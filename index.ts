@@ -38,6 +38,19 @@ interface AsfState {
   updatedAt: string;
 }
 
+/** Definition-of-done checks (references/06b-testing-qa.md, Rule 10). */
+const QA_CHECKLIST: Array<{ key: string; label: string }> = [
+  { key: "build", label: "Typecheck/build passes" },
+  { key: "tests", label: "Full test suite green (not a subset)" },
+  { key: "regression", label: "Regression test added for every bug fixed this cycle" },
+  { key: "triggers", label: "Triggers AND non-triggers tested for conditional behavior" },
+  { key: "artifact", label: "Shipped artifact inspected (npm pack file list) + clean-room install" },
+  { key: "observable", label: "Observable end state verified as a user would experience it" },
+  { key: "browser", label: "Web surfaces exercised through a real browser (n/a if none)" },
+  { key: "specs", label: "Every MUST spec 'met' with concrete evidence" },
+  { key: "honest", label: "Skipped/inconclusive checks reported explicitly" },
+];
+
 interface ProjectStateFile {
   current: AsfState | null;
   history: Array<{ workType: string; phase: AsfPhase; startedAt: string; endedAt: string }>;
@@ -203,6 +216,21 @@ export default function register(pi: ExtensionAPI): void {
           `  history: ${state.history.length} completed session(s)`
         );
       }
+      case "verify": {
+        // Gate 7: force an explicit, itemised QA pass before delivery.
+        const project = projectName();
+        const state = await loadState(project);
+        if (!state.current) return "No active ASF session — nothing to verify.";
+        await setPhase(ctx, "verification");
+        return (
+          `ASF verification gate (${project}) — Definition of Done.\n` +
+          `Read references/06b-testing-qa.md. Confirm EACH item with concrete evidence\n` +
+          `(command output, file list, screenshot). Do not tick anything you did not run.\n\n` +
+          QA_CHECKLIST.map((c, i) => `  ${i + 1}. [ ] ${c.label}`).join("\n") +
+          `\n\nThen run get_task_specs and close every spec with update_spec_status.\n` +
+          `Unverifiable → 'partial' + ask the user. Never self-certify.`
+        );
+      }
       case "abort":
         return await setPhase(ctx, "none");
       default:
@@ -213,6 +241,7 @@ export default function register(pi: ExtensionAPI): void {
           "  /asf bugfix     — major bugfix\n" +
           "  /asf refactor   — architectural refactor\n" +
           "  /asf status     — show current phase\n" +
+          "  /asf verify     — run the definition-of-done QA gate\n" +
           "  /asf abort      — end the current session\n\n" +
           dependencySummary()
         );
@@ -224,9 +253,25 @@ export default function register(pi: ExtensionAPI): void {
     const project = projectName();
     const state = await loadState(project);
     if (!state.current) return "No active ASF session — start one with /asf new|feature|bugfix|refactor.";
+
+    // Gate 5 must approve something that actually exists: refuse to rubber-stamp
+    // when no PLAN.md is present (a plan the user never saw cannot be approved).
+    const planPath = join(process.cwd(), "PLAN.md");
+    if (!existsSync(planPath)) {
+      return (
+        `No PLAN.md found in ${process.cwd()}.\n` +
+        "Gate 5 approves a written plan — write PLAN.md and present it to the user first."
+      );
+    }
+
     state.current.planApproved = true;
+    state.current.phase = "implementation";
     state.current.updatedAt = new Date().toISOString();
     await saveState(project, state);
-    return "Plan approved ✓ — Gate 5 passed, implementation may begin.";
+    return (
+      "Plan approved ✓ — Gate 5 passed, implementation may begin.\n" +
+      "Test-first, strict codebase isolation, regression test per bug fixed.\n" +
+      "Run /asf verify before delivery."
+    );
   });
 }

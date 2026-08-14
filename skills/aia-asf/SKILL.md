@@ -145,9 +145,19 @@ Keep the plan **implementation-ready**: any competent engineer (or agent) can ex
 
 ## Phase 6 — Implementation (test-first, disciplined)
 
+> **Read `references/06b-testing-qa.md` before writing tests.** It is the mandatory QA
+> standard, distilled from real shipped-broken failures. Non-negotiable highlights:
+> **test the shipped artifact, not just the source** (inspect `npm pack` output);
+> **assert the observable end state**, not intermediate files; **probe for silent
+> failures** (a malformed manifest/frontmatter is skipped without any error);
+> **read the actual error before editing**; **verify clean-room** (caches serve stale
+> builds); **add a regression test for every bug fixed**.
+
 Execute the task list milestone by milestone. Discipline rules:
 
 1. **Test-first**: write/update tests before or with implementation; run them; only commit green.
+   Every bug fixed gets a **regression test** that fails on the old code. For conditional
+   behavior (skills, gates, auto-activation) test **triggers AND non-triggers**.
 2. **Codebase isolation**: work strictly inside the project's own codebase. Do NOT edit files in other repos, global config, or unrelated directories — **unless the user explicitly instructs otherwise**. If a change would touch another codebase, stop and ask.
 3. **No scope creep**: if something new is discovered that changes specs, capture it, ask the user, and update the plan before implementing.
 4. **Descriptive commits**: `git commit -m "type: specific description of what and why"` (e.g. `fix: verify specs before rotation`). No vague messages, no placeholders.
@@ -159,8 +169,17 @@ Execute the task list milestone by milestone. Discipline rules:
 
 ## Phase 7 — Verification & delivery (gate)
 
-1. Run the full test suite; fix failures; re-run until green.
-2. Run `get_task_specs` and verify **every spec** with `update_spec_status` + concrete evidence (test output, build result, code inspection). Unverifiable → `partial` + ask the user. Never self-certify.
+Run the **Definition of Done checklist** in `references/06b-testing-qa.md` (Rule 10). Every box must hold.
+
+1. Run the full test suite (all of it, not a subset); fix failures; re-run until green.
+2. **Verify the artifact a user would actually get**: inspect the packaged file list
+   (`npm pack` → `tar tzf`), install/load it clean-room in a fresh dir with caches
+   cleared, confirm the installed version is the one just built, and confirm the
+   **observable end state** (the tool/skill/page actually appears and works) — not just
+   that files are in place. Any web surface must be exercised through `pi-aia-browser`.
+3. Run `get_task_specs` and verify **every spec** with `update_spec_status` + concrete evidence (test output, build result, code inspection). Unverifiable → `partial` + ask the user. Never self-certify.
+4. **Report honestly**: never claim a check you didn't run; state explicitly anything
+   skipped or inconclusive, and distinguish "tests pass" from "works for the user".
 3. If the project is a library/package that the user publishes (npm, GitHub release): **offer** to run the release (see `references/07-release.md`): version bump, CHANGELOG, git tag, push. **Publishing is always the user's decision** — never publish without explicit approval. Optionally offer to set up a CI/CD pipeline for publishing.
 4. Present a completion summary: what was built, specs met, tests passing, how to use it.
 
@@ -176,6 +195,12 @@ Execute the task list milestone by milestone. Discipline rules:
 - ❌ Vague commits or CHANGELOG placeholders
 - ❌ Declaring done while specs are still `open`
 - ❌ Publishing anything without the user's explicit go-ahead
+- ❌ Shipping a package without inspecting the packaged file list (`npm pack`)
+- ❌ Treating "no error" as "it worked" — malformed config is skipped **silently**
+- ❌ Verifying against a cached/stale install, or with an old duplicate still present
+- ❌ Guessing at a fix before reading the actual error message
+- ❌ Fixing a bug without adding a regression test
+- ❌ Claiming something was verified when it was assumed
 
 ## References
 
@@ -184,4 +209,5 @@ Execute the task list milestone by milestone. Discipline rules:
 - `references/04-adversarial.md` — adversarial checklist per area
 - `references/05-plan.md` — PLAN.md template with examples
 - `references/06-implementation.md` — coding discipline details
+- `references/06b-testing-qa.md` — **mandatory testing & QA standard** (11 rules + definition of done)
 - `references/07-release.md` — release workflow (versioning, CHANGELOG, tags, npm, CI/CD)
