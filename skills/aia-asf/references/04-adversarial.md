@@ -1,5 +1,9 @@
 # Phase 4 — Adversarial Analysis Checklist
 
+> **Scale note: the full checklist and gate apply to LARGE work.** Small work does
+> a quick mental pass on edge cases and failure modes while implementing — no
+> formal review, no user checkpoint.
+
 Challenge every spec and design decision like a hostile reviewer. For each item, determine: capture a new spec / supersede an existing one / accept the risk (recorded).
 
 ## Per-spec questions

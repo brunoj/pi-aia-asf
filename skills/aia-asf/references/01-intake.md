@@ -1,5 +1,9 @@
 # Phase 1 — Intake: Question Bank
 
+> **Scale note: this bank is for LARGE work.** Small work (small features, minor
+> bugfixes, small refactors) skips the questions — state understanding in 1–2
+> sentences and start. At most ONE clarifying question, only if genuinely ambiguous.
+
 Keep asking until the user confirms. One question at a time is fine; short batches (3–5) are faster. Do not proceed on guesses.
 
 ## Starter questions
@@ -32,3 +36,5 @@ Every concrete requirement the user states → `capture_spec` immediately, befor
 ## Intake gate
 
 Restate intent in 3–5 bullets, then ask: **"Is this correct?"** Only proceed on an explicit yes.
+
+> Large work only. Small work has no intake gate.

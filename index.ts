@@ -30,8 +30,11 @@ type AsfPhase =
   | "implementation"
   | "verification";
 
+type AsfScale = "small" | "large";
+
 interface AsfState {
   workType?: "new-project" | "feature" | "major-bugfix" | "refactor";
+  scale?: AsfScale;
   phase: AsfPhase;
   planApproved?: boolean;
   startedAt?: string;
@@ -160,7 +163,7 @@ export default function register(pi: ExtensionAPI): void {
   // Startup check: warn once per session if deps are missing (unless disabled)
   // The extension loads at startup; log to console so it surfaces in logs.
 
-  const setPhase = async (ctx: ExtensionCommandContext, phase: AsfPhase, workType?: AsfState["workType"]): Promise<string> => {
+  const setPhase = async (ctx: ExtensionCommandContext, phase: AsfPhase, workType?: AsfState["workType"], scale?: AsfScale): Promise<string> => {
     const project = projectName();
     const state = await loadState(project);
     const now = new Date().toISOString();
@@ -183,6 +186,7 @@ export default function register(pi: ExtensionAPI): void {
         };
       }
       if (workType) state.current.workType = workType;
+      if (scale) state.current.scale = scale;
       state.current.phase = phase;
       state.current.updatedAt = now;
     }
@@ -196,13 +200,15 @@ export default function register(pi: ExtensionAPI): void {
 
     switch (sub) {
       case "new":
-        return await setPhase(ctx, "intake", "new-project");
+        return await setPhase(ctx, "intake", "new-project", "large");
       case "feature":
-        return await setPhase(ctx, "intake", "feature");
+        return await setPhase(ctx, "intake", "feature", "large");
       case "bugfix":
-        return await setPhase(ctx, "intake", "major-bugfix");
+        return await setPhase(ctx, "intake", "major-bugfix", "large");
       case "refactor":
-        return await setPhase(ctx, "intake", "refactor");
+        return await setPhase(ctx, "intake", "refactor", "large");
+      case "small":
+        return await setPhase(ctx, "implementation", undefined, "small");
       case "status": {
         const project = projectName();
         const state = await loadState(project);
@@ -210,6 +216,7 @@ export default function register(pi: ExtensionAPI): void {
         return (
           `ASF status (${project}):\n` +
           `  work type: ${state.current.workType || "unset"}\n` +
+          `  scale: ${state.current.scale || "unset"}${state.current.scale === "small" ? " (automatic — no gates)" : ""}\n` +
           `  phase: ${state.current.phase}\n` +
           `  plan approved: ${state.current.planApproved ? "yes" : "no"}\n` +
           `  started: ${state.current.startedAt || "?"}\n` +
@@ -236,10 +243,11 @@ export default function register(pi: ExtensionAPI): void {
       default:
         return (
           "ASF commands:\n" +
-          "  /asf new        — start a new software project\n" +
-          "  /asf feature    — add a feature to an existing project\n" +
-          "  /asf bugfix     — major bugfix\n" +
-          "  /asf refactor   — architectural refactor\n" +
+          "  /asf new        — start a new software project (large, gated)\n" +
+          "  /asf feature    — add a feature to an existing project (large, gated)\n" +
+          "  /asf bugfix     — major bugfix (large, gated)\n" +
+          "  /asf refactor   — architectural refactor (large, gated)\n" +
+          "  /asf small      — small change, automatic (no gates)\n" +
           "  /asf status     — show current phase\n" +
           "  /asf verify     — run the definition-of-done QA gate\n" +
           "  /asf abort      — end the current session\n\n" +

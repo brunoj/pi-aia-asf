@@ -1,5 +1,8 @@
 # Phase 5 — PLAN.md Template
 
+> **Scale note: this phase is for LARGE work only.** Small work skips PLAN.md and
+> the approval gate entirely — implement directly.
+
 Write `PLAN.md` in the project root. It must be executable by any competent engineer without re-deriving decisions.
 
 ```markdown
@@ -54,7 +57,7 @@ From adversarial analysis. Each risk: likelihood, impact, mitigation, owner.
 Explicitly cut items (so nobody re-adds them).
 ```
 
-## Approval gate (MANDATORY)
+## Approval gate (MANDATORY — large work only)
 
 Present the plan and ask:
 
