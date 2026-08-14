@@ -1,6 +1,18 @@
 ---
 name: aia-asf
-description: Agentic Software Factory — run a complete, disciplined software development cycle. Use when the user wants to start a NEW software project, add a SIGNIFICANT FEATURE to an existing project, perform a MAJOR BUGFIX, or do an ARCHITECTURAL REFACTOR. The flow is: classify the work, ask questions until the intent is clear, research SOTA and existing packages, capture hard specifications (via capture_spec, shared with pi-vigilant), run adversarial analysis, produce a PLAN.md and get explicit user approval, then implement test-first with strict codebase isolation and mandatory browser testing of any web interfaces (pi-aia-browser). Do NOT activate for simple Q&A, one-line fixes, casual conversation, content writing, or non-software tasks. When in doubt about whether work qualifies as a project/feature/bugfix/refactor, ask the user.
+description: >-
+  Agentic Software Factory — run a complete, disciplined software development
+  cycle. Use when the user wants to start a NEW software project, add a
+  SIGNIFICANT FEATURE to an existing project, perform a MAJOR BUGFIX, or do an
+  ARCHITECTURAL REFACTOR. The flow classifies the work, asks questions until the
+  intent is clear, researches SOTA and existing packages, captures hard
+  specifications (via capture_spec, shared with pi-vigilant), runs adversarial
+  analysis, produces a PLAN.md and gets explicit user approval, then implements
+  test-first with strict codebase isolation and mandatory browser testing of any
+  web interfaces (pi-aia-browser). Do NOT activate for simple Q&A, one-line
+  fixes, casual conversation, content writing, or non-software tasks. When in
+  doubt about whether work qualifies as a project/feature/bugfix/refactor, ask
+  the user.
 ---
 
 # AIA Agentic Software Factory (ASF)
