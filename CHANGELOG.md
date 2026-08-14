@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-08-14
+
+### Added
+
+- **Scale-based flow.** Every ASF activation is now classified **small** or **large**:
+  - **Small** (small features, minor bugfixes, small refactors) — runs **automatically**: no intake question barrage (at most one clarifying question), no research, no adversarial gate, no PLAN.md, no approval. State the intent, capture specs silently, implement test-first, verify, deliver.
+  - **Large** (new projects, significant features, major bugfixes, architectural refactors) — full gated flow unchanged: intake → research → specs → adversarial → PLAN.md → **explicit approval** → implementation → verification.
+  - When in doubt, **default to small and start working**; re-classify upward if the work grows.
+- **`/asf small`** command — starts a small session directly in implementation phase. `/asf status` now shows the scale (`automatic — no gates` for small).
+
+### Changed
+
+- All gates (1–5) explicitly apply to large work only; Phase 2 (research) and Phase 5 (PLAN.md + approval) are skipped entirely for small work.
+- References `01-intake`, `04-adversarial`, `05-plan` annotated with the scale rule.
+- Anti-patterns: no question barrage or PLAN.md/approval demand for small work; when in doubt, start small.
+
+
 ## [0.2.0] - 2026-08-14
 
 ### Added
