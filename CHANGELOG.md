@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-08-14
+
+### Added
+
+- **Mandatory testing & QA standard** (`references/06b-testing-qa.md`) — 11 rules distilled from real shipped-broken failures: test the packaged artifact (not just source), assert the observable end state, probe for silent failures, read the actual error before editing, clean-room verification against stale caches, a regression test for every bug fixed, test triggers *and* non-triggers, state-machine deadlock tests, mandatory browser testing for web surfaces, a definition-of-done checklist, and honest reporting.
+- **`/asf verify`** — an explicit definition-of-done gate that itemises the 9 required checks, points at the QA standard, and forbids self-certifying unverifiable specs.
+
+### Changed
+
+- Phase 6 and Phase 7 of the skill now require the QA standard; Phase 7 additionally requires verifying the packaged artifact and the observable end state, plus honest reporting of skipped or inconclusive checks.
+- Anti-patterns extended: shipping without inspecting the packaged file list, treating "no error" as success, verifying against a stale install, guessing before reading the error, fixing without a regression test, and claiming assumed verification.
+
+### Fixed
+
+- **`/asf-approve` rubber-stamped Gate 5.** It marked the plan approved even when no `PLAN.md` existed — approving a plan the user had never seen. It now refuses unless `PLAN.md` is present, and advances the phase to implementation on success.
+
+
 ## [0.1.1] - 2026-08-14
 
 ### Fixed

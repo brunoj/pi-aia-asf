@@ -1,6 +1,6 @@
 {
   "name": "pi-aia-asf",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Ai Applied Agentic Software Factory — codifies the full software development flow: intake, research, spec capture, adversarial analysis, planning with approval gates, test-first implementation, and release. Requires pi-vigilant, pi-smart-web-search, pi-smart-fetch, and pi-aia-browser.",
   "keywords": [
     "pi-package",
