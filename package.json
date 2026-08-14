@@ -1,0 +1,72 @@
+{
+  "name": "pi-aia-asf",
+  "version": "0.1.0",
+  "description": "Ai Applied Agentic Software Factory — codifies the full software development flow: intake, research, spec capture, adversarial analysis, planning with approval gates, test-first implementation, and release. Requires pi-vigilant, pi-smart-web-search, pi-smart-fetch, and pi-aia-browser.",
+  "keywords": [
+    "pi-package",
+    "software-factory",
+    "asf",
+    "specs",
+    "planning"
+  ],
+  "type": "module",
+  "license": "MIT",
+  "author": "Bruno Jakic <bruno@ai-applied.nl>",
+  "homepage": "https://github.com/brunoj/pi-aia-asf#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/brunoj/pi-aia-asf.git"
+  },
+  "bugs": {
+    "url": "https://github.com/brunoj/pi-aia-asf/issues"
+  },
+  "files": [
+    "index.ts",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md",
+    "skills/"
+  ],
+  "scripts": {
+    "clean": "echo 'nothing to clean'",
+    "build": "echo 'nothing to build — pi loads .ts via jiti at runtime'",
+    "check": "tsc --noEmit --target ES2022 --module NodeNext --moduleResolution NodeNext --skipLibCheck --allowImportingTsExtensions --noCheck index.ts",
+    "test": "echo 'see https://github.com/brunoj/pi-aia-asf for test suites'",
+    "release": "./scripts/release.sh"
+  },
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ],
+    "skills": [
+      "./skills/aia-asf"
+    ]
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-agent-core": "*",
+    "@earendil-works/pi-coding-agent": "*",
+    "typebox": "*"
+  },
+  "peerDependenciesMeta": {
+    "@earendil-works/pi-ai": {
+      "optional": false
+    },
+    "@earendil-works/pi-agent-core": {
+      "optional": false
+    },
+    "@earendil-works/pi-coding-agent": {
+      "optional": false
+    },
+    "typebox": {
+      "optional": false
+    }
+  },
+  "devDependencies": {
+    "@earendil-works/pi-agent-core": "0.83.0",
+    "@earendil-works/pi-ai": "0.83.0",
+    "@earendil-works/pi-coding-agent": "0.83.0",
+    "typebox": "1.1.38",
+    "typescript": "5.9.3"
+  }
+}
