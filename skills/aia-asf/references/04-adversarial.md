@@ -8,6 +8,12 @@ Challenge every spec and design decision like a hostile reviewer. For each item,
 
 ## Per-spec questions
 
+> **Code-quality lens (always applied):** for every module/design under review,
+> also ask the `references/06c-code-quality.md` questions — is shared logic
+> duplicated anywhere? Is the single escalation path identifiable? Is the module
+> testable standalone with the same calls? Any hardcoded values that belong in
+> config?
+
 - **Edge cases**: empty input, zero data, max load, missing fields, concurrent access, duplicate input, unicode, huge payloads
 - **Failure modes**: what breaks first? Is failure loud or silent? Can we recover automatically?
 - **Security**: authentication, authorization, injection (SQL/XSS), data exposure, secrets, abuse/rate-limiting, supply chain

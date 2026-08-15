@@ -1,5 +1,11 @@
 # Phase 6 — Implementation Discipline
 
+> **Also read `references/06c-code-quality.md`** — the modularity & maintainability
+> standard. Structure code as small modules with one responsibility, keep shared
+> functionality in exactly one implementation (SSOT, single escalation path),
+> never hardcode what config should drive, and keep every module testable
+> standalone outside the host.
+
 ## Test-first
 
 1. Write the failing test for the next behavior

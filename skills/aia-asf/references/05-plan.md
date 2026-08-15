@@ -21,10 +21,13 @@ Existing system, repo layout, relevant prior work. Links to research sources.
 Decided approach with rationale. Cite the research (package names, URLs).
 
 ## Architecture / Design
-- Components and their responsibilities
+- Modules and their responsibilities (small, single-purpose — see `references/06c-code-quality.md`)
 - Data model / schema (if any)
 - Key flows (request lifecycle, event flow)
 - Interfaces / contracts between components
+- **Where shared truth lives** (single source of truth map: which module owns each shared capability)
+- **Layering**: one-way dependency rules between layers; what each layer may/may not import
+- **Standalone testability**: how each module is exercised outside the host with the same calls
 
 ## Milestones
 | # | Milestone | Exit criteria |

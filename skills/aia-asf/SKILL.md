@@ -172,6 +172,14 @@ Keep the plan **implementation-ready**: any competent engineer (or agent) can ex
 > **read the actual error before editing**; **verify clean-room** (caches serve stale
 > builds); **add a regression test for every bug fixed**.
 
+> **Read `references/06c-code-quality.md` before structuring code.** It is the mandatory
+> modularity & maintainability standard: small well-readable modules plugged in where
+> needed; **one implementation for shared functionality** (single escalation path,
+> SSOT); no hardcoding (config-driven); **testable outside the host then integrated
+> verbatim** (same modules in tests and production); refactor what is too complex to
+> understand; layered with clear boundaries and an architecture writeup; full I/O debug
+> logging with replay; nothing breaks existing functionality.
+
 Execute the task list milestone by milestone. Discipline rules:
 
 1. **Test-first**: write/update tests before or with implementation; run them; only commit green.
@@ -189,6 +197,8 @@ Execute the task list milestone by milestone. Discipline rules:
 ## Phase 7 — Verification & delivery (gate)
 
 Run the **Definition of Done checklist** in `references/06b-testing-qa.md` (Rule 10). Every box must hold.
+
+Also check the **modularity DoD** from `references/06c-code-quality.md` (Phase 7 section): no duplicated shared logic, no hardcoded config values, every module tested standalone with the same calls it gets in the host, architecture writeup exists, existing functionality still green.
 
 1. Run the full test suite (all of it, not a subset); fix failures; re-run until green.
 2. **Verify the artifact a user would actually get**: inspect the packaged file list
@@ -223,6 +233,14 @@ Run the **Definition of Done checklist** in `references/06b-testing-qa.md` (Rule
 - ❌ Asking a barrage of intake questions for small work — small runs automatically
 - ❌ Writing PLAN.md / demanding approval for small work — that's the large-work gate only
 - ❌ Waiting for sign-off when the work is small; when in doubt, default to small and start
+- ❌ One giant file / god-object that "does everything" — small well-readable modules, plugged in
+- ❌ Copy-pasting shared logic instead of importing the one authoritative module (SSOT)
+- ❌ A "test copy" of a module that differs from the production version — same modules everywhere
+- ❌ Hardcoding values (model names, thresholds, URLs) that config should drive
+- ❌ Escalation/fallback logic re-implemented per caller instead of one shared escalation path
+- ❌ Shipping a module that cannot run/test standalone outside the host
+- ❌ Refactoring without the architecture writeup (see `references/06c-code-quality.md`)
+- ❌ Breaking existing functionality during a refactor — refactoring preserves behavior
 
 ## References
 
@@ -232,4 +250,5 @@ Run the **Definition of Done checklist** in `references/06b-testing-qa.md` (Rule
 - `references/05-plan.md` — PLAN.md template with examples
 - `references/06-implementation.md` — coding discipline details
 - `references/06b-testing-qa.md` — **mandatory testing & QA standard** (11 rules + definition of done)
+- `references/06c-code-quality.md` — **mandatory modularity & maintainability standard** (8 rules, SSOT, testable-standalone, single escalation path)
 - `references/07-release.md` — release workflow (versioning, CHANGELOG, tags, npm, CI/CD)
