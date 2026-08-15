@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-08-14
+
+### Added
+
+- **Mandatory modularity & maintainability standard** (`references/06c-code-quality.md`) — 8 rules distilled from Bruno's Tunnel-project philosophy (small well-readable modules plugged in where needed; one authoritative implementation for shared functionality with a single escalation path; no hardcoding — config-driven; fully testable outside the host then integrated verbatim, same modules in tests and production; refactor what is too complex to understand; layered with clear one-way boundaries and an architecture writeup; full I/O debug logging with replay of stored data; nothing may break existing functionality) and reinforced by external research (SSOT, testability as design property, ports-and-adapters seams).
+
+### Changed
+
+- **Phase 6** now requires reading `06c-code-quality.md` before structuring code; **Phase 7** verification includes the modularity DoD (no duplicated shared logic, no hardcoded config values, standalone-tested modules, architecture writeup, existing functionality green).
+- **Phase 4** adversarial analysis gains a code-quality lens (duplication, single escalation path, standalone testability, hardcoded values); **Phase 5** PLAN.md architecture section now requires the SSOT map, layering rules, and standalone-testability notes.
+- Anti-patterns extended: god-objects, copy-pasted shared logic, test copies of modules, hardcoding, per-caller escalation logic, untestable-standalone modules, behavior-breaking refactors.
+
+
 ## [0.2.1] - 2026-08-14
 
 ### Added
