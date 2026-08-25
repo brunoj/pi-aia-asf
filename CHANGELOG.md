@@ -11,7 +11,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- (describe changes for 0.3.0)
+- **Mechanical spec-to-code traceability gate in `/asf verify`** (large work
+  only) — reads the shared spec-memory task and validates every `met` spec's
+  trace (`outcome → codePath → testFile + assertion`); `testFile` must exist
+  and `assertion` must appear in it. Outputs a traceability matrix with
+  PASS/FAIL rows and refuses delivery on FAIL (`GATE NOT PASSED`). Small work
+  keeps the checklist only — no mechanical gate (scale proportionality).
+- **New QA rules (06b-testing-qa.md)**: Rule 12 — test the operator-facing
+  outcome, not the machinery (Betamaxx dead-code failure); Rule 13 — nothing
+  is delivered until consumed by a surface (UI or API); Rule 14 — every
+  feature spec ships an E2E behavioral test through the real entry point.
+  Rule 9 extended for silent async paths; Rule 10 DoD extended (traceability,
+  consumed-by-surface, E2E).
+- **M4 — challenge approved designs during implementation** (06-implementation.md):
+  product tension → resolve with the user before implementing.
+- **M5 — the delivery log is a claim; the code is the evidence**: trace the
+  actual code path before marking anything delivered.
+- **M6 — external planning docs are specs, not ground truth** (01-intake.md +
+  SKILL.md Phase 1/3): locate IMPROVEMENT-PLAN.md / PLAN.md / requirements
+  docs / delivery logs / tickets, ingest every actionable item as a captured
+  spec; their ✅ markers are claims, not evidence.
+- **Adversarial traceability lens** (04-adversarial.md): operator-facing
+  outcome + code path + where dead wiring hides.
+- **PLAN.md traceability matrix** (05-plan.md): spec → outcome → code path →
+  test.
+- DoD checklist extended; anti-patterns added (delivery-log trust, machinery
+  without a surface, unit tests as wiring proof, external plan checkmarks,
+  literal implementation of tension-creating specs).
+
+### Changed
+
+- `/asf verify` output now shows scale and, for large work, the mechanical
+  traceability matrix before the DoD checklist.
+
+### Requires
+
+- pi-vigilant 0.1.3+ (provides the `trace` field on specs).
 
 
 ## [0.2.2] - 2026-08-14
