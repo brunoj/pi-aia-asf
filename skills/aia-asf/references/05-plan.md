@@ -29,6 +29,14 @@ Decided approach with rationale. Cite the research (package names, URLs).
 - **Layering**: one-way dependency rules between layers; what each layer may/may not import
 - **Standalone testability**: how each module is exercised outside the host with the same calls
 
+## Spec-to-code traceability matrix
+For every spec, the operator-facing outcome, the code path that delivers it, and the test that asserts it. This is what `/asf verify` checks mechanically at delivery (M1).
+
+| Spec | Operator-facing outcome | Code path | Test (asserts outcome) |
+|------|------------------------|-----------|------------------------|
+| spc-… | e.g. "ingested report has an agent_title on the card" | ingest → analyze() → persist → render | tests/e2e-ingest.test.ts (`agent_title`) |
+| … | | | |
+
 ## Milestones
 | # | Milestone | Exit criteria |
 |---|-----------|---------------|

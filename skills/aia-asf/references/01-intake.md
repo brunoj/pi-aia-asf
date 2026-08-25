@@ -13,6 +13,24 @@ Keep asking until the user confirms. One question at a time is fine; short batch
 - "What exists today?" (blank slate / existing repo / replaces something)
 - "How will we know it's done and correct?" (concrete success criteria)
 - "Any hard constraints?" (stack, platform, budget, timeline, must-nots)
+- "**Are there external planning docs?**" (IMPROVEMENT-PLAN.md, PLAN.md, requirements docs, delivery logs, ticket lists — in the repo, `docs/`, or referenced by the user)
+
+## External planning docs (M6) — locate and ingest
+
+When a task references or contains external planning documents, **realize they
+exist**: look in the repo root, `docs/`, and anything the user points at. Then
+**treat them like own captured specs**:
+
+1. Read the doc(s) and list every actionable item (e.g. `IMP-002/006 — service agent titles`).
+2. `capture_spec` each item with `sourceQuote` pointing at the doc + item id.
+3. **The doc's own ✅ / "delivered" markers are claims, not evidence** — each
+   item gets traced (outcome → codePath → test) and verified like any other spec.
+4. If the doc is large, ingest by section and decompose with `parentId`.
+
+> **Why this matters (betamaxx audit):** the IMPROVEMENT-PLAN's delivery log said
+> "IMP-006+P-A delivered ✅" and that was trusted as ground truth — the code was
+> never traced. `intelligenceBudget.analyze()` shipped as dead code. Ingesting
+> the plan's items as specs forces each one to be traced and verified.
 
 ## Probing techniques
 

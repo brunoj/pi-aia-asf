@@ -125,6 +125,13 @@ API/curl checks do not replicate what a human sees. Via `pi-aia-browser`:
 
 A 200 response with a blank or broken page is a **failure**.
 
+**Silent async paths are the priority.** Fire-and-forget enrichment (an async
+budgeted analysis that fills in a card title after render) fails silently — the
+page renders, nobody notices the enrichment never landed. For any async/silent
+surface: ingest through the real flow, then **wait for the enrichment to appear**
+and assert it (e.g. ingest a report, wait for `agent_title` on the card). If it
+never arrives, the wiring is dead — that is a failed test.
+
 ## Rule 10 — Definition of done (all must hold)
 
 - [ ] Typecheck/build passes
@@ -135,6 +142,9 @@ A 200 response with a blank or broken page is a **failure**.
 - [ ] Observable end state verified as a user would experience it
 - [ ] Web surfaces exercised through a real browser
 - [ ] Every MUST spec `met` with concrete evidence (`update_spec_status`)
+- [ ] **Spec-to-code traceability: every `met` spec carries `trace` (outcome → codePath → testFile + assertion); `/asf verify` mechanically validates it (large work)**
+- [ ] **Consumed by a surface: every delivered feature's output is visible in the product (UI or API) — nothing ships as dead machinery**
+- [ ] **E2E behavioral test: every feature spec has a test through the real entry point asserting the operator-facing outcome**
 - [ ] Unverifiable specs → `partial` + asked the user (never self-certified)
 
 ## Rule 11 — Report honestly
@@ -144,3 +154,43 @@ A 200 response with a blank or broken page is a **failure**.
 - If a check was skipped or inconclusive, **say so explicitly** and say why.
 - Distinguish "tests pass" from "feature works for the user" — Rule 2.
 - If you discover you shipped something broken, say it plainly and fix it first.
+
+## Rule 12 — Test the OPERATOR-FACING OUTCOME, not the machinery
+
+> **Real failure (betamaxx audit):** `intelligence-budget.test.ts` and
+> `service-session.test.ts` passed — they proved `analyze()` *works in
+> isolation*. Nobody tested "does ingest actually call `analyze()`?". The tests
+> proved the machinery, not the wiring. `intelligenceBudget.analyze()` shipped
+> as **dead code** while every unit test was green.
+
+Unit tests prove a component works in isolation. They do **not** prove the
+feature is wired. For every feature spec, the deciding test is the one that
+asserts the **operator-facing outcome** end-to-end:
+
+- ❌ "`analyze()` returns a budget verdict" (machinery)
+- ✅ "an ingested report eventually has an `agent_title` rendered on the card" (outcome)
+
+If a unit test is green but the outcome test is missing, the feature is **not**
+done — the wiring may be dead.
+
+## Rule 13 — Nothing is delivered until CONSUMED BY A SURFACE
+
+> **Real failure (betamaxx audit):** code commented *"Not yet consumed by a
+> surface"* shipped as "delivered". Machinery (budget, runner, verdict
+> contract) was built; the product behavior (cards titled by the agent) never
+> happened.
+
+- **Delivered = the output is visible in the product** (UI or API).
+- Code commented "not yet consumed by a surface" is, by definition, **not
+  delivered**.
+- Before marking a spec `met`, answer: *where does a user/operator see this?*
+  If nowhere — it is not done.
+
+## Rule 14 — Every feature spec ships an E2E behavioral test through the REAL entry point
+
+- The E2E test drives the **real entry point** (HTTP endpoint, CLI, UI) with a
+  mocked boundary (agent, DB), and asserts the operator-facing outcome.
+- This catches dead wiring in one test: ingest → `analyze()` → persist → render.
+- **Scale note:** mandatory for feature specs in **large/gated work**. For small
+  work, required only when the change touches a surface/wiring; otherwise the
+  standard test-first rules above suffice.

@@ -60,3 +60,26 @@ Every user-visible change gets an entry under `## [Unreleased]` or the released 
 - New hard requirement discovered → `capture_spec` immediately
 - Requirement changed → capture superseding spec (old → obsolete)
 - When pi-vigilant injects its verification checklist → respond with `update_spec_status` + evidence
+
+## Challenge approved designs during implementation (M4)
+
+A plan was approved, but that does not make it correct. When a spec's literal
+reading creates **product tension** (e.g. feedback clusters rendered under the
+"Plan" tab when "Plan = plans"), **stop and resolve it with the user before
+implementing** — do not implement blindly and call it delivered.
+
+- Tension detected → state it plainly, propose the fix, get a decision.
+- Implement the *sensible* version, not the literal-but-wrong one.
+- The user's words "implemented in a SENSIBLE way" are the acceptance bar.
+
+## The delivery log is a claim; the code is the evidence (M5)
+
+Before marking anything ✅ (a spec, a milestone, a delivery-log item):
+
+1. **Trace the actual code path** — the function is called, not just defined.
+2. Confirm the output is **consumed by a surface** (Rule 13).
+3. Confirm the **operator-facing outcome test** passes (Rule 12).
+
+A delivery log saying "IMP-006 delivered ✅" proves nothing. The code is the
+evidence. External planning docs (IMPROVEMENT-PLAN.md, PLAN.md, delivery logs)
+are inputs to spec capture — their ✅ markers are claims, never ground truth.

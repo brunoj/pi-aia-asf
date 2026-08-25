@@ -14,6 +14,12 @@ Challenge every spec and design decision like a hostile reviewer. For each item,
 > testable standalone with the same calls? Any hardcoded values that belong in
 > config?
 
+> **Traceability lens (always applied):** for every spec, ask — *what is the
+> operator-facing outcome, and what code path delivers it?* Trace the path in
+> your head: where could **dead wiring** hide (a function defined but never
+> called, an async enrichment that never lands, a surface that never renders)?
+> If the outcome has no concrete path, the spec is not yet real.
+
 - **Edge cases**: empty input, zero data, max load, missing fields, concurrent access, duplicate input, unicode, huge payloads
 - **Failure modes**: what breaks first? Is failure loud or silent? Can we recover automatically?
 - **Security**: authentication, authorization, injection (SQL/XSS), data exposure, secrets, abuse/rate-limiting, supply chain

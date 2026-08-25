@@ -13,7 +13,7 @@
 
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
 
@@ -51,8 +51,28 @@ const QA_CHECKLIST: Array<{ key: string; label: string }> = [
   { key: "observable", label: "Observable end state verified as a user would experience it" },
   { key: "browser", label: "Web surfaces exercised through a real browser (n/a if none)" },
   { key: "specs", label: "Every MUST spec 'met' with concrete evidence" },
+  { key: "trace", label: "Spec-to-code traceability: every met spec has outcome → codePath → test" },
+  { key: "surface", label: "Every delivered feature is consumed by a surface (UI or API) — nothing dead" },
+  { key: "e2e", label: "Feature specs have an end-to-end behavioral test through the real entry point" },
   { key: "honest", label: "Skipped/inconclusive checks reported explicitly" },
 ];
+
+/** Spec-to-code traceability (M1) — mirrors pi-vigilant's Trace. */
+interface Trace {
+  outcome: string;
+  codePath: string;
+  testFile?: string;
+  assertion?: string;
+}
+
+interface SpecItem {
+  id: string;
+  requirement: string;
+  area: string;
+  priority: string;
+  status: string;
+  trace?: Trace;
+}
 
 interface ProjectStateFile {
   current: AsfState | null;
@@ -92,6 +112,61 @@ async function saveState(project: string, data: ProjectStateFile): Promise<void>
   const file = stateFileFor(project);
   await mkdir(join(STATE_DIR, project), { recursive: true });
   await writeFile(file, JSON.stringify(data, null, 2), "utf-8");
+}
+
+// ─── Spec-memory read (shared with pi-vigilant) ────────────────────────────
+
+const SPEC_DIR = join(SKILLS_DIR, "spec-memory", "projects");
+
+function specTaskFileFor(project: string): string {
+  return join(SPEC_DIR, project, "current-task.json");
+}
+
+async function loadSpecs(project: string): Promise<SpecItem[] | null> {
+  const file = specTaskFileFor(project);
+  if (!existsSync(file)) return null;
+  try {
+    const task = JSON.parse(await readFile(file, "utf-8")) as {
+      areas?: Record<string, SpecItem[]>;
+    };
+    return Object.values(task.areas || {}).flat();
+  } catch {
+    return null;
+  }
+}
+
+/** Mechanical M1 validation of a met spec's trace. */
+function validateTrace(spec: SpecItem): { ok: boolean; reason: string } {
+  const t = spec.trace;
+  if (!t || !t.outcome || !t.codePath) {
+    return {
+      ok: false,
+      reason: "met but trace incomplete — outcome + codePath required (add via update_spec_status trace)",
+    };
+  }
+  if (t.testFile) {
+    const abs = join(process.cwd(), t.testFile);
+    if (!existsSync(abs)) {
+      return { ok: false, reason: `testFile not found: ${t.testFile}` };
+    }
+    if (t.assertion) {
+      let content = "";
+      try {
+        content = readFileSync(abs, "utf-8");
+      } catch {
+        /* unreadable → treat as missing */
+      }
+      if (!content.includes(t.assertion)) {
+        return { ok: false, reason: `assertion not found in ${t.testFile}: "${t.assertion}"` };
+      }
+    }
+  }
+  return {
+    ok: true,
+    reason: !t.testFile
+      ? "trace complete (no testFile — ensure this is verifiable by inspection, or add an E2E test per 06b Rule 14)"
+      : "trace complete",
+  };
 }
 
 // ─── Dependency check ──────────────────────────────────────────────────────
@@ -225,18 +300,79 @@ export default function register(pi: ExtensionAPI): void {
       }
       case "verify": {
         // Gate 7: force an explicit, itemised QA pass before delivery.
+        // Large work: mechanical spec-to-code traceability gate (M1).
         const project = projectName();
         const state = await loadState(project);
         if (!state.current) return "No active ASF session — nothing to verify.";
         await setPhase(ctx, "verification");
-        return (
-          `ASF verification gate (${project}) — Definition of Done.\n` +
-          `Read references/06b-testing-qa.md. Confirm EACH item with concrete evidence\n` +
-          `(command output, file list, screenshot). Do not tick anything you did not run.\n\n` +
-          QA_CHECKLIST.map((c, i) => `  ${i + 1}. [ ] ${c.label}`).join("\n") +
-          `\n\nThen run get_task_specs and close every spec with update_spec_status.\n` +
-          `Unverifiable → 'partial' + ask the user. Never self-certify.`
+        const scale = state.current.scale;
+        const lines: string[] = [
+          `ASF verification gate (${project}) — Definition of Done.`,
+          `Scale: ${scale || "unset"}${
+            scale === "large"
+              ? " — mechanical traceability gate ACTIVE"
+              : scale === "small"
+                ? " (automatic — no mechanical gate)"
+                : ""
+          }`,
+        ];
+
+        if (scale === "large") {
+          const specs = await loadSpecs(project);
+          lines.push("\nSPEC-TO-CODE TRACEABILITY (M1 — large work):");
+          if (!specs || specs.length === 0) {
+            lines.push(
+              "  (no spec-memory task found — capture specs with capture_spec, incl. items from external planning docs)",
+            );
+          } else {
+            const metSpecs = specs.filter((s) => s.status === "met");
+            if (metSpecs.length === 0) {
+              lines.push(
+                "  (no specs marked met yet — traceability applies when closing specs)",
+              );
+            } else {
+              let allOk = true;
+              for (const spec of metSpecs) {
+                const check = validateTrace(spec);
+                if (!check.ok) allOk = false;
+                lines.push(`  [${check.ok ? "PASS" : "FAIL"}] ${spec.id}: ${check.reason}`);
+                if (check.ok && spec.trace) {
+                  lines.push(`       outcome: ${spec.trace.outcome}`);
+                  lines.push(`       code path: ${spec.trace.codePath}`);
+                  if (spec.trace.testFile) {
+                    lines.push(
+                      `       test: ${spec.trace.testFile}${spec.trace.assertion ? ` (asserts "${spec.trace.assertion}")` : ""}`,
+                    );
+                  }
+                }
+              }
+              lines.push(
+                allOk
+                  ? "\n  ✓ All met specs have complete traces."
+                  : "\n  ✗ GATE NOT PASSED — resolve FAIL rows before delivery (attach trace via update_spec_status).",
+              );
+            }
+          }
+        }
+
+        lines.push(
+          "\nDefinition of Done checklist (references/06b-testing-qa.md Rule 10):",
         );
+        lines.push(
+          "Read references/06b-testing-qa.md. Confirm EACH item with concrete evidence",
+        );
+        lines.push(
+          "(command output, file list, screenshot). Do not tick anything you did not run.",
+        );
+        lines.push("");
+        QA_CHECKLIST.forEach((c, i) => lines.push(`  ${i + 1}. [ ] ${c.label}`));
+        lines.push(
+          "\nThen run get_task_specs and close every spec with update_spec_status.",
+        );
+        lines.push(
+          "Unverifiable → 'partial' + ask the user. Never self-certify.",
+        );
+        return lines.join("\n");
       }
       case "abort":
         return await setPhase(ctx, "none");

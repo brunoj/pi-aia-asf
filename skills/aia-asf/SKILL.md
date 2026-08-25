@@ -70,6 +70,7 @@ Minimum intake checklist (ask anything not yet known, one question at a time or 
 - **Constraints** — musts, must-nots, boundaries, budget, timeline
 - **Preferences** — stack, language, platform, style (only if the user has them)
 - **Definition of done** — tests? deploy? release? docs?
+- **External planning docs** — are there IMPROVEMENT-PLAN.md / PLAN.md / requirements docs / delivery logs / ticket lists? Locate them (repo root, `docs/`, referenced by the user); they are inputs to spec capture, not ground truth.
 
 For each answer, **capture hard requirements immediately with `capture_spec`** (requirement, area, priority). Specs are the shared contract with pi-vigilant — it will re-verify them at the end.
 
@@ -105,9 +106,10 @@ Turn the intake answers + research into the authoritative spec set.
 
 1. Run `get_task_specs` to see what's already captured.
 2. Fill gaps: for every requirement the user stated or approved, ensure a spec exists (`capture_spec`).
-3. Decompose broad specs with `parentId` (e.g. "must be secure" → auth + encryption sub-specs).
-4. Default priority is `must`; use `should` only when the user says "nice to have".
-5. Areas: functionality, ui-ux, performance, security, error-handling, testing, documentation, compatibility, constraints, format, data, deployment, other.
+3. **Ingest external planning docs (M6):** every actionable item in an external planning doc (IMPROVEMENT-PLAN.md, PLAN.md, requirements docs, delivery logs, ticket lists) becomes a captured spec with `sourceQuote` pointing at the doc + item id. The doc's own ✅/delivered markers are **claims, not evidence** — each item gets traced and verified like any other spec.
+4. Decompose broad specs with `parentId` (e.g. "must be secure" → auth + encryption sub-specs).
+5. Default priority is `must`; use `should` only when the user says "nice to have".
+6. Areas: functionality, ui-ux, performance, security, error-handling, testing, documentation, compatibility, constraints, format, data, deployment, other.
 
 **Gate 3** (large only): show the full spec tree (`get_task_specs`) and get user sign-off: "specs correct — proceed to adversarial analysis?" Small work: capture specs silently, no sign-off needed.
 
@@ -188,9 +190,11 @@ Execute the task list milestone by milestone. Discipline rules:
 2. **Codebase isolation**: work strictly inside the project's own codebase. Do NOT edit files in other repos, global config, or unrelated directories — **unless the user explicitly instructs otherwise**. If a change would touch another codebase, stop and ask.
 3. **No scope creep**: if something new is discovered that changes specs, capture it, ask the user, and update the plan before implementing.
 4. **Descriptive commits**: `git commit -m "type: specific description of what and why"` (e.g. `fix: verify specs before rotation`). No vague messages, no placeholders.
-5. **Browser testing — MANDATORY for any web interface**: if the deliverable has a UI/website/web app, test it through `pi-aia-browser` (`browser_init`, `browser_navigate`, `browser_click`, `browser_type`, `browser_screenshot`, `browser_dom`, …) to replicate the user's real experience — not just curl/API checks. Verify: loads, key user journeys, responsive behavior, console errors.
+5. **Browser testing — MANDATORY for any web interface**: if the deliverable has a UI/website/web app, test it through `pi-aia-browser` (`browser_init`, `browser_navigate`, `browser_click`, `browser_type`, `browser_screenshot`, `browser_dom`, …) to replicate the user's real experience — not just curl/API checks. Verify: loads, key user journeys, responsive behavior, console errors. **Silent async paths included**: ingest through the real flow and wait for the enrichment to land (06b Rule 9).
 6. **Let pi-vigilant do its job**: it will auto-continue after premature stops and verify specs at settle. When it asks for `update_spec_status` with evidence, do it.
 7. **CHANGELOG discipline**: every user-visible change gets a CHANGELOG entry describing exactly what changed (no placeholder text).
+8. **Challenge approved designs (M4)**: if a spec's literal reading creates product tension (e.g. feedback clusters under "Plan" when "Plan = plans"), stop and resolve it with the user before implementing — never implement blindly and call it delivered.
+9. **Trace before claiming delivered (M5)**: the delivery log is a claim; the code is the evidence. Before marking anything ✅, trace the actual code path, confirm the output is consumed by a surface, and confirm the operator-facing outcome test passes.
 
 ---
 
@@ -199,6 +203,8 @@ Execute the task list milestone by milestone. Discipline rules:
 Run the **Definition of Done checklist** in `references/06b-testing-qa.md` (Rule 10). Every box must hold.
 
 Also check the **modularity DoD** from `references/06c-code-quality.md` (Phase 7 section): no duplicated shared logic, no hardcoded config values, every module tested standalone with the same calls it gets in the host, architecture writeup exists, existing functionality still green.
+
+**Large work:** run `/asf verify` — it mechanically validates the **spec-to-code traceability matrix** (M1): every `met` spec must carry `trace` (outcome → codePath → testFile + assertion), testFile must exist, assertion must appear in it. FAIL rows block delivery. **Verify ingested specs from external planning docs too** — the doc's ✅ markers are claims, not evidence.
 
 1. Run the full test suite (all of it, not a subset); fix failures; re-run until green.
 2. **Verify the artifact a user would actually get**: inspect the packaged file list
@@ -241,14 +247,19 @@ Also check the **modularity DoD** from `references/06c-code-quality.md` (Phase 7
 - ❌ Shipping a module that cannot run/test standalone outside the host
 - ❌ Refactoring without the architecture writeup (see `references/06c-code-quality.md`)
 - ❌ Breaking existing functionality during a refactor — refactoring preserves behavior
+- ❌ Marking a spec delivered from the delivery log instead of tracing the code — the log is a claim
+- ❌ Shipping machinery no surface consumes — delivered = visible in the product (UI or API)
+- ❌ Trusting unit tests as proof of wiring — assert the operator-facing outcome end-to-end
+- ❌ Trusting an external plan's ✅ (IMPROVEMENT-PLAN / delivery log) — ingest its items as specs and verify them
+- ❌ Implementing a spec literally when it creates product tension — challenge it and resolve with the user
 
 ## References
 
-- `references/01-intake.md` — question bank and probing techniques
+- `references/01-intake.md` — question bank and probing techniques (incl. external planning docs, M6)
 - `references/02-research.md` — research playbook with search templates
 - `references/04-adversarial.md` — adversarial checklist per area
-- `references/05-plan.md` — PLAN.md template with examples
-- `references/06-implementation.md` — coding discipline details
-- `references/06b-testing-qa.md` — **mandatory testing & QA standard** (11 rules + definition of done)
+- `references/05-plan.md` — PLAN.md template with examples (incl. spec-to-code traceability matrix)
+- `references/06-implementation.md` — coding discipline details (incl. M4 challenge designs, M5 trace before claiming)
+- `references/06b-testing-qa.md` — **mandatory testing & QA standard** (14 rules + definition of done)
 - `references/06c-code-quality.md` — **mandatory modularity & maintainability standard** (8 rules, SSOT, testable-standalone, single escalation path)
 - `references/07-release.md` — release workflow (versioning, CHANGELOG, tags, npm, CI/CD)
