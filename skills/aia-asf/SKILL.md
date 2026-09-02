@@ -182,6 +182,15 @@ Keep the plan **implementation-ready**: any competent engineer (or agent) can ex
 > understand; layered with clear boundaries and an architecture writeup; full I/O debug
 > logging with replay; nothing breaks existing functionality.
 
+> **Read `references/06d-delegation.md` before delegating.** Work may be delegated two ways:
+> **intercom** (message another live pi session that owns relevant context — always `list`
+> first, say what you want back, and treat their findings as evidence, not proof), and
+> **subagents** (spawn an isolated `pi -p` process when the OUTCOME matters more than the
+> trace — scoped codebase research, independent parallel fixes, fresh-perspective review).
+> Two verified hard limits: **never run parallel subagents against the same file** — tested,
+> 4 concurrent writers left only 1 of 4 edits, silently, all exiting 0 — and **exit code 0
+> does not mean success**, so always validate the returned output against what you asked for.
+
 Execute the task list milestone by milestone. Discipline rules:
 
 1. **Test-first**: write/update tests before or with implementation; run them; only commit green.
@@ -246,6 +255,9 @@ Also check the **modularity DoD** from `references/06c-code-quality.md` (Phase 7
 - ❌ Escalation/fallback logic re-implemented per caller instead of one shared escalation path
 - ❌ Shipping a module that cannot run/test standalone outside the host
 - ❌ Refactoring without the architecture writeup (see `references/06c-code-quality.md`)
+- ❌ Running parallel subagents that touch the same file — edits are silently lost (see `references/06d-delegation.md`)
+- ❌ Trusting a subagent's exit code or self-report instead of verifying the actual code/test result
+- ❌ Re-deriving context another live session already has instead of asking it over intercom
 - ❌ Breaking existing functionality during a refactor — refactoring preserves behavior
 - ❌ Marking a spec delivered from the delivery log instead of tracing the code — the log is a claim
 - ❌ Shipping machinery no surface consumes — delivered = visible in the product (UI or API)
@@ -262,4 +274,5 @@ Also check the **modularity DoD** from `references/06c-code-quality.md` (Phase 7
 - `references/06-implementation.md` — coding discipline details (incl. M4 challenge designs, M5 trace before claiming)
 - `references/06b-testing-qa.md` — **mandatory testing & QA standard** (14 rules + definition of done)
 - `references/06c-code-quality.md` — **mandatory modularity & maintainability standard** (8 rules, SSOT, testable-standalone, single escalation path)
+- `references/06d-delegation.md` — **intercom & subagents**: when to message another session, when to spawn isolated workers, the no-mutual-dependencies rule, and why exit codes lie
 - `references/07-release.md` — release workflow (versioning, CHANGELOG, tags, npm, CI/CD)

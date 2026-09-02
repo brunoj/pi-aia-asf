@@ -41,6 +41,9 @@ You can also force/start a session explicitly:
 | **pi-smart-web-search** | `web_search` | `pi install npm:pi-smart-web-search` |
 | **pi-smart-fetch** | `web_fetch`, `batch_web_fetch` | `pi install npm:pi-smart-fetch` |
 | **pi-aia-browser** | `browser_init`, `browser_navigate`, … (Playwright + Chromium, auto-installed) | `pi install npm:pi-aia-browser` |
+| **pi-intercom** | `intercom` — message other live pi sessions directly (delegation, cross-session verification) | `pi install npm:pi-intercom` |
+
+`pi-intercom` is also declared in `dependencies` in `package.json`, so `npm install` of this package pulls it in. It is intentionally **not bundled** into the tarball: bundling it would conflict with a top-level `pi install npm:pi-intercom` (tool name collision), so the tool must be installed at top level to register.
 
 The extension warns at startup (and on `/asf` with no args) when any dependency is missing.
 

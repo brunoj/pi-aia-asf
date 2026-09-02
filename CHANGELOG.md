@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-08-28
+
+### Added
+
+- **Delegation reference `references/06d-delegation.md`** — codifies the two
+  delegation mechanisms available to ASF work: **intercom** (message another
+  live pi session that owns relevant context — `list` first, say what you want
+  back, treat peer findings as evidence, not proof) and **subagents** (spawn an
+  isolated `pi -p` process when the OUTCOME matters more than the trace — scoped
+  codebase research, independent parallel fixes, fresh-perspective review).
+- **Two verified hard limits, backed by experiment** (both documented as
+  anti-patterns in SKILL.md):
+  - **Never run parallel subagents against the same file.** Tested: 4 concurrent
+    whole-file writers left only 1 of 4 edits, silently, all exiting 0 — the
+    no-mutual-dependencies rule is enforced by physics, not preference.
+  - **Exit code 0 does not mean success.** Tested: a subagent asked to read a
+    non-existent file exited 0. Always validate the returned output.
+- **`pi-intercom` as a declared dependency** (`dependencies` in package.json,
+  `^0.10.1`) — `npm install` pulls it in. Intentionally **not bundled**: a
+  bundled copy conflicts with a top-level `pi install npm:pi-intercom`
+  (tool-name collision, verified), so the tool must be installed top-level to
+  register. Added to the ASF runtime dependency check (`/asf` summary now lists
+  all five: pi-vigilant, pi-smart-web-search, pi-smart-fetch, pi-aia-browser,
+  pi-intercom).
+- **SKILL.md wiring** — Phase 6 delegation note, reference index entry, and
+  three new anti-patterns (same-file parallel subagents, trusting subagent exit
+  codes/self-reports, re-deriving context another live session already has).
+
+### Changed
+
+- README dependencies table now lists pi-intercom with the not-bundled rationale.
+
 ## [0.3.0] - 2026-08-25
 
 ### Added
