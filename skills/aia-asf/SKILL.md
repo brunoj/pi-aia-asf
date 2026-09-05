@@ -200,10 +200,11 @@ Execute the task list milestone by milestone. Discipline rules:
 3. **No scope creep**: if something new is discovered that changes specs, capture it, ask the user, and update the plan before implementing.
 4. **Descriptive commits**: `git commit -m "type: specific description of what and why"` (e.g. `fix: verify specs before rotation`). No vague messages, no placeholders.
 5. **Browser testing — MANDATORY for any web interface**: if the deliverable has a UI/website/web app, test it through `pi-aia-browser` (`browser_init`, `browser_navigate`, `browser_click`, `browser_type`, `browser_screenshot`, `browser_dom`, …) to replicate the user's real experience — not just curl/API checks. Verify: loads, key user journeys, responsive behavior, console errors. **Silent async paths included**: ingest through the real flow and wait for the enrichment to land (06b Rule 9).
-6. **Let pi-vigilant do its job**: it will auto-continue after premature stops and verify specs at settle. When it asks for `update_spec_status` with evidence, do it.
-7. **CHANGELOG discipline**: every user-visible change gets a CHANGELOG entry describing exactly what changed (no placeholder text).
-8. **Challenge approved designs (M4)**: if a spec's literal reading creates product tension (e.g. feedback clusters under "Plan" when "Plan = plans"), stop and resolve it with the user before implementing — never implement blindly and call it delivered.
-9. **Trace before claiming delivered (M5)**: the delivery log is a claim; the code is the evidence. Before marking anything ✅, trace the actual code path, confirm the output is consumed by a surface, and confirm the operator-facing outcome test passes.
+6. **Bounded waits — ALWAYS (06b Rule 15)**: before any long-running command (package install, platform/test-harness startup, browser/daemon launch, full suite), **state the expected duration explicitly** and wrap it in a **hard timeout** (`timeout N …` or the tool's `timeout` parameter) — never run unbounded. If it exceeds the bound: kill it, diagnose what it is blocking on, fix the root cause. If the bound proves too short, raise it deliberately with a reason — never silently extend, never remove the bound. A 50,000-second hang is a failure to investigate, not patience.
+7. **Let pi-vigilant do its job**: it will auto-continue after premature stops and verify specs at settle. When it asks for `update_spec_status` with evidence, do it.
+8. **CHANGELOG discipline**: every user-visible change gets a CHANGELOG entry describing exactly what changed (no placeholder text).
+9. **Challenge approved designs (M4)**: if a spec's literal reading creates product tension (e.g. feedback clusters under "Plan" when "Plan = plans"), stop and resolve it with the user before implementing — never implement blindly and call it delivered.
+10. **Trace before claiming delivered (M5)**: the delivery log is a claim; the code is the evidence. Before marking anything ✅, trace the actual code path, confirm the output is consumed by a surface, and confirm the operator-facing outcome test passes.
 
 ---
 

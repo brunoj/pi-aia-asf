@@ -146,6 +146,7 @@ never arrives, the wiring is dead — that is a failed test.
 - [ ] **Consumed by a surface: every delivered feature's output is visible in the product (UI or API) — nothing ships as dead machinery**
 - [ ] **E2E behavioral test: every feature spec has a test through the real entry point asserting the operator-facing outcome**
 - [ ] Unverifiable specs → `partial` + asked the user (never self-certified)
+- [ ] **Every long-running command ran under an explicit timeout with a stated expected duration (no unbounded waits)**
 
 ## Rule 11 — Report honestly
 
@@ -194,3 +195,24 @@ done — the wiring may be dead.
 - **Scale note:** mandatory for feature specs in **large/gated work**. For small
   work, required only when the change touches a surface/wiring; otherwise the
   standard test-first rules above suffice.
+
+## Rule 15 — Bound every long-running operation: state the expected duration, then enforce it
+
+> **Real failure (user report):** package installs / platform startups / test
+> harnesses hung for up to **50,000 seconds** while the agent waited, doing
+> nothing. An unbounded wait is not patience — it is a silent stall.
+
+- **State the expected duration before running.** "This install should take
+  ~2 min", "first platform startup ~10 min", "suite ~3 min". The expectation is
+  part of the command, not an afterthought.
+- **ALWAYS wrap it in a hard timeout** — `timeout 300 …` for shell commands, an
+  explicit `timeout` parameter for tool calls. Never run unbounded.
+- **Exceeding the bound is a bug signal, not a slow command.** Kill it and
+  diagnose immediately: what is it blocking on (network, lock, hung process,
+  missing dependency, waiting for input)? Fix the root cause.
+- **If the bound proves too short, raise it deliberately** — state the new
+  expectation and the reason ("first-time platform startup needs 10 min;
+  bound raised to 900s"). Never silently extend, never remove the bound.
+- **A hang that outlives its expected duration is a failure to investigate,**
+  not a wait to endure. If you cannot verify something within a bounded time,
+  say so explicitly (Rule 11) instead of waiting indefinitely.

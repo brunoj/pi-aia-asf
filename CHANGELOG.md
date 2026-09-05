@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-08-28
+
+### Added
+
+- **06b Rule 15 — bound every long-running operation** (new mandatory QA rule):
+  state the expected duration before running any long command (package installs,
+  platform/test-harness startup, browser/daemon launches, full suites); ALWAYS
+  wrap it in a hard timeout (`timeout N …` / tool timeout parameter); exceeding
+  the bound is a bug signal — kill and diagnose the root cause; if the bound
+  proves too short, raise it deliberately with a reason. Rooted in the user
+  report of package hangs lasting up to 50,000 seconds with the agent waiting
+  idle. Added to the Rule 10 definition-of-done checklist.
+- **SKILL.md discipline rule 6 — Bounded waits — ALWAYS** (renumbered rules
+  7–10): the same rule at the phase level, with the 50,000-second hang as the
+  anti-example.
+- **07-release.md**: "Verify first" step now requires every long-running
+  verification command to have run under an explicit timeout with a stated
+  expected duration.
+
 ## [0.4.0] - 2026-08-28
 
 ### Added

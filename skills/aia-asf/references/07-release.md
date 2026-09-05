@@ -15,6 +15,7 @@ Publishing is **always the user's decision**. The factory prepares everything; t
    - typecheck / build passes
    - test suite green
    - all MUST specs `met` in pi-vigilant
+   - every long-running verification command ran under an explicit timeout with a stated expected duration (06b Rule 15) — no unbounded waits
 2. **Version bump** — semantic versioning:
    - `patch` (0.1.0 → 0.1.1): bug fixes
    - `minor` (0.1.0 → 0.2.0): new features, backward compatible
