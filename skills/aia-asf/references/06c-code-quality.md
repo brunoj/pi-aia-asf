@@ -141,6 +141,38 @@ existing functionality. Each rule below carries the lesson.
 - This is the SSOT/refactor safety net: refactoring restructures *structure*,
   never *behavior*.
 
+## Rule 9 — Documents are code: refactor them when they outgrow editability
+
+> *"Whenever documents you work on become so big that they start causing
+> writing / editing issues, it's time to refactor them."* — Ai Applied tenet
+
+A document that is too big to edit safely is a **maintainability bug**, not a
+fact of life. The same triggers that say "extract a module" for code say
+"split this document" for docs:
+
+- **Edit-tool failures**: `oldText` matching starts failing or needs huge
+  context; edits become fragile and overlapping.
+- **Truncation**: the file approaches context limits; reads get cut off;
+  you can no longer see the whole document.
+- **Multi-topic bloat**: one file covers several distinct subjects (e.g. a
+  SKILL.md that has grown into a wall of prose instead of a map).
+- **Every change touches the same big file**: constant conflict risk, slow
+  review, no single place to look.
+
+**The refactor pattern (documents):**
+
+1. **Split by topic** — one subject per document (like one responsibility per
+   module). Move detail into focused references; keep the parent as an
+   **index/map** that points to them.
+2. **Keep cross-references exact** — every pointer to the old content is
+   updated; nothing dangles.
+3. **Preserve content** — a doc refactor moves text, it does not rewrite or
+   drop it (Rule 8 applied to documents).
+4. **Verify** — re-read the split docs, confirm every referenced rule/topic
+   still exists and is reachable, and that the frontmatter/format stays valid.
+5. **Refactor before it hurts, not after** — if you notice edit friction
+   starting, that is the moment. Do not wait for a broken edit.
+
 ---
 
 ## Where this applies in ASF
@@ -152,11 +184,14 @@ existing functionality. Each rule below carries the lesson.
   their boundaries, the one-way dependencies, where shared truth lives, and
   how each module is tested standalone.
 - **Phase 6 (implementation)**: apply Rules 1–8 as you build; extract modules
-  when triggers fire; write the architecture doc alongside the code.
+  when triggers fire; write the architecture doc alongside the code. Apply
+  Rule 9 to the documents you write: SKILL.md, references, PLAN.md, README —
+  split them when they outgrow editability.
 - **Phase 7 (verification)**: the DoD checklist includes: no duplicated shared
   logic (Rule 2), no hardcoded config values (Rule 3), every module tested
   standalone with the same calls (Rule 4), architecture doc written (Rule 6),
-  existing functionality still green (Rule 8).
+  existing functionality still green (Rule 8). Documents: no doc so large that
+  editing it is fragile (Rule 9).
 
 ## Anti-patterns
 
@@ -168,3 +203,6 @@ existing functionality. Each rule below carries the lesson.
 - ❌ Refactoring "for fun" without the testability/debugging payoff
 - ❌ Shipping a module that cannot run outside the host
 - ❌ Skipping the architecture writeup ("the code is self-documenting")
+- ❌ Letting a document grow until edits start breaking instead of splitting it
+  (Rule 9)
+- ❌ A SKILL.md that is a wall of prose instead of a map to focused references

@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-08-28
+
+### Added
+
+- **06c Rule 9 — Documents are code: refactor them when they outgrow
+  editability** (new mandatory rule, Ai Applied tenet): when a document starts
+  causing writing/editing issues (edit-tool matching failures, truncation,
+  multi-topic bloat, every change touching the same big file), it is time to
+  refactor it — split by topic, keep the parent as an index/map, keep
+  cross-references exact, preserve content (Rule 8 applied to documents),
+  verify, and refactor before it hurts rather than after.
+- **Wiring**: 06c "Where this applies" (Phase 6 + Phase 7), 06c anti-patterns
+  (letting a document grow until edits break; wall-of-prose SKILL.md), SKILL.md
+  Phase 6 note, Phase 7 modularity DoD (documents too), SKILL.md anti-pattern,
+  and the reference index (now 9 rules).
+
 ## [0.5.0] - 2026-08-28
 
 ### Added

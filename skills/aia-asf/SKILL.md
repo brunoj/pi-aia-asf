@@ -180,7 +180,10 @@ Keep the plan **implementation-ready**: any competent engineer (or agent) can ex
 > SSOT); no hardcoding (config-driven); **testable outside the host then integrated
 > verbatim** (same modules in tests and production); refactor what is too complex to
 > understand; layered with clear boundaries and an architecture writeup; full I/O debug
-> logging with replay; nothing breaks existing functionality.
+> logging with replay; nothing breaks existing functionality. **Documents are code too
+> (Rule 9): when a document outgrows editability (failing edits, truncation, multi-topic
+> bloat), split it by topic and keep the parent as an index — never let it grow until
+> editing breaks.**
 
 > **Read `references/06d-delegation.md` before delegating.** Work may be delegated two ways:
 > **intercom** (message another live pi session that owns relevant context — always `list`
@@ -212,7 +215,7 @@ Execute the task list milestone by milestone. Discipline rules:
 
 Run the **Definition of Done checklist** in `references/06b-testing-qa.md` (Rule 10). Every box must hold.
 
-Also check the **modularity DoD** from `references/06c-code-quality.md` (Phase 7 section): no duplicated shared logic, no hardcoded config values, every module tested standalone with the same calls it gets in the host, architecture writeup exists, existing functionality still green.
+Also check the **modularity DoD** from `references/06c-code-quality.md` (Phase 7 section): no duplicated shared logic, no hardcoded config values, every module tested standalone with the same calls it gets in the host, architecture writeup exists, existing functionality still green. **Documents too (06c Rule 9)**: no document so large that editing it is fragile — if a doc you worked on started causing edit failures/truncation, it was refactored (split by topic, parent kept as index, cross-references updated).
 
 **Large work:** run `/asf verify` — it mechanically validates the **spec-to-code traceability matrix** (M1): every `met` spec must carry `trace` (outcome → codePath → testFile + assertion), testFile must exist, assertion must appear in it. FAIL rows block delivery. **Verify ingested specs from external planning docs too** — the doc's ✅ markers are claims, not evidence.
 
@@ -256,6 +259,7 @@ Also check the **modularity DoD** from `references/06c-code-quality.md` (Phase 7
 - ❌ Escalation/fallback logic re-implemented per caller instead of one shared escalation path
 - ❌ Shipping a module that cannot run/test standalone outside the host
 - ❌ Refactoring without the architecture writeup (see `references/06c-code-quality.md`)
+- ❌ Letting a document grow until edits start breaking instead of splitting it (06c Rule 9)
 - ❌ Running parallel subagents that touch the same file — edits are silently lost (see `references/06d-delegation.md`)
 - ❌ Trusting a subagent's exit code or self-report instead of verifying the actual code/test result
 - ❌ Re-deriving context another live session already has instead of asking it over intercom
@@ -274,6 +278,6 @@ Also check the **modularity DoD** from `references/06c-code-quality.md` (Phase 7
 - `references/05-plan.md` — PLAN.md template with examples (incl. spec-to-code traceability matrix)
 - `references/06-implementation.md` — coding discipline details (incl. M4 challenge designs, M5 trace before claiming)
 - `references/06b-testing-qa.md` — **mandatory testing & QA standard** (14 rules + definition of done)
-- `references/06c-code-quality.md` — **mandatory modularity & maintainability standard** (8 rules, SSOT, testable-standalone, single escalation path)
+- `references/06c-code-quality.md` — **mandatory modularity & maintainability standard** (9 rules, SSOT, testable-standalone, single escalation path, documents-are-code)
 - `references/06d-delegation.md` — **intercom & subagents**: when to message another session, when to spawn isolated workers, the no-mutual-dependencies rule, and why exit codes lie
 - `references/07-release.md` — release workflow (versioning, CHANGELOG, tags, npm, CI/CD)
