@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-08-28
+
+### Removed
+
+- **pi-intercom is no longer a dependency** (reversal of the 0.4.0 addition,
+  per user decision): removed from `dependencies` in package.json and from the
+  runtime dependency check — `/asf` summary is back to the four required
+  packages (pi-vigilant, pi-smart-web-search, pi-smart-fetch, pi-aia-browser).
+  ASF works fully without it; intercom is documented as an **optional** tool
+  (`pi install npm:pi-intercom`) in the README, 06d-delegation.md, and the
+  SKILL.md delegation note. Rationale: a hard dependency broke the workspace
+  installer's `--skip=pi-intercom` semantics (npm pulled it back in via
+  pi-aia-asf), and delegation is a nice-to-have, not a requirement.
+
 ## [0.6.0] - 2026-08-28
 
 ### Added

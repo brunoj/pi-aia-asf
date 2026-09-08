@@ -215,12 +215,6 @@ function checkDependencies(): DependencyCheck[] {
         existsSync(join(gitDir, "github.com", "brunoj", "pi-aia-browser")),
       hint: "pi install npm:pi-aia-browser (installs Playwright + Chromium)",
     },
-    {
-      name: "pi-intercom (intercom: message other pi sessions)",
-      package: "pi-intercom",
-      present: existsSync(join(npmDir, "pi-intercom")),
-      hint: "pi install npm:pi-intercom",
-    },
   ];
 
   return checks;
@@ -230,7 +224,7 @@ function dependencySummary(): string {
   const checks = checkDependencies();
   const missing = checks.filter((c) => !c.present);
   if (missing.length === 0) {
-    return "All ASF dependencies present: pi-vigilant, pi-smart-web-search, pi-smart-fetch, pi-aia-browser, pi-intercom ✓";
+    return "All ASF dependencies present: pi-vigilant, pi-smart-web-search, pi-smart-fetch, pi-aia-browser ✓";
   }
   return (
     "⚠️ ASF dependencies missing — install before starting a project:\n" +

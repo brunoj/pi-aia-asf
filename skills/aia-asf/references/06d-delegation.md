@@ -14,6 +14,12 @@ ASF work does not have to happen in one session, in one context window, or one t
 
 ## Part 1 — Intercom: passing messages to other sessions
 
+> **Optional capability.** `pi-intercom` is **not** a dependency of ASF — ASF
+> works fully without it. The `intercom` tool is available only when the user
+> has installed it (`pi install npm:pi-intercom`). When it is present, use it
+> as described below; when it is absent, fall back to asking the user or
+> working in one session.
+
 Other pi sessions on this machine are often working on directly relevant things: the same monorepo, an adjacent service, the package you depend on. **Use intercom to talk to them directly instead of guessing, duplicating their work, or routing everything through the user.**
 
 ### When to use intercom

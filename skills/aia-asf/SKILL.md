@@ -187,7 +187,8 @@ Keep the plan **implementation-ready**: any competent engineer (or agent) can ex
 
 > **Read `references/06d-delegation.md` before delegating.** Work may be delegated two ways:
 > **intercom** (message another live pi session that owns relevant context — always `list`
-> first, say what you want back, and treat their findings as evidence, not proof), and
+> first, say what you want back, and treat their findings as evidence, not proof; **optional** —
+> only when the user has installed `pi-intercom`, ASF works without it), and
 > **subagents** (spawn an isolated `pi -p` process when the OUTCOME matters more than the
 > trace — scoped codebase research, independent parallel fixes, fresh-perspective review).
 > Two verified hard limits: **never run parallel subagents against the same file** — tested,
