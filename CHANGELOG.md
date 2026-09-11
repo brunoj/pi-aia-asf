@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-09-11
+
+### Added
+
+- **Absolute wait ceiling — 30 minutes (06b Rule 15)** — no single wait may
+  exceed 30 min (1800s). Addresses the reported failure where tool calls waited
+  forever for the system to react and the whole process kept hanging,
+  especially during testing. The ceiling is a **backstop, never a substitute**
+  for a real per-call bound: a 30s suite still gets ~120s, and a lone 1800s
+  bound is treated as not having bounded anything. Hitting the ceiling means
+  kill the wait and diagnose the blocking cause — it is a bug signal, not
+  patience.
+- **Explicit per-run waiver** — the ceiling can be disabled, but only
+  deliberately and only for a **single run**: stated before running, with the
+  reason and a finite larger bound. A waiver does not persist, does not carry
+  over, and resets immediately afterwards. Blanket/standing waivers are
+  disallowed; repeated need for waivers is a setup defect to report (Rule 11).
+- **"Every waiting call carries its own explicit timeout"** — makes the rule
+  cover *every* tool call or command that waits on the system, not just the
+  obviously slow ones, with testing called out as the highest-risk area
+  (harnesses, servers, daemons, browsers hanging on ports, locks and prompts).
+  Bounds are sized from the stated expected duration with headroom.
+- New Definition-of-Done item for the ceiling; ceiling applies at **both
+  scales** (small work is not exempt).
+- **Durable test suite in `test/`** — the ASF suites were previously only in
+  `/tmp` and would have been lost. `npm test` now runs 67 checks (timeouts,
+  ceiling, delegation, docs-rule) against the real shipped skill text;
+  `test/setup.sh` prepares the jiti harness against the installed pi.
+
+### Verification
+
+- 67/67 checks pass (`npm test`): 13 timeouts, 17 ceiling, 19 delegation,
+  18 docs-rule.
+- The 17 new ceiling checks were confirmed to **fail 11/17 on the pre-change
+  text** before implementation, proving they assert real content.
+- SKILL.md YAML frontmatter re-verified as parsing (pi silently skips skills
+  with malformed frontmatter).
+
+
 ## [0.6.1] - 2026-08-28
 
 ### Removed

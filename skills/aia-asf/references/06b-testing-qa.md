@@ -147,6 +147,7 @@ never arrives, the wiring is dead — that is a failed test.
 - [ ] **E2E behavioral test: every feature spec has a test through the real entry point asserting the operator-facing outcome**
 - [ ] Unverifiable specs → `partial` + asked the user (never self-certified)
 - [ ] **Every long-running command ran under an explicit timeout with a stated expected duration (no unbounded waits)**
+- [ ] **No wait exceeded the 30 min (1800s) absolute ceiling — or it was explicitly waived for that single run, with a reason and a finite bound**
 
 ## Rule 11 — Report honestly
 
@@ -216,3 +217,54 @@ done — the wiring may be dead.
 - **A hang that outlives its expected duration is a failure to investigate,**
   not a wait to endure. If you cannot verify something within a bounded time,
   say so explicitly (Rule 11) instead of waiting indefinitely.
+
+### Every waiting call carries its own explicit timeout
+
+This applies to **every tool call or command that waits on the system** — not
+just the obviously slow ones. Testing is where this bites hardest: a test
+harness, dev server, daemon, browser launch, or watcher can block forever on a
+port, a lock, a prompt, or a process that never exits.
+
+- Shell: `timeout <seconds> <command>` — always.
+- Tool calls: pass the tool's explicit `timeout` parameter — always.
+- Pick the bound from the **stated expected duration**, with headroom. A test
+  suite you expect to take 30s gets ~120s, not 3000s.
+- "I'll just run it and see" is the failure mode this rule exists to prevent.
+
+### The absolute ceiling — 30 minutes, no exceptions unless explicitly waived
+
+> **Real failure (user report):** tool calls waited forever for the system to
+> react and the whole process kept hanging — especially during testing.
+
+**No single wait may exceed 30 minutes (1800s).** This is a hard ceiling, not a
+default and not a target:
+
+- **It is a backstop, not a substitute for a per-call bound.** The ceiling never
+  replaces the real timeout: a 30s suite still gets a ~120s bound. If your only
+  bound is 1800s, you have not bounded anything — you have deferred the hang.
+- **Never exceed it.** If a command genuinely needs longer, that is a signal to
+  restructure it (run it in the background and poll with bounded checks, split
+  it into stages, or reduce the work) — not to raise the number.
+- **When the ceiling is hit, kill the wait and diagnose.** Hitting 30 minutes is
+  a bug signal and a failure to investigate: find what it is blocking on
+  (network, lock, hung process, missing dependency, waiting on stdin) and fix
+  the root cause. Never re-run the same unbounded wait hoping for a different
+  result.
+
+**Explicit per-run waiver.** The ceiling can be disabled, but only deliberately
+and only for a **single run**:
+
+- The agent must **state it explicitly before running** — what is being run, why
+  it legitimately needs more than 30 minutes, and the new bound. For example:
+  *"Waiving the 30-min ceiling for this one run: full integration suite against
+  a cold container build, expected ~45 min, bound 3600s."*
+- A waiver covers **that one run only**. It **does not persist**, does not carry
+  over to the next command, and **resets immediately afterwards** — the next
+  wait is bounded by 30 minutes again.
+- A waiver still requires a **finite bound**. Waiving the ceiling means choosing
+  a larger explicit number, never running unbounded.
+- Blanket or standing waivers are not allowed. If waivers are needed repeatedly,
+  that is a defect in the setup — report it (Rule 11) instead of normalizing it.
+
+**Applies at both scales.** Small work is not exempt: a hang wastes the same
+time regardless of how the task was classified.
