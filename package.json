@@ -1,7 +1,7 @@
 {
   "name": "pi-aia-asf",
-  "version": "0.6.1",
-  "description": "Ai Applied Agentic Software Factory \u2014 codifies the full software development flow: intake, research, spec capture, adversarial analysis, planning with approval gates, test-first implementation, and release. Requires pi-vigilant, pi-smart-web-search, pi-smart-fetch, and pi-aia-browser.",
+  "version": "0.7.0",
+  "description": "Ai Applied Agentic Software Factory — codifies the full software development flow: intake, research, spec capture, adversarial analysis, planning with approval gates, test-first implementation, and release. Requires pi-vigilant, pi-smart-web-search, pi-smart-fetch, and pi-aia-browser.",
   "keywords": [
     "pi-package",
     "software-factory",
@@ -29,7 +29,7 @@
   ],
   "scripts": {
     "clean": "echo 'nothing to clean'",
-    "build": "echo 'nothing to build \u2014 pi loads .ts via jiti at runtime'",
+    "build": "echo 'nothing to build — pi loads .ts via jiti at runtime'",
     "check": "tsc --noEmit --target ES2022 --module NodeNext --moduleResolution NodeNext --skipLibCheck --allowImportingTsExtensions --noCheck index.ts",
     "test": "./test/run-all.sh",
     "release": "./scripts/release.sh"
