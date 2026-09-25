@@ -23,7 +23,12 @@ function makeProject(files) {
   return dir;
 }
 
-export async function run({ commands }) {
+export async function run({ commands, extDir }) {
+  // 06e standard doc wired into SKILL.md like 06c (spec spc-1790336984535-15568).
+  const skill = fs.readFileSync(path.join(extDir, "skills", "aia-asf", "SKILL.md"), "utf8");
+  chk("06e referenced from SKILL.md", skill.includes("06e-code-health.md"));
+  chk("06e standard doc exists", fs.existsSync(path.join(extDir, "skills", "aia-asf", "references", "06e-code-health.md")));
+  chk("Phase 7 mentions the code health gate", /Code Health Gate/.test(skill));
   const asf = commands.find((c) => c.name === "asf");
   chk("/asf command registered", !!asf);
   if (!asf) return;

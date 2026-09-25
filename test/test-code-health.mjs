@@ -325,6 +325,16 @@ section("16. pipeline: a hanging tool fails with timeout, does not hang");
   rm(dir);
 }
 
+section("15b. pipeline: --json returns machine-readable output");
+{
+  const dir = makeProject({ "src/a.js": "const a = 1;\n" });
+  const res = await health.runHealth(dir, ["--json"], { tools: TOOLS_ALL, execFn: fakeExec() });
+  check("json payload has rows", Array.isArray(res.json?.rows) && res.json.rows.length > 0);
+  check("json payload has verdict", typeof res.json?.verdict?.healthy === "boolean");
+  check("json rows carry status", res.json.rows.every((r) => typeof r.status === "string"));
+  rm(dir);
+}
+
 section("16b. pipeline: no tools at all → UNVERIFIED, not a gate failure");
 {
   const dir = makeProject({ "src/a.js": "const a = 1;\n" });
