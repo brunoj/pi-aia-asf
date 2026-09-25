@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-09-12
+
+### Added
+
+- **Code Health Gate** — objective, configurable measurement of code
+  convolution at three levels, replacing pure judgment with measurable
+  thresholds (references/06e-code-health.md):
+  - **function** — cyclomatic complexity (20), cognitive complexity (15),
+    lines per function (50), nesting depth (4), parameters (3) via eslint
+    (`--rule` flags, not the project's own config);
+  - **module** — lines per file (300) via eslint, duplication (5% / min 5
+    lines / 50 tokens) via jscpd, circular imports (any cycle = fail) via
+    madge;
+  - **architecture** — optional dependency-cruiser rules (off by default).
+- **`/asf health`** — runs the gate and prints a `metric | value | threshold |
+  status` table with a verdict; exit 1 when the gate fails. Flags: `--diff`
+  (regression trend vs the committed baseline), `--update-baseline`, `--json`.
+- **Gate 8 in `/asf verify`** — large work runs the code health gate after the
+  M1 traceability matrix; block mode fails the gate, warn mode reports only.
+- **`.asf-code-health.json`** — optional project config, merged over defaults
+  (defaults ← project ← CLI). On/off at every level: master `enabled`,
+  per-level, per-metric. `gate.mode` block|warn, `gate.scope` large|all|off,
+  `missingTool` warn|fail, `toolTimeoutSeconds` (default 120s, Rule 15).
+- **Committed baseline** — `.asf-code-health-baseline.json` is committed so the
+  trend survives across machines/CI; `--diff` flags any regression.
+- **Test suites** — `test/test-code-health.mjs` (73 checks: pure modules,
+  pipeline triggers + non-triggers with fake tools, real-exec timeout,
+  real-eslint integration) and `test/test-code-health-ext.mjs` (12 checks
+  through the real `/asf health` + `/asf verify` command handlers with a real
+  eslint).
+
 ## [0.7.0] - 2026-09-11
 
 ### Added

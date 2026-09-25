@@ -29,6 +29,7 @@ You can also force/start a session explicitly:
 /asf bugfix       — major bugfix
 /asf refactor     — architectural refactor
 /asf status       — show current phase + state
+/asf health       — run the code health gate (function/module/architecture)
 /asf approve      — mark PLAN.md as approved (Gate 5)
 /asf abort        — end the session
 ```
@@ -59,6 +60,31 @@ Then `/reload`.
 - **Skill** (`skills/aia-asf/SKILL.md`) — the workflow itself, with per-phase reference guides in `references/`.
 - **Extension** (`index.ts`) — `/asf` commands, per-project phase state (`~/.pi/agent/skills/aia-asf/projects/<project>/state.json`), dependency checks.
 - **Specs shared with pi-vigilant** — ASF drives `capture_spec` during intake; pi-vigilant re-verifies every spec at task end and blocks "done" while MUST specs are open. One spec file, two systems.
+
+## Code Health Gate
+
+`/asf health` measures convolution **objectively** at three levels — function
+(complexity, cognitive complexity, lines, depth, params), module (file lines,
+duplication, circular imports) and architecture (optional dependency rules) —
+and fails the gate when a threshold is crossed. It is **on by default** with
+conservative thresholds; configure via `.asf-code-health.json` at the project
+root (every level/metric can be disabled independently). For large work it is
+**Gate 8** in `/asf verify`. See `skills/aia-asf/references/06e-code-health.md`.
+
+```json
+{
+  "enabled": true,
+  "gate": { "mode": "block", "scope": "large" },
+  "missingTool": "warn",
+  "function": { "complexity": { "max": 20 }, "maxDepth": { "max": 4 } },
+  "module": { "duplication": { "thresholdPercent": 5 } }
+}
+```
+
+Flags: `--diff` (compare vs committed `.asf-code-health-baseline.json`),
+`--update-baseline`, `--json`. Tools are invoked via `npx --no-install` — they
+must be project devDependencies (eslint, eslint-plugin-sonarjs, jscpd, madge,
+dependency-cruiser); the gate never installs anything.
 
 ## Hygiene rules enforced
 

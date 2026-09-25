@@ -220,6 +220,8 @@ Also check the **modularity DoD** from `references/06c-code-quality.md` (Phase 7
 
 **Large work:** run `/asf verify` — it mechanically validates the **spec-to-code traceability matrix** (M1): every `met` spec must carry `trace` (outcome → codePath → testFile + assertion), testFile must exist, assertion must appear in it. FAIL rows block delivery. **Verify ingested specs from external planning docs too** — the doc's ✅ markers are claims, not evidence.
 
+**Code Health Gate (large work, Gate 8):** run `/asf health` — it measures convolution objectively at function / module / architecture level (see `references/06e-code-health.md`) and fails the gate when thresholds are crossed. The gate is **on by default** with conservative thresholds; configure via `.asf-code-health.json` at the project root. **Fix the cause, not the threshold** (06e Rule 2). Small work shows the report but never blocks.
+
 1. Run the full test suite (all of it, not a subset); fix failures; re-run until green.
 2. **Verify the artifact a user would actually get**: inspect the packaged file list
    (`npm pack` → `tar tzf`), install/load it clean-room in a fresh dir with caches
@@ -280,5 +282,6 @@ Also check the **modularity DoD** from `references/06c-code-quality.md` (Phase 7
 - `references/06-implementation.md` — coding discipline details (incl. M4 challenge designs, M5 trace before claiming)
 - `references/06b-testing-qa.md` — **mandatory testing & QA standard** (14 rules + definition of done)
 - `references/06c-code-quality.md` — **mandatory modularity & maintainability standard** (9 rules, SSOT, testable-standalone, single escalation path, documents-are-code)
+- `references/06e-code-health.md` — **Code Health Gate** (objective convolution measurement; Gate 8 for large work)
 - `references/06d-delegation.md` — **intercom & subagents**: when to message another session, when to spawn isolated workers, the no-mutual-dependencies rule, and why exit codes lie
 - `references/07-release.md` — release workflow (versioning, CHANGELOG, tags, npm, CI/CD)

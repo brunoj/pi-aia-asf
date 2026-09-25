@@ -355,6 +355,21 @@ export default function register(pi: ExtensionAPI): void {
           }
         }
 
+        if (scale === "large") {
+          // Gate 8: Code Health — objective convolution measurement.
+          const { runHealth } = await import("./lib/code-health/index.mjs");
+          const health = await runHealth(process.cwd(), []);
+          lines.push("\nCODE HEALTH (Gate 8 — large work):");
+          lines.push(health.text);
+          if (health.exitCode === 1) {
+            lines.push("\n  ✗ GATE NOT PASSED — resolve code-health violations before delivery.");
+          } else if (!health.healthy && health.config?.gate?.mode === "warn") {
+            lines.push("\n  ⚠ warn mode: violations reported but not blocking.");
+          } else {
+            lines.push("\n  ✓ Code health gate passed.");
+          }
+        }
+
         lines.push(
           "\nDefinition of Done checklist (references/06b-testing-qa.md Rule 10):",
         );
@@ -374,6 +389,19 @@ export default function register(pi: ExtensionAPI): void {
         );
         return lines.join("\n");
       }
+      case "health": {
+        // Code Health Gate: objective measurement of convolution at function /
+        // module / architecture level (references/06e-code-health.md).
+        const { runHealth } = await import("./lib/code-health/index.mjs");
+        const res = await runHealth(process.cwd(), args.slice(1));
+        const tail =
+          res.exitCode === 1
+            ? "\n\n✗ GATE FAILED — resolve the violations before delivery."
+            : res.config?.gate?.mode === "warn" && !res.healthy
+              ? "\n\n(warn mode: violations reported, gate not blocking)"
+              : "";
+        return res.text + tail;
+      }
       case "abort":
         return await setPhase(ctx, "none");
       default:
@@ -385,6 +413,7 @@ export default function register(pi: ExtensionAPI): void {
           "  /asf refactor   — architectural refactor (large, gated)\n" +
           "  /asf small      — small change, automatic (no gates)\n" +
           "  /asf status     — show current phase\n" +
+          "  /asf health     — run the code health gate (function/module/architecture)\n" +
           "  /asf verify     — run the definition-of-done QA gate\n" +
           "  /asf abort      — end the current session\n\n" +
           dependencySummary()

@@ -25,7 +25,8 @@
     "README.md",
     "LICENSE",
     "CHANGELOG.md",
-    "skills/"
+    "skills/",
+    "lib/"
   ],
   "scripts": {
     "clean": "echo 'nothing to clean'",
