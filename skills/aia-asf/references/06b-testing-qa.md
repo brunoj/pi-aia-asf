@@ -143,6 +143,7 @@ never arrives, the wiring is dead — that is a failed test.
 - [ ] Web surfaces exercised through a real browser
 - [ ] Every MUST spec `met` with concrete evidence (`update_spec_status`)
 - [ ] **Spec-to-code traceability: every `met` spec carries `trace` (outcome → codePath → testFile + assertion); `/asf verify` mechanically validates it (large work)**
+- [ ] **Code Health Gate passed (or `enabled: false` / `gate.mode: warn` with the report shown)**
 - [ ] **Consumed by a surface: every delivered feature's output is visible in the product (UI or API) — nothing ships as dead machinery**
 - [ ] **E2E behavioral test: every feature spec has a test through the real entry point asserting the operator-facing outcome**
 - [ ] Unverifiable specs → `partial` + asked the user (never self-certified)

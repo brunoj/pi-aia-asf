@@ -52,6 +52,7 @@ const QA_CHECKLIST: Array<{ key: string; label: string }> = [
   { key: "browser", label: "Web surfaces exercised through a real browser (n/a if none)" },
   { key: "specs", label: "Every MUST spec 'met' with concrete evidence" },
   { key: "trace", label: "Spec-to-code traceability: every met spec has outcome → codePath → test" },
+  { key: "code-health", label: "Code Health Gate passed (or enabled:false / gate.mode:warn with the report shown)" },
   { key: "surface", label: "Every delivered feature is consumed by a surface (UI or API) — nothing dead" },
   { key: "e2e", label: "Feature specs have an end-to-end behavioral test through the real entry point" },
   { key: "honest", label: "Skipped/inconclusive checks reported explicitly" },
