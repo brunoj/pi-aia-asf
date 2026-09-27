@@ -499,6 +499,39 @@ gracefully), consistent with the ASF's non-negotiable scale proportionality.
 
 ---
 
+## P23 — Configurable release policy (user-authored when/how)
+
+- **Evidence**: user directive — "ASF should have a default stance on this
+  (and the current one is good), but release behavior should be user
+  configurable. Only in absence of user definition should the default
+  behavior be used." Refinements: "User should state (or, if user states),
+  'when X is true, publish automatically, when Y is true, do this…' and so
+  on, and 'To publish, connect with X using credentials Y, sync git…'";
+  "Not deterministic commands but instructions for ASF to drive the
+  publishing"; "And always test on publish / in production, if applicable!"
+- **Gap**: the ASF's stance is a hard rule (never publish without explicit
+  approval) with no way for a user to define their own policy; a one-off
+  instruction to auto-publish is not persisted. The release flow also lacks
+  a mandatory test-on-publish step.
+- **Proposed change**: `.asf-release.json` at the project root (optional):
+  - `when` — user-stated conditional rules ("when X is true, publish
+    automatically; when Y is true, do this…") the ASF evaluates against the
+    current state and acts on;
+  - `how` — user-stated instructions with all technical details (credentials,
+    git sync, publish steps, verification) that the ASF **drives with
+    judgment** — not a deterministic command list: it checks prerequisites,
+    runs the verification gates, handles failures, applies ASF discipline;
+  - no file → default: always send for final review (current stance);
+  - user definition takes precedence; default used only in its absence.
+  - **Test on publish / in production, if applicable — always**: package →
+    clean-room install from registry + observable end state; deployed app →
+    prod smoke test; not applicable → say so explicitly.
+  - The ASF's own release procedure is codified through the same mechanism
+    (repo `.asf-release.json`).
+- **Priority**: high. **Effort**: S. **Risk**: low.
+
+---
+
 ## Recommended review order & bundles
 
 **Bundle 1 — craft core (small, fixes a real defect)**: P05 (depth-over-size),

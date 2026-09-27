@@ -136,6 +136,36 @@ export async function run({ extDir }) {
   chk('P19 escalate only genuine conflicts', del.includes('Escalate to the user ONLY on genuine conflicts'));
   chk('SKILL.md Phase 7 reviewer gate', skill.includes('Independent reviewer gate (large work, P19)'));
 
+  console.log('=== 14. P23 configurable release policy ===');
+  const rel2 = read('07-release.md');
+  chk('policy section in 07-release', rel2.includes('Release policy (user-configurable)'));
+  chk('policy when field', rel2.includes('**`when`**'));
+  chk('policy how field', rel2.includes('**`how`**'));
+  chk('policy not a deterministic command list', rel2.includes('not a deterministic command list'));
+  chk('policy precedence (user > default)', rel2.includes('user definition takes precedence'));
+  chk('policy default = final review', rel2.includes('always send for final review'));
+  chk('test on publish step', rel2.includes('Test on publish / in production — ALWAYS'));
+  chk('test on publish hygiene rule', rel2.includes('Test on publish / in production, if applicable — always'));
+  chk('SKILL.md step 3 reads policy', skill.includes('check the release policy') && skill.includes('.asf-release.json'));
+  chk('SKILL.md test-on-publish', skill.includes('Always test on publish / in production'));
+  chk('SKILL.md anti-pattern policy', skill.includes('beyond the configured release policy'));
+  chk('SKILL.md anti-pattern test-on-publish', skill.includes('without testing the shipped artifact on publish'));
+  const asfPolicy = path.join(extDir, '.asf-release.json');
+  chk('ASF own .asf-release.json exists', fs.existsSync(asfPolicy));
+  if (fs.existsSync(asfPolicy)) {
+    try {
+      const p = JSON.parse(fs.readFileSync(asfPolicy, 'utf8'));
+      chk('ASF policy parses as JSON', true);
+      chk('ASF policy has when', typeof p.when === 'string' && p.when.length > 0);
+      chk('ASF policy has how', typeof p.how === 'string' && p.how.length > 0);
+      chk('ASF policy how mentions npm', p.how.includes('npm'));
+      chk('ASF policy how mentions verification', p.how.includes('clean-room') || p.how.includes('verify'));
+    } catch (e) { chk('ASF policy parses as JSON', false, e.message); }
+  }
+  const relScript = fs.readFileSync(path.join(extDir, 'scripts', 'release.sh'), 'utf8');
+  chk('release.sh echo says pi-aia-asf', relScript.includes('npm:pi-aia-asf@'));
+  chk('release.sh no pi-vigilant echo', !relScript.includes('npm:pi-vigilant@'));
+
   console.log(`\n  PASS: ${pass}  FAIL: ${fail}`);
   process.exit(fail > 0 ? 1 : 0);
 }

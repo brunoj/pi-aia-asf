@@ -86,6 +86,28 @@ Flags: `--diff` (compare vs committed `.asf-code-health-baseline.json`),
 must be project devDependencies (eslint, eslint-plugin-sonarjs, jscpd, madge,
 dependency-cruiser); the gate never installs anything.
 
+## Release policy (configurable)
+
+Publishing is the user's decision **by default** — the factory prepares the
+release and gets explicit approval. A project can define its own release
+policy in `.asf-release.json` at the project root (optional):
+
+```json
+{
+  "when": "when the full suite is green and the bump is patch/minor → publish automatically; when the bump is major → send for final review; when the suite is not green → fix first, never publish",
+  "how": "To publish: connect with npm using the credentials in ~/.npmrc (2FA token; verify with `npm whoami`), sync git (`git pull --rebase`), run `npm run release <level>`, then verify the published version from the registry in a clean install..."
+}
+```
+
+- **`when`** — user-stated conditional rules the ASF evaluates against the
+  current state (suite green, bump scope, credentials) and acts on.
+- **`how`** — user-stated instructions with all technical details; the ASF
+  drives the release with judgment, not as a deterministic command list.
+- No file → default: always send for final review; standard workflow in
+  `references/07-release.md`.
+- **Always test on publish / in production, if applicable** — verify the
+  shipped artifact from the registry (clean-room install) or smoke-test prod.
+
 ## Hygiene rules enforced
 
 - Test-first; only green commits

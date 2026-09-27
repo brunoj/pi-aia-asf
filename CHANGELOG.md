@@ -55,6 +55,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   same change; standards change only via the review process (P22).
 - **test/test-improvements.mjs** — new suite (84 checks) verifying the
   indexed structure and that each proposal landed in its designated file.
+- **Configurable release policy (P23)** — `.asf-release.json` at the project
+  root (optional): `when` (user-stated conditional rules: "when X is true,
+  publish automatically; when Y is true, do this…") and `how` (user-stated
+  instructions with all technical details that the ASF drives with judgment,
+  not a deterministic command list). Default with no file = current stance
+  (always send for final review); user definition takes precedence.
+  **Test on publish / in production, if applicable — always** (package →
+  clean-room registry install + observable end state; deployed app → prod
+  smoke test). The ASF's own release procedure is codified via the same
+  mechanism (repo `.asf-release.json`).
 
 ## [0.8.1] - 2026-09-25
 

@@ -47,3 +47,5 @@ a later round. Release (version bump + tag + publish) pending user approval.
 Structure: SKILL.md = lean index (phase flow + gates + reference table);
 13 single-concern references loaded on demand (progressive disclosure);
 `docs/research/` stays repo-only (not shipped in the npm package).
+
+| P23 | ✅ **Approve** | Configurable release policy (user directive, 2026-09-27): `.asf-release.json` at project root (optional) with `when` (user-stated conditional rules: "when X is true, publish automatically; when Y is true, do this…") and `how` (user-stated instructions with all technical details — credentials, git sync, publish steps — that the ASF drives with judgment, NOT a deterministic command list). Default (no file) = current stance (always send for final review). User definition takes precedence; default only in its absence. Mandatory: **test on publish / in production, if applicable** (package → clean-room registry install + observable end state; deployed app → prod smoke test; N/A → say so). The ASF's own release procedure codified via the same mechanism (repo `.asf-release.json`). Also fixed `scripts/release.sh` echo bug (said pi-vigilant). |

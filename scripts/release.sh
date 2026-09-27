@@ -53,5 +53,5 @@ npm publish
 echo ""
 echo "✅ Released $OLD_VERSION → $NEW_VERSION"
 echo "   Tag:   $NEW_VERSION"
-echo "   npm:   npm:pi-vigilant@$NEW_VERSION"
+echo "   npm:   npm:pi-aia-asf@$NEW_VERSION"
 echo "   NOTE:  Update CHANGELOG.md's '### Added' section if needed, then commit."

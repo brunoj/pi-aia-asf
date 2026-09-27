@@ -259,7 +259,7 @@ conflicts). Record the review + triage in the delivery report.
 3. Run `get_task_specs` and verify **every spec** with `update_spec_status` + concrete evidence (test output, build result, code inspection). Unverifiable → `partial` + ask the user. Never self-certify.
 4. **Report honestly**: never claim a check you didn't run; state explicitly anything
    skipped or inconclusive, and distinguish "tests pass" from "works for the user".
-3. If the project is a library/package that the user publishes (npm, GitHub release): **offer** to run the release (see `references/07-release.md`): version bump, CHANGELOG, git tag, push. **Publishing is always the user's decision** — never publish without explicit approval. Optionally offer to set up a CI/CD pipeline for publishing.
+3. If the project is a library/package that the user publishes (npm, GitHub release): **check the release policy** — read `.asf-release.json` at the project root if present (see `references/07-release.md`). It defines **when** (user-stated conditional rules: "when X is true, publish automatically; when Y is true, do this…") and **how** (instructions the ASF drives with judgment — credentials, git sync, publish steps). If the policy authorizes automatic publishing for the current state, drive the release per `how`; otherwise **offer** to run the release and get explicit approval (the default stance: publishing is the user's decision). **Always test on publish / in production, if applicable** — verify the shipped artifact from the registry / smoke-test prod, never assume it works. Optionally offer to set up a CI/CD pipeline for publishing.
 4. Present a completion summary: what was built, specs met, tests passing, how to use it.
 
 ---
@@ -273,7 +273,8 @@ conflicts). Record the review + triage in the delivery report.
 - ❌ Verifying a UI only via API/curl — browser testing is mandatory
 - ❌ Vague commits or CHANGELOG placeholders
 - ❌ Declaring done while specs are still `open`
-- ❌ Publishing anything without the user's explicit go-ahead
+- ❌ Publishing anything beyond the configured release policy — no `.asf-release.json` means the default: always get the user's explicit go-ahead
+- ❌ Publishing without testing the shipped artifact on publish / in production (if applicable)
 - ❌ Shipping a package without inspecting the packaged file list (`npm pack`)
 - ❌ Treating "no error" as "it worked" — malformed config is skipped **silently**
 - ❌ Verifying against a cached/stale install, or with an old duplicate still present
@@ -328,7 +329,7 @@ reads at most 06b + 06c; large work reads the ones its phase calls for.
 | `06f-stability.md` | stability patterns + error handling + observability (P06/P07/P08) | **if the deliverable makes external calls or is a service** |
 | `06g-test-design.md` | risk-based test derivation + determinism | Phase 6 large (test plan) / non-trivial tests |
 | `06h-security.md` | threat model, ASVS DoD, supply chain, agent tools | Phase 4/5 large; small = one line |
-| `07-release.md` | release workflow (verify-first incl. SCA re-run) | before publishing |
+| `07-release.md` | release workflow + **configurable release policy** (`.asf-release.json`: when/how) + test-on-publish | before publishing |
 
 ## ASF self-modification policy (P22)
 
