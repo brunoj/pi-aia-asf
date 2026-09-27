@@ -11,11 +11,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- (describe changes for 0.9.0)
-
-
-### Added
-
 - **Indexed reference structure (P-index)** — SKILL.md now carries a reference
   index table (file → covers → read when) so the agent finds the right
   section on demand; each reference is a small single-concern doc with a
