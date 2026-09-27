@@ -119,6 +119,13 @@ Turn the intake answers + research into the authoritative spec set.
 
 > **Small work:** skip the formal gate. Do a quick mental pass over edge cases and failure modes while implementing; if something real surfaces, fix it or capture a spec. No user checkpoint.
 
+> **Large work:** read `references/04-adversarial.md` for the full checklist
+> (per-spec, architecture, security, code-quality, traceability lenses). For
+> security, also read `references/06h-security.md` — write the one-page threat
+> model (trust boundaries + STRIDE + registry) as part of the plan. For
+> stability, ask the `references/06f-stability.md` questions about every
+> external call in the design.
+
 Challenge the plan like a hostile reviewer before committing to it. For each spec and the overall design, ask and resolve:
 
 - **Edge cases** — empty input, zero users, max load, missing data, concurrency
@@ -147,13 +154,20 @@ Write `PLAN.md` in the project root (repo root, or cwd if no repo). Structure:
 ## Goal
 ## Context
 ## Approach (from research, cited)
+## Decisions (ADRs — one per significant decision)
+## Quality requirements (ISO 25010 scenarios)
 ## Architecture / Design
+## Architecture evaluation (ATAM-lite)
+## Views (context / runtime / deployment — optional)
 ## Milestones (M1..Mn with exit criteria)
 ## Task list (per milestone, checkboxes)
 ## Dependencies (with licenses)
 ## Risks & mitigations (from adversarial analysis)
 ## Definition of done (tests, deploy, release)
 ```
+
+The full template with examples is in `references/05-plan.md` — read it before
+writing the plan.
 
 Keep the plan **implementation-ready**: any competent engineer (or agent) can execute the task list without re-deriving decisions.
 
@@ -195,6 +209,11 @@ Keep the plan **implementation-ready**: any competent engineer (or agent) can ex
 > 4 concurrent writers left only 1 of 4 edits, silently, all exiting 0 — and **exit code 0
 > does not mean success**, so always validate the returned output against what you asked for.
 
+> **Read on demand (only if they apply):** `references/06f-stability.md` if the
+> deliverable makes external calls; `references/06g-test-design.md` for the
+> test plan or non-trivial tests; `references/06h-security.md` if the
+> deliverable handles untrusted input, secrets, or agent-like tool surfaces.
+
 Execute the task list milestone by milestone. Discipline rules:
 
 1. **Test-first**: write/update tests before or with implementation; run them; only commit green.
@@ -218,7 +237,16 @@ Run the **Definition of Done checklist** in `references/06b-testing-qa.md` (Rule
 
 Also check the **modularity DoD** from `references/06c-code-quality.md` (Phase 7 section): no duplicated shared logic, no hardcoded config values, every module tested standalone with the same calls it gets in the host, architecture writeup exists, existing functionality still green. **Documents too (06c Rule 9)**: no document so large that editing it is fragile — if a doc you worked on started causing edit failures/truncation, it was refactored (split by topic, parent kept as index, cross-references updated).
 
+Also check the **stability DoD** (`references/06f-stability.md`): if the deliverable makes external calls, it has timeouts and bounded retries (idempotent only). And the **security DoD** (`references/06h-security.md`): no secrets in the repo, no untrusted input reaches a shell/query/path unvalidated, no unbounded resource use on user-controlled input; for agent-like tool surfaces, every tool is least-privilege with an abuse-case test.
+
 **Large work:** run `/asf verify` — it mechanically validates the **spec-to-code traceability matrix** (M1): every `met` spec must carry `trace` (outcome → codePath → testFile + assertion), testFile must exist, assertion must appear in it. FAIL rows block delivery. **Verify ingested specs from external planning docs too** — the doc's ✅ markers are claims, not evidence.
+
+**Independent reviewer gate (large work, P19):** before delivery, run the
+independent review (fresh-context hostile reviewer, blockers vs suggestions;
+see `references/06d-delegation.md` Part 3). Triage autonomously — fix safe
+blockers, apply safe suggestions, escalate to the user **only** on genuine
+conflicts (conflicting requirements, product-level tradeoffs, scope
+conflicts). Record the review + triage in the delivery report.
 
 **Code Health Gate (large work, Gate 8):** run `/asf health` — it measures convolution objectively at function / module / architecture level (see `references/06e-code-health.md`) and fails the gate when thresholds are crossed. The gate is **on by default** with conservative thresholds; configure via `.asf-code-health.json` at the project root. **Fix the cause, not the threshold** (06e Rule 2). Small work shows the report but never blocks.
 
@@ -272,16 +300,50 @@ Also check the **modularity DoD** from `references/06c-code-quality.md` (Phase 7
 - ❌ Trusting unit tests as proof of wiring — assert the operator-facing outcome end-to-end
 - ❌ Trusting an external plan's ✅ (IMPROVEMENT-PLAN / delivery log) — ingest its items as specs and verify them
 - ❌ Implementing a spec literally when it creates product tension — challenge it and resolve with the user
+- ❌ Shallow pass-through modules that add no abstraction; a new layer that hides nothing (06c P05)
+- ❌ Refactoring untested code without a characterization baseline (06c P13)
+- ❌ Fixing a smell instance by instance instead of the design (06c P09)
+- ❌ Drift: scope creep, approach drift, gate drift — stop, revert, self-correct (06-implementation P20)
+- ❌ Shipping a delivery summary without the report fields: spec status + evidence, test results, skipped checks, not-tested register (06b Rule 17)
+- ❌ Letting an escaped defect teach nothing — ask which gate should have caught it and close the gap (06b Rule 18)
+- ❌ Self-modifying the ASF's own rules during a task run — standards change only via the review process (P22)
 
-## References
+## Reference index (read on demand — never load all)
 
-- `references/01-intake.md` — question bank and probing techniques (incl. external planning docs, M6)
-- `references/02-research.md` — research playbook with search templates
-- `references/04-adversarial.md` — adversarial checklist per area
-- `references/05-plan.md` — PLAN.md template with examples (incl. spec-to-code traceability matrix)
-- `references/06-implementation.md` — coding discipline details (incl. M4 challenge designs, M5 trace before claiming)
-- `references/06b-testing-qa.md` — **mandatory testing & QA standard** (14 rules + definition of done)
-- `references/06c-code-quality.md` — **mandatory modularity & maintainability standard** (9 rules, SSOT, testable-standalone, single escalation path, documents-are-code)
-- `references/06e-code-health.md` — **Code Health Gate** (objective convolution measurement; Gate 8 for large work)
-- `references/06d-delegation.md` — **intercom & subagents**: when to message another session, when to spawn isolated workers, the no-mutual-dependencies rule, and why exit codes lie
-- `references/07-release.md` — release workflow (versioning, CHANGELOG, tags, npm, CI/CD)
+Each reference is a small, single-concern doc. **Read only the ones your
+current phase needs** — the "Read when" column is the index. Small work
+reads at most 06b + 06c; large work reads the ones its phase calls for.
+
+| File | Covers | Read when |
+|---|---|---|
+| `01-intake.md` | question bank, probing, external planning docs (M6) | Phase 1 (large) |
+| `02-research.md` | research playbook, search templates | Phase 2 (large) |
+| `04-adversarial.md` | adversarial checklist (spec/architecture/security lenses) | Phase 4 (large) |
+| `05-plan.md` | PLAN.md template + ADRs + quality scenarios + ATAM-lite + views | Phase 5 (large) |
+| `06-implementation.md` | coding discipline, M4/M5, drift self-correction (P20) | Phase 6 |
+| `06b-testing-qa.md` | **mandatory** testing & QA standard (18 rules + DoD) | before writing tests (always) |
+| `06c-code-quality.md` | **mandatory** modularity standard (9 rules, deep modules, smells) | before structuring code |
+| `06d-delegation.md` | intercom & subagents + independent reviewer gate (P19) | before delegating; Gate 7 review (large) |
+| `06e-code-health.md` | Code Health Gate (+ depth, supply-chain, secrets metrics) | Gate 8 (large) |
+| `06f-stability.md` | stability patterns + error handling + observability (P06/P07/P08) | **if the deliverable makes external calls or is a service** |
+| `06g-test-design.md` | risk-based test derivation + determinism | Phase 6 large (test plan) / non-trivial tests |
+| `06h-security.md` | threat model, ASVS DoD, supply chain, agent tools | Phase 4/5 large; small = one line |
+| `07-release.md` | release workflow (verify-first incl. SCA re-run) | before publishing |
+
+## ASF self-modification policy (P22)
+
+The ASF's own rules, gates, and standards are **normative content** — they
+must never be self-modified during a task run (no "while I'm here, let me
+improve the rule").
+
+- **Facts may be updated in the same change**: package versions, external
+  tool behavior, SOTA findings, URLs — these are non-normative and stay
+  current.
+- **Standards change only through the review process**: propose it in
+  `docs/research/improvement-proposals.md`, review it, get approval, then
+  implement (the same flow that produced this version).
+- **Escalate, don't edit**: if a task reveals the ASF's own rules are wrong
+  or missing, that is a proposal + a user decision, not a silent edit.
+- **Rule 9 applies to the ASF too**: if SKILL.md or a reference outgrows
+  editability, split it by topic and keep the parent as an index — via the
+  review process.

@@ -16,6 +16,10 @@ Publishing is **always the user's decision**. The factory prepares everything; t
    - test suite green
    - all MUST specs `met` in pi-vigilant
    - every long-running verification command ran under an explicit timeout with a stated expected duration (06b Rule 15) — no unbounded waits
+   - **re-run the dependency/security check (P17 RV loop):** `npm audit`
+     (or osv-scanner) + secrets scan — a vulnerability discovered after the
+     last run must not ship. The check is re-run **every release**, not
+     just when dependencies change.
 2. **Version bump** — semantic versioning:
    - `patch` (0.1.0 → 0.1.1): bug fixes
    - `minor` (0.1.0 → 0.2.0): new features, backward compatible

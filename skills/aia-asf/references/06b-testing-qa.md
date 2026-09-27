@@ -4,6 +4,10 @@ These rules are distilled from real failures in production sessions (pi-vigilant
 pi-aia-asf, pi-aia-browser, conversense, betamaxx). Each rule exists because
 skipping it **shipped a broken artifact**. They are not optional.
 
+> **Test design:** for *which* tests to write (risk-based derivation) and how
+> to keep them reliable (determinism), see `references/06g-test-design.md` —
+> read it in Phase 6 large work or when the logic under test is non-trivial.
+
 ---
 
 ## Rule 1 — Test the ARTIFACT you ship, not the source you wrote
@@ -149,6 +153,9 @@ never arrives, the wiring is dead — that is a failed test.
 - [ ] Unverifiable specs → `partial` + asked the user (never self-certified)
 - [ ] **Every long-running command ran under an explicit timeout with a stated expected duration (no unbounded waits)**
 - [ ] **No wait exceeded the 30 min (1800s) absolute ceiling — or it was explicitly waived for that single run, with a reason and a finite bound**
+- [ ] **Delivery report complete (P14): every spec with status + evidence, every test run with result, every skipped/inconclusive check listed with reason, and the not-tested register (what was deliberately not tested and why)**
+- [ ] **Stability line (06f): if the deliverable makes external calls, it has timeouts and bounded retries (idempotent only)**
+- [ ] **Security line (06h): no secrets in the repo; no untrusted input reaches a shell/query/path unvalidated; no unbounded resource use on user-controlled input**
 
 ## Rule 11 — Report honestly
 
@@ -269,3 +276,52 @@ and only for a **single run**:
 
 **Applies at both scales.** Small work is not exempt: a hang wastes the same
 time regardless of how the task was classified.
+
+## Rule 16 — Determinism: a flaky test is a defect
+
+A test that fails intermittently is a **defect in the test**, not bad luck.
+
+- Never "re-run into green" — that is hiding a broken test (Rule 11).
+- Fix it immediately (inject the clock, seed randomness, own the data, poll
+  instead of sleep, no order dependence, no real network in unit tests) — the
+  full rules are in `references/06g-test-design.md`.
+- If a test cannot be made deterministic, **delete it and say so** in the
+  delivery report (Rule 11) — a flaky test is worse than no test because it
+  erodes trust in the whole suite.
+
+## Rule 17 — Delivery report (P14): the fields that make it verifiable
+
+The completion summary is not a narrative — it is a **report with fields** a
+reviewer can check:
+
+- **Specs:** each spec → status (`met`/`partial`/`not-met`) → evidence
+  (test name + output, build result, code inspection).
+- **Tests:** each suite → command → result (pass/fail/skip) → count. State
+  which suites you ran and which you did not.
+- **Skipped/inconclusive:** every check not run or inconclusive, with the
+  reason (Rule 11).
+- **Not-tested register:** what was deliberately not tested and why (e.g.
+  "payment webhook: no sandbox credentials — covered by contract test only").
+  An honest register beats a silent gap.
+- **Artifact:** what was shipped (version, file list) and how it was verified
+  clean-room (Rule 5).
+
+## Rule 18 — Escaped-defect feedback loop (P21)
+
+When a defect escapes to the user (a bug report, a failed integration, a
+production incident), the fix is not the end — the **loop** is:
+
+1. Fix it (with a regression test, Rule 6).
+2. **Ask: which gate should have caught this?** Answer honestly — the
+   missing test technique (06g), the missing check (06b Rule 10), the
+   missing adversarial question (04-adversarial), the missing stability
+   pattern (06f), the missing security check (06h).
+3. **Close the gap** — add the check/rule/test so the same class of defect
+   cannot escape again. If the gap is in the ASF itself, that is a proposal
+   (docs/research/improvement-proposals.md), not a silent edit (P22).
+4. Record the loop in the delivery report (Rule 17) — what escaped, what
+   caught it, what changed.
+
+> **Real failure:** a package shipped with a broken `files` allowlist; the
+> fix landed but the *gap* ("no test inspects the packaged artifact") was not
+> closed until Rule 1 was added. The loop is what prevents the next one.

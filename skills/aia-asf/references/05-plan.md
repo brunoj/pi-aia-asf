@@ -20,6 +20,57 @@ Existing system, repo layout, relevant prior work. Links to research sources.
 ## Approach
 Decided approach with rationale. Cite the research (package names, URLs).
 
+## Decisions (P01 — ADRs, one per significant decision)
+
+For every decision with alternatives (stack, architecture, protocol, library):
+
+```markdown
+### <Decision title>
+- **Decision:** <what we chose>
+- **Options considered:** <2+ real options, not strawmen>
+- **Rationale:** <why this one — cite the research>
+- **Consequence:** <what this costs / what it enables>
+```
+
+Five lines max per decision. Significant decisions live in the plan; if a
+project accumulates many, move them to `docs/decisions/NNNN-<slug>.md` and
+keep one line each in the plan. A decision with only one option is not a
+decision — skip it.
+
+## Quality requirements (P02 — ISO 25010 scenarios)
+
+Only the characteristics this work actually touches (cap ~8). For each:
+
+| Characteristic | Scenario (stimulus → response → measure) | Acceptance |
+|---|---|---|
+| e.g. Performance | 1000 concurrent users submit a report → system responds | p95 < 2s |
+| e.g. Reliability | DB restarts mid-ingest → no data loss | 0 lost records |
+| e.g. Security | unauthenticated request → rejected | 401 |
+
+Each scenario is testable: stimulus, response, measure. If you cannot write
+the measure, the requirement is not real yet.
+
+## Architecture evaluation (P03 — ATAM-lite)
+
+One page max. Before committing to the architecture:
+
+1. **Quality goals** — from the Quality requirements table (the 3–6 that
+   matter most).
+2. **Key scenarios** — the 3–6 scenarios that stress the architecture most
+   (highest risk × impact from Phase 4).
+3. **Sensitivity/tradeoff points** — which decisions are load-bearing for
+   which quality goal, and where two goals pull against each other (e.g.
+   performance vs security).
+4. **Architectural risks** — each with mitigation, or an explicit accepted
+   risk with rationale.
+
+## Views (P04 — optional, only when they earn their place)
+
+Add a view only if it communicates something the prose does not: **context**
+(external systems/interfaces), **runtime** (key flows/state), **deployment**
+(environments/topology). Each view ≤15 lines (ASCII or mermaid). No view for
+its own sake — the Architecture/Design prose is the primary artifact.
+
 ## Architecture / Design
 - Modules and their responsibilities (small, single-purpose — see `references/06c-code-quality.md`)
 - Data model / schema (if any)

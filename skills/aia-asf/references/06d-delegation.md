@@ -134,3 +134,55 @@ Delegation changes **who does the work**, never **what must be proven**:
 - The QA standard (06b) applies to delegated work identically. "A subagent did it" is not evidence.
 - Subagent findings enter the record as **claims** until verified against code or tests.
 - For LARGE work, the approval gate is unaffected: no subagent may start implementation before plan approval.
+
+---
+
+## Part 3 — Independent reviewer gate (P19, large work)
+
+Before delivery of **large** work, run an **independent review**: a second
+agent with fresh context, no exposure to your reasoning, asked to attack the
+result. It is the strongest anti-rubber-stamp check available (Part 2:
+fresh-perspective review) and it reuses the subagent machinery above.
+
+### How
+
+Spawn a subagent (Part 2, direct subprocess or extension) with a read-only
+tool set and this adversarial prompt shape:
+
+```
+You are a hostile reviewer of a delivered change. Review ONLY the diff and
+its tests. Classify every finding as:
+- BLOCKER: the change is wrong, breaks existing behavior, or violates a
+  stated spec/gate — must be fixed before delivery.
+- SUGGESTION: improvement that does not block delivery.
+- QUESTION: something you cannot determine from the diff.
+Return: findings list, nothing else. Do not fix anything.
+```
+
+Give it: the diff (or the files changed), the spec list, and the test
+results. Nothing else — no narrative, no context, no "here's what I did".
+
+### Triage (autonomous — human only on genuine conflicts)
+
+- **BLOCKER that is safe to fix** (a wrong value, a missing test, a broken
+  gate) → **fix it yourself**, add a regression test, re-run the suite. No
+  user checkpoint.
+- **SUGGESTION that is safe and clearly better** → apply it. If it is a
+  taste call, note it and move on.
+- **QUESTION / ambiguous finding** → investigate; if it resolves, resolve it.
+- **Escalate to the user ONLY on genuine conflicts** — conflicting
+  requirements, product-level tradeoffs, scope conflicts, or a finding that
+  contradicts an approved decision. State the conflict plainly and propose a
+  resolution; never silently pick a side.
+
+### Rules
+
+1. **Fresh context is the point** — the reviewer must not have seen your
+   reasoning; do not pre-answer its questions.
+2. **Read-only tools** — the reviewer never edits; it reports, you fix.
+3. **Its findings are claims** — verify each blocker against the code/test
+   before acting (M5). A reviewer can be wrong too.
+4. **Record it** — the review + triage outcome goes in the delivery report
+   (06b Rule 17): what was found, what was fixed, what was escalated.
+5. **Small work: none.** The reviewer gate is large-work only; small work
+   relies on the standard gates (06b DoD).

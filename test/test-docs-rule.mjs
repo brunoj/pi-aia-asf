@@ -35,7 +35,7 @@ export async function run({ extDir }) {
   chk('Phase 6 note mentions Rule 9', skill.includes('Documents are code too') && skill.includes('Rule 9'));
   chk('Phase 7 DoD mentions doc check', skill.includes('Documents too (06c Rule 9)'));
   chk('anti-pattern added', skill.includes('Letting a document grow until edits start breaking'));
-  chk('index says 9 rules', skill.includes('(9 rules, SSOT'));
+  chk('index says 9 rules', skill.includes('(9 rules'));
 
   console.log(`\n  PASS: ${pass}  FAIL: ${fail}`);
   process.exit(fail > 0 ? 1 : 0);

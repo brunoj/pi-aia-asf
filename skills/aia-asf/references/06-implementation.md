@@ -5,6 +5,11 @@
 > functionality in exactly one implementation (SSOT, single escalation path),
 > never hardcode what config should drive, and keep every module testable
 > standalone outside the host.
+>
+> **Read on demand:** `references/06f-stability.md` when the deliverable makes
+> external calls; `references/06g-test-design.md` when writing the test plan or
+> non-trivial tests; `references/06h-security.md` when the deliverable handles
+> untrusted input/secrets/agent tools.
 
 ## Test-first
 
@@ -83,3 +88,39 @@ Before marking anything ✅ (a spec, a milestone, a delivery-log item):
 A delivery log saying "IMP-006 delivered ✅" proves nothing. The code is the
 evidence. External planning docs (IMPROVEMENT-PLAN.md, PLAN.md, delivery logs)
 are inputs to spec capture — their ✅ markers are claims, never ground truth.
+
+## Drift self-correction (P20) — stop, revert, self-correct, continue
+
+**Drift** = the implementation is moving away from the approved plan/specs
+(scope creep, a different approach sneaking in, a shortcut that changes
+behavior). It is the most common silent failure of a long implementation.
+
+**Named drift anti-patterns** (if you catch yourself doing any of these, you
+are drifting):
+
+- **Scope creep** — adding features/edge cases the plan did not call for
+  ("while I'm here...").
+- **Approach drift** — quietly switching from the approved approach to a
+  different one because it "feels simpler".
+- **Spec drift** — implementing a *sensible* variant of a spec without
+  resolving the tension (M4 says: resolve it with the user first).
+- **Gate drift** — skipping a gate "just this once" (tests, adversarial,
+  browser verification).
+- **Quality drift** — accepting a shortcut that changes behavior or leaves
+  dead machinery, then marking it delivered (M5).
+
+**Self-correction loop (autonomous, no user needed):**
+
+1. **Detect** — compare what you are about to do against the plan/specs. If
+   it is not in the plan, it is drift.
+2. **Stop** — do not continue the drift; do not "finish it first".
+3. **Revert** — undo the drifted change (git checkout / undo the edit). The
+   revert is cheap; the drift is not.
+4. **Self-correct** — re-read the plan/spec, implement the approved version.
+5. **Continue** — resume the task list.
+
+**Escalate to the user only when the plan/requirements themselves are the
+problem** (a genuine conflict, a product-level tradeoff, a scope change).
+Then: stop, state the conflict plainly, propose the resolution, get the
+decision — do not silently pick a side. Everything else, self-correct and
+continue; the human decides only on genuine conflicts.

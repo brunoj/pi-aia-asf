@@ -24,6 +24,21 @@ Three levels, each with objective thresholds (all configurable):
 | module | duplication | jscpd | 5% (min 5 lines / 50 tokens) |
 | module | circular imports | madge `--circular` | any cycle = fail |
 | architecture | dependency rules | dependency-cruiser | opt-in (off by default) |
+| design | module depth (interface vs implementation) | report-only heuristic | report-only (never gates) |
+| supply chain | dependency vulnerabilities | npm audit / osv-scanner | warn (high/critical fails) |
+| secrets | secrets in repo | gitleaks | warn (any finding fails) |
+
+**Depth metric (P05, report-only):** a heuristic that flags **shallow
+pass-through modules** — modules whose interface is nearly as large as their
+implementation (e.g. a wrapper that forwards every call with no added
+abstraction). It is **never a gate**: depth is a judgment call (06c Rule 1
+Deep modules), and the heuristic only *surfaces candidates* for review.
+
+**Supply chain & secrets (P17):** `npm audit`/`osv-scanner` and `gitleaks`
+run as part of the gate. They are **warn by default** (report, don't block)
+for small work; for large work a high/critical vulnerability in a runtime
+dependency or any secret finding blocks delivery. See
+`references/06h-security.md` for the full rules.
 
 Metrics for languages the project does not use are silently skipped. Metrics
 whose tool is not installed are skipped (or fail the gate when
@@ -67,6 +82,13 @@ switched on/off independently.
   },
   "architecture": {
     "dependencyRules": { "enabled": false, "config": ".asf-code-health.rules.mjs" }
+  },
+  "supplyChain": {
+    "npmAudit": { "enabled": true, "failOn": "high" },
+    "osvScanner": { "enabled": false }
+  },
+  "secrets": {
+    "gitleaks": { "enabled": true }
   },
   "ignore": ["**/node_modules/**", "**/dist/**", "**/test/**", "**/*.test.*"]
 }

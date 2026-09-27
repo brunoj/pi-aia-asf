@@ -8,6 +8,22 @@ Challenge every spec and design decision like a hostile reviewer. For each item,
 
 ## Per-spec questions
 
+> **Security lens (always applied):** for every design under review, also ask
+> the `references/06h-security.md` questions — where are the **trust
+> boundaries** (where does untrusted input cross into trusted code)? What does
+> STRIDE say about each (Spoofing, Tampering, Repudiation, Information
+> disclosure, Denial of service, Elevation of privilege)? Is there a **threat
+> registry** (threat → likelihood × impact → mitigation → status)? Any
+> High×High threat unmitigated and unrecorded blocks delivery. **Large work
+> writes the one-page threat model** (context view + STRIDE matrix + registry)
+> as part of the plan (see `references/06h-security.md`).
+
+> **Architecture lens (always applied):** for every architecture under review,
+> ask the ATAM-lite questions (`references/05-plan.md`) — which quality goals
+> matter most? Which 3–6 scenarios stress the architecture? Which decisions
+> are **sensitivity/tradeoff points** (load-bearing for one goal, harmful to
+> another)? What are the architectural risks and mitigations?
+
 > **Code-quality lens (always applied):** for every module/design under review,
 > also ask the `references/06c-code-quality.md` questions — is shared logic
 > duplicated anywhere? Is the single escalation path identifiable? Is the module

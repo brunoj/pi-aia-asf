@@ -7,6 +7,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Indexed reference structure (P-index)** — SKILL.md now carries a reference
+  index table (file → covers → read when) so the agent finds the right
+  section on demand; each reference is a small single-concern doc with a
+  "Read when / Skip when" header. Default context cost is unchanged (SKILL.md
+  only); large work reads at most the 3–4 references its phase needs.
+- **`references/06f-stability.md`** — stability patterns (timeouts, bounded
+  retries, circuit breaker, bulkheads, bounded result sets, fail fast,
+  graceful shutdown) + error-handling design rules + observability DoD for
+  service-like deliverables (health endpoint, structured logs, correlation
+  IDs, runbook) (P06, P08, P07).
+- **`references/06g-test-design.md`** — risk-based test derivation
+  (likelihood × impact, technique selection table) + determinism rules
+  (P10, P11).
+- **`references/06h-security.md`** — one-page threat model (trust boundaries,
+  STRIDE, registry), ASVS 5.0-based DoD with chapter/level selection,
+  supply-chain & secrets gates, and the agent/tool-surface chapter (P15,
+  P16, P17, P18).
+
+### Changed
+
+- **05-plan.md** — PLAN.md template extended: Decisions (ADRs, P01), Quality
+  requirements (ISO 25010 scenarios, P02), Architecture evaluation (ATAM-lite,
+  P03), optional Views (P04).
+- **04-adversarial.md** — added security lens (threat model) and architecture
+  lens (ATAM-lite) applied on every review (P15, P03).
+- **06c-code-quality.md** — deep-module principle (interface simpler than
+  implementation, P05), code smells in 5 groups (P09), characterization
+  baseline for refactoring untested code (P13).
+- **06b-testing-qa.md** — Rule 16 determinism (flaky = defect, P11), Rule 17
+  delivery report fields incl. not-tested register (P14), Rule 18
+  escaped-defect feedback loop (P21); DoD extended with delivery-report,
+  stability and security lines.
+- **06e-code-health.md** — report-only depth metric (P05) + supply-chain
+  (npm audit/osv-scanner) and secrets (gitleaks) gates with config (P17).
+- **07-release.md** — verify-first now re-runs the dependency/security check
+  before every release (P17 RV loop).
+- **06-implementation.md** — drift self-correction: named anti-patterns,
+  stop → revert → self-correct → continue, escalate only on genuine
+  conflicts (P20).
+- **06d-delegation.md** — Part 3: independent reviewer gate for large work
+  (fresh-context hostile reviewer, blockers vs suggestions, autonomous
+  triage, human only on genuine conflicts) (P19).
+- **SKILL.md** — ASF self-modification policy: facts may be updated in the
+  same change; standards change only via the review process (P22).
+- **test/test-improvements.mjs** — new suite (84 checks) verifying the
+  indexed structure and that each proposal landed in its designated file.
+
 ## [0.8.1] - 2026-09-25
 
 ### Added

@@ -57,7 +57,7 @@ Then `/reload`.
 
 ## How it works
 
-- **Skill** (`skills/aia-asf/SKILL.md`) — the workflow itself, with per-phase reference guides in `references/`.
+- **Skill** (`skills/aia-asf/SKILL.md`) — the workflow itself, with per-phase reference guides in `references/`. The skill uses **progressive disclosure**: only SKILL.md (the phase flow + gates + a reference index) loads by default; each reference is a small single-concern doc the agent reads on demand when its phase needs it (the index's "Read when" column tells it which). Small work reads at most the testing + code-quality standards; large work reads the ones its phase calls for.
 - **Extension** (`index.ts`) — `/asf` commands, per-project phase state (`~/.pi/agent/skills/aia-asf/projects/<project>/state.json`), dependency checks.
 - **Specs shared with pi-vigilant** — ASF drives `capture_spec` during intake; pi-vigilant re-verifies every spec at task end and blocks "done" while MUST specs are open. One spec file, two systems.
 

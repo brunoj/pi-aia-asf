@@ -29,6 +29,36 @@ existing functionality. Each rule below carries the lesson.
   - you cannot explain what the file does in one sentence
   - you are about to debug the same area a second time
 
+### Deep modules (P05) — interface simpler than implementation
+
+> *"A module is deep if its interface is much simpler than its
+> implementation. Shallow modules are a design flaw."* — Ousterhout, *A
+> Philosophy of Software Design*
+
+- **Depth is the goal, not size.** A deep module hides a lot behind a small
+  interface (e.g. a storage layer with one `get(key)`). A shallow module
+  exposes nearly as much interface as it implements (e.g. a "wrapper" that
+  just forwards a call with no added value).
+- **Shallow pass-through modules are defects.** A function that adds nothing
+  (forwards args, renames, calls one thing) should be inlined — it costs
+  context without hiding anything. Exception: a seam that exists for
+  testability (06c Rule 4) or a boundary that hides a *real* variation.
+- **New layer = new abstraction.** Do not add a layer unless it hides
+  something (a variation, a dependency, a policy). A layer that only passes
+  through is ceremony.
+- **Minimize voodoo constants (Rule 3 counterweight).** Config drives real
+  variation; but a constant that only this module uses and never changes
+  belongs in the module as a named constant, not in a config file. The
+  question is *who varies it* — if nobody, it is not config.
+- **Anti-patterns (P05):** temporal decomposition (functions named after
+  steps that share state and cannot be understood alone); back-door leakage
+  (a module reaches into another's internals instead of its interface);
+  information leakage (a caller knows more about a module's internals than
+  its interface should reveal).
+
+> **Depth is measured, not judged** — see `references/06e-code-health.md`
+> (report-only depth metric, no gate).
+
 ## Rule 2 — One implementation for shared functionality (single escalation path)
 
 > *"Make a separate module for ... communication and use IT instead of having
@@ -141,6 +171,24 @@ existing functionality. Each rule below carries the lesson.
 - This is the SSOT/refactor safety net: refactoring restructures *structure*,
   never *behavior*.
 
+### Characterization baseline (P13) — when refactoring code without tests
+
+If you must refactor code that has **no test coverage**, do not guess what it
+should do — **capture what it does** first:
+
+1. Write a **characterization test**: feed representative inputs, record the
+   actual outputs (including edge cases and error paths).
+2. The test asserts **current behavior** (even if it looks wrong) — it is a
+   safety net, not a spec.
+3. Refactor; the characterization test must stay green (Rule 8).
+4. Then (and only then) write the *spec* tests for the behavior you actually
+   want, and change the behavior deliberately with its own test.
+
+> **Real failure:** a refactor of untested code "fixed" behavior the author
+> believed was wrong — silently changing semantics and breaking a downstream
+> consumer that depended on it. Characterization first, then change
+> deliberately.
+
 ## Rule 9 — Documents are code: refactor them when they outgrow editability
 
 > *"Whenever documents you work on become so big that they start causing
@@ -175,18 +223,40 @@ fact of life. The same triggers that say "extract a module" for code say
 
 ---
 
+## Code smells — the 5 groups (P09)
+
+Smells are *signals*, not verdicts — each one has a standard fix. Check for
+them during Phase 4 (adversarial) and Phase 6 (implementation), and when the
+Code Health Gate flags a metric (06e).
+
+| Group | Smells | Standard fix |
+|---|---|---|
+| **Bloaters** | long method, large class, long parameter list, data clumps | Extract Method/Class, Introduce Parameter Object |
+| **Object-orientation abusers** | switch on type, temporary field, refused bequest | Replace Conditional with Polymorphism, Extract Class |
+| **Change preventers** | divergent change, shotgun surgery, parallel inheritance | Extract Class, Move Method, consolidate the variation |
+| **Dispensables** | comments as excuses, duplicate code, dead code, speculative generality | Remove Duplication, Delete Dead Code, YAGNI |
+| **Couplers** | feature envy, inappropriate intimacy, message chains, middle man | Move Method, Hide Delegate, inline the middle man |
+
+**Rule of thumb:** a smell that appears once is a code-style question; a
+smell that appears three times is a design problem — fix the design, not the
+instances.
+
 ## Where this applies in ASF
 
 - **Phase 4 (adversarial)**: challenge the design — is there duplication?
   Where is the single source of truth? Is the module testable outside the
-  host? What breaks if a config value changes?
+  host? What breaks if a config value changes? Are there **smells** (P09)?
+  Is the module **deep** (P05) or a shallow pass-through? Is any module
+  **temporally decomposed / leaking information** (P05 anti-patterns)?
 - **Phase 5 (PLAN.md)**: the Architecture/Design section must name the modules,
   their boundaries, the one-way dependencies, where shared truth lives, and
-  how each module is tested standalone.
+  how each module is tested standalone. The quality requirements table (P02)
+  and ATAM-lite evaluation (P03) live here too.
 - **Phase 6 (implementation)**: apply Rules 1–8 as you build; extract modules
   when triggers fire; write the architecture doc alongside the code. Apply
   Rule 9 to the documents you write: SKILL.md, references, PLAN.md, README —
-  split them when they outgrow editability.
+  split them when they outgrow editability. **Characterize before refactoring
+  untested code (P13)**; check for smells (P09) as you go.
 - **Phase 7 (verification)**: the DoD checklist includes: no duplicated shared
   logic (Rule 2), no hardcoded config values (Rule 3), every module tested
   standalone with the same calls (Rule 4), architecture doc written (Rule 6),
@@ -203,6 +273,12 @@ fact of life. The same triggers that say "extract a module" for code say
 - ❌ Refactoring "for fun" without the testability/debugging payoff
 - ❌ Shipping a module that cannot run outside the host
 - ❌ Skipping the architecture writeup ("the code is self-documenting")
+- ❌ Shallow pass-through modules that add no abstraction (P05)
+- ❌ A new layer that hides nothing (P05)
+- ❌ Temporal decomposition — functions named after steps, sharing state (P05)
+- ❌ Back-door leakage — reaching into another module's internals (P05)
+- ❌ Refactoring untested code without a characterization baseline (P13)
+- ❌ Fixing a smell instance by instance instead of the design (P09)
 - ❌ Letting a document grow until edits start breaking instead of splitting it
   (Rule 9)
 - ❌ A SKILL.md that is a wall of prose instead of a map to focused references
