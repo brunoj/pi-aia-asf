@@ -323,7 +323,7 @@ reads at most 06b + 06c; large work reads the ones its phase calls for.
 | `06-implementation.md` | coding discipline, M4/M5, drift self-correction (P20) | Phase 6 |
 | `06b-testing-qa.md` | **mandatory** testing & QA standard (18 rules + DoD) | before writing tests (always) |
 | `06c-code-quality.md` | **mandatory** modularity standard (9 rules, deep modules, smells) | before structuring code |
-| `06d-delegation.md` | intercom & subagents + independent reviewer gate (P19) | before delegating; Gate 7 review (large) |
+| `06d-delegation.md` | intercom & subagents + independent reviewer gate (P19) | before delegating; Phase 7 review (large) |
 | `06e-code-health.md` | Code Health Gate (+ depth, supply-chain, secrets metrics) | Gate 8 (large) |
 | `06f-stability.md` | stability patterns + error handling + observability (P06/P07/P08) | **if the deliverable makes external calls or is a service** |
 | `06g-test-design.md` | risk-based test derivation + determinism | Phase 6 large (test plan) / non-trivial tests |
