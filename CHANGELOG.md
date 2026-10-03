@@ -9,9 +9,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.9.1] - 2026-10-03
 
-### Added
+### Fixed
 
-- (describe changes for 0.9.1)
+- **Extension no longer loads on pi >= 1.0** — pi 1.0 changed the command
+  contract to `registerCommand(name, { description, handler })`, where
+  `handler(args: string, ctx)` returns void and user-visible output goes
+  through `ctx.ui.notify()`. `/asf` and `/asf-approve` were registered as bare
+  functions taking `(args: string[], ctx)` and returning their text, so pi
+  1.0.1 refused to load the package at all:
+  `Command "/asf" registered by extension ".../index.ts" must define handler()`.
+  Both commands now use the options-object form; the argument string is split
+  into subcommand + flags and every gate report is notified. Subcommand
+  behaviour is unchanged.
+
+### Tests
+
+- The test harness mock now enforces the real `RegisteredCommand` contract
+  (it accepted any shape before, which is how this shipped) and exposes
+  `invokeCommand()`, which calls a registered command exactly as pi does and
+  captures `ctx.ui.notify()` output.
+- New `test/test-command-contract.mjs` (16 checks): contract enforcement with a
+  negative control, arg-as-string parsing, case-insensitive subcommands,
+  void return, notify-based output, no bare-function registration left.
 
 
 ## [0.9.0] - 2026-09-27
