@@ -7,7 +7,7 @@ ROOT="$(cd "$HERE/.." && pwd)"
 "$HERE/setup.sh" >/dev/null || { echo "setup failed"; exit 1; }
 
 fail=0
-for t in test-timeouts.mjs test-ceiling.mjs test-delegation.mjs test-docs-rule.mjs test-code-health-ext.mjs test-improvements.mjs; do
+for t in test-timeouts.mjs test-ceiling.mjs test-delegation.mjs test-docs-rule.mjs test-code-health-ext.mjs test-command-contract.mjs test-improvements.mjs; do
   echo "── $t ─────────────────────────────────────────"
   # Bounded per 06b Rule 15: these are pure file/text assertions, seconds at most.
   if timeout 120 node "$HERE/harness.mjs" "$ROOT" "$HERE/$t"; then :; else fail=1; fi

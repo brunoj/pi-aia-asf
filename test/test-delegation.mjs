@@ -9,7 +9,7 @@ const chk = (name, cond, detail) => {
   else { console.log(`  FAIL  ${name}${detail ? ' — ' + detail : ''}`); fail++; }
 };
 
-export async function run({ tools, commands, extDir }) {
+export async function run({ tools, commands, extDir, invokeCommand }) {
   const pkg = JSON.parse(fs.readFileSync(path.join(extDir, 'package.json'), 'utf8'));
 
   console.log('=== 1. pi-intercom NOT a dependency ===');
@@ -22,7 +22,7 @@ export async function run({ tools, commands, extDir }) {
   const asfCmd = commands.find((c) => c.name === 'asf');
   chk('/asf command registered', !!asfCmd);
   if (asfCmd) {
-    const out = await asfCmd.fn([], {});
+    const out = (await invokeCommand('asf')).text;
     chk('summary does NOT mention pi-intercom', !out.includes('pi-intercom'), 'intercom is optional, not required');
     chk('summary lists all 4 required deps', out.includes('pi-vigilant') && out.includes('pi-smart-web-search') && out.includes('pi-smart-fetch') && out.includes('pi-aia-browser'));
   }

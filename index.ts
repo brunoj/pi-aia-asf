@@ -271,7 +271,14 @@ export default function register(pi: ExtensionAPI): void {
     return state.current ? `ASF phase → ${phase}${workType ? ` (${workType})` : ""}` : "ASF session ended.";
   };
 
-  pi.registerCommand("asf", async (args: string[], ctx: ExtensionCommandContext) => {
+  // pi >= 1.0 contract: registerCommand(name, { description, handler }) where
+  // handler receives the raw argument STRING and returns void — output goes to
+  // ctx.ui.notify(). The command body stays a string-returning function so the
+  // gate text is testable without a UI.
+  const runAsf = async (
+    args: string[],
+    ctx: ExtensionCommandContext,
+  ): Promise<string> => {
     const sub = (args[0] || "").toLowerCase();
 
     switch (sub) {
@@ -420,10 +427,20 @@ export default function register(pi: ExtensionAPI): void {
           dependencySummary()
         );
     }
+  };
+
+  pi.registerCommand("asf", {
+    description:
+      "Agentic Software Factory — /asf new|feature|bugfix|refactor|small|status|verify|health|abort",
+    handler: async (args: string, ctx: ExtensionCommandContext) => {
+      const argv = args.trim() ? args.trim().split(/\s+/) : [];
+      const out = await runAsf(argv, ctx);
+      if (out) ctx.ui.notify(out, "info");
+    },
   });
 
-  // Plan-approval helper: /asf approve marks the plan as approved (records Gate 5)
-  pi.registerCommand("asf-approve", async (_args: string[], ctx: ExtensionCommandContext) => {
+  // Plan-approval helper: /asf-approve records Gate 5 approval (requires PLAN.md)
+  const runApprove = async (ctx: ExtensionCommandContext): Promise<string> => {
     const project = projectName();
     const state = await loadState(project);
     if (!state.current) return "No active ASF session — start one with /asf new|feature|bugfix|refactor.";
@@ -447,5 +464,12 @@ export default function register(pi: ExtensionAPI): void {
       "Test-first, strict codebase isolation, regression test per bug fixed.\n" +
       "Run /asf verify before delivery."
     );
+  };
+
+  pi.registerCommand("asf-approve", {
+    description: "Record Gate 5 plan approval (requires PLAN.md) and begin implementation",
+    handler: async (_args: string, ctx: ExtensionCommandContext) => {
+      ctx.ui.notify(await runApprove(ctx), "info");
+    },
   });
 }

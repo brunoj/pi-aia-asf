@@ -23,7 +23,7 @@ function makeProject(files) {
   return dir;
 }
 
-export async function run({ commands, extDir }) {
+export async function run({ commands, extDir, invokeCommand }) {
   // 06e standard doc wired into SKILL.md like 06c (spec spc-1790336984535-15568).
   const skill = fs.readFileSync(path.join(extDir, "skills", "aia-asf", "SKILL.md"), "utf8");
   chk("06e referenced from SKILL.md", skill.includes("06e-code-health.md"));
@@ -46,7 +46,7 @@ export async function run({ commands, extDir }) {
     fs.mkdirSync(path.join(clean, "node_modules", ".bin"), { recursive: true });
     fs.symlinkSync("/usr/bin/eslint", path.join(clean, "node_modules", ".bin", "eslint"));
     process.chdir(clean);
-    const out1 = await asf.fn(["health"], {});
+    const out1 = (await invokeCommand("asf", "health")).text;
     chk("/asf health prints a report", out1.includes("Code Health Gate report"));
     chk("clean fixture: HEALTHY", out1.includes("HEALTHY"), out1.split("\n").slice(0, 4).join(" | "));
     chk("real eslint metrics ran", out1.includes("complexity") && out1.includes("0"));
@@ -62,7 +62,7 @@ export async function run({ commands, extDir }) {
     fs.mkdirSync(path.join(god, "node_modules", ".bin"), { recursive: true });
     fs.symlinkSync("/usr/bin/eslint", path.join(god, "node_modules", ".bin", "eslint"));
     process.chdir(god);
-    const out2 = await asf.fn(["health"], {});
+    const out2 = (await invokeCommand("asf", "health")).text;
     chk("god-file: GATE FAILED", out2.includes("GATE FAILED"), out2.split("\n").filter((l) => l.includes("✗")).slice(0, 3).join(" | "));
     chk("god-file: violation named", out2.includes("maxLinesPerFunction") || out2.includes("complexity"));
 
@@ -75,7 +75,7 @@ export async function run({ commands, extDir }) {
       history: [],
     }));
     try {
-      const out3 = await asf.fn(["verify"], {});
+      const out3 = (await invokeCommand("asf", "verify")).text;
       chk("verify includes CODE HEALTH (Gate 8)", out3.includes("CODE HEALTH (Gate 8"));
       chk("verify includes the health report", out3.includes("Code Health Gate report"));
       chk("verify flags the gate result", /Code health gate passed|GATE NOT PASSED/.test(out3));
@@ -84,12 +84,12 @@ export async function run({ commands, extDir }) {
     }
 
     // ── 4. help lists /asf health ──
-    const help = await asf.fn([], {});
+    const help = (await invokeCommand("asf")).text;
     chk("help lists /asf health", help.includes("/asf health"));
 
     // ── 5. /asf health --diff works through the command ──
     process.chdir(clean);
-    const out5 = await asf.fn(["health", "--diff"], {});
+    const out5 = (await invokeCommand("asf", "health --diff")).text;
     chk("--diff accepted", out5.includes("No metric regressed") || out5.includes("regression"));
   } finally {
     process.chdir(prevCwd);
