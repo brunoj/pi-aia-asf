@@ -532,6 +532,52 @@ gracefully), consistent with the ASF's non-negotiable scale proportionality.
 
 ---
 
+## P24 — Completeness standard: no stubs, no fabricated data, no invented facts
+
+- **Evidence**: user directive — "newer models tend to just build stubs,
+  incomplete things or hallucinate data. aia-asf should explicitly instruct
+  against that, and pi-vigilant should guard against it on completion."
+  Clarified: "the agent should be able to either explain the discrepancies
+  (perhaps the directive was to explicitly make a stub), or finish the work.
+  No accidental stubs, hallucinations etc — agents should always be called out
+  about this."
+- **Gap**: the ASF had anti-placeholder rules for commits/CHANGELOG/docs and a
+  wiring rule (M5, "machinery no surface consumes"), but nothing against a
+  deliverable that is a stub, is incomplete, or is populated with fabricated
+  data and invented facts. Green tests do not catch it — the tests get written
+  against the stub, so the fake looks verified.
+- **Proposed change** (both sides, since the guard is only honest if the rule
+  and the check agree):
+  - **ASF**: new mandatory reference `06i-completeness.md` — core rule (ship
+    the real thing, or say out loud what is not real); banned patterns
+    (`TODO`/`not implemented`/`coming soon` on a user-reachable path, fake or
+    seed data the user reads as their own, invented facts stated as checked,
+    silently deferred scope, built-but-never-wired, mocks in production paths,
+    dead config); legitimate exceptions that must be **declared** (user asked
+    for a scaffold, approved deferral, test seam); prove-it-is-real evidence
+    (exercise each part through the user's entry point and name that action in
+    the delivery report); completeness DoD. Wired into Phase 6 (mandatory read
+    + discipline rule 11), Phase 7 (DoD), anti-patterns, reference index.
+  - **pi-vigilant**: completeness guard at final verification. Scans the files
+    the session changed (git baseline diff + worktree; mtime fallback outside
+    git — so work the agent already committed is still covered) for stub /
+    fabricated-data / fact-hole markers, and injects the concrete evidence
+    (file:line) into the verification prompt. The call-out is **always** made:
+    findings variant, scan-failure variant, or a clean-scan variant that still
+    asks the two questions a scan cannot answer (was anything deferred, is
+    everything wired). The agent must finish the work or state the discrepancy
+    — a deliberate stub is acceptable only when the user asked for it, and then
+    it is said out loud. Config: `completenessGuard` (default on),
+    `completenessMaxFindings` (25).
+- **Proportionality**: the scanner reads only changed files, skips
+  tests/fixtures/docs/dependencies/generated code (mocks at a test seam are
+  correct practice), caps findings and says when it capped; the prompt addition
+  is bounded. Small work reads only the core rule and the DoD of 06i.
+- **Priority**: critical. **Effort**: M. **Risk**: low — prompt-based, never
+  blocks a run, disable via `completenessGuard: false`.
+
+---
+
 ## Recommended review order & bundles
 
 **Bundle 1 — craft core (small, fixes a real defect)**: P05 (depth-over-size),
@@ -550,6 +596,10 @@ security).
 
 **Bundle 5 — process (medium)**: P19 (independent reviewer), P21 (escaped-
 defect loop), P09 (code smells, low).
+
+**Bundle 6 — completeness (user directive, highest urgency)**: P24 (no stubs,
+no fabricated data, no invented facts — ASF rule + pi-vigilant completion
+guard).
 
 Suggested first approvals if you want to start small: **P05, P11, P15, P16** —
 they are the highest value-to-effort and cover the three biggest confirmed

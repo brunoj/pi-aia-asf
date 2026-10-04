@@ -199,6 +199,13 @@ Keep the plan **implementation-ready**: any competent engineer (or agent) can ex
 > bloat), split it by topic and keep the parent as an index — never let it grow until
 > editing breaks.**
 
+> **Read `references/06i-completeness.md` before implementing, and again before claiming
+> done.** Ship the real thing or say out loud what is not real: no `// TODO` /
+> not-implemented paths on a user-reachable code path, no fake or seed data the user will
+> read as their own, no invented facts presented as checked, no silently deferred scope,
+> no built-but-never-wired module. A stub is legitimate only when the user asked for one
+> — and then it is declared, never silent.
+
 > **Read `references/06d-delegation.md` before delegating.** Work may be delegated two ways:
 > **intercom** (message another live pi session that owns relevant context — always `list`
 > first, say what you want back, and treat their findings as evidence, not proof; **optional** —
@@ -228,6 +235,7 @@ Execute the task list milestone by milestone. Discipline rules:
 8. **CHANGELOG discipline**: every user-visible change gets a CHANGELOG entry describing exactly what changed (no placeholder text).
 9. **Challenge approved designs (M4)**: if a spec's literal reading creates product tension (e.g. feedback clusters under "Plan" when "Plan = plans"), stop and resolve it with the user before implementing — never implement blindly and call it delivered.
 10. **Trace before claiming delivered (M5)**: the delivery log is a claim; the code is the evidence. Before marking anything ✅, trace the actual code path, confirm the output is consumed by a surface, and confirm the operator-facing outcome test passes.
+11. **No stubs, no fake data, no invented facts (`references/06i-completeness.md`)**: the deliverable is the real implementation. Finish it, or state the discrepancy plainly to the user — what is missing, why, what remains. Never let the user discover the gap by using the product.
 
 ---
 
@@ -238,6 +246,8 @@ Run the **Definition of Done checklist** in `references/06b-testing-qa.md` (Rule
 Also check the **modularity DoD** from `references/06c-code-quality.md` (Phase 7 section): no duplicated shared logic, no hardcoded config values, every module tested standalone with the same calls it gets in the host, architecture writeup exists, existing functionality still green. **Documents too (06c Rule 9)**: no document so large that editing it is fragile — if a doc you worked on started causing edit failures/truncation, it was refactored (split by topic, parent kept as index, cross-references updated).
 
 Also check the **stability DoD** (`references/06f-stability.md`): if the deliverable makes external calls, it has timeouts and bounded retries (idempotent only). And the **security DoD** (`references/06h-security.md`): no secrets in the repo, no untrusted input reaches a shell/query/path unvalidated, no unbounded resource use on user-controlled input; for agent-like tool surfaces, every tool is least-privilege with an abuse-case test.
+
+Also check the **completeness DoD** (`references/06i-completeness.md`): no stub, placeholder, unimplemented path or fabricated data left on a user-reachable path (or declared to the user with the reason); every part of the ask reachable from where the user enters it, with the exercising command/request/action named in the delivery report; nothing asked for quietly moved to "later"; no claim presented as verified when it was not. `pi-vigilant` scans the changed files for these markers at completion — resolve every finding or explain it; a clean scan is not proof of completeness.
 
 **Large work:** run `/asf verify` — it mechanically validates the **spec-to-code traceability matrix** (M1): every `met` spec must carry `trace` (outcome → codePath → testFile + assertion), testFile must exist, assertion must appear in it. FAIL rows block delivery. **Verify ingested specs from external planning docs too** — the doc's ✅ markers are claims, not evidence.
 
@@ -259,8 +269,8 @@ conflicts). Record the review + triage in the delivery report.
 3. Run `get_task_specs` and verify **every spec** with `update_spec_status` + concrete evidence (test output, build result, code inspection). Unverifiable → `partial` + ask the user. Never self-certify.
 4. **Report honestly**: never claim a check you didn't run; state explicitly anything
    skipped or inconclusive, and distinguish "tests pass" from "works for the user".
-3. If the project is a library/package that the user publishes (npm, GitHub release): **check the release policy** — read `.asf-release.json` at the project root if present (see `references/07-release.md`). It defines **when** (user-stated conditional rules: "when X is true, publish automatically; when Y is true, do this…") and **how** (instructions the ASF drives with judgment — credentials, git sync, publish steps). If the policy authorizes automatic publishing for the current state, drive the release per `how`; otherwise **offer** to run the release and get explicit approval (the default stance: publishing is the user's decision). **Always test on publish / in production, if applicable** — verify the shipped artifact from the registry / smoke-test prod, never assume it works. Optionally offer to set up a CI/CD pipeline for publishing.
-4. Present a completion summary: what was built, specs met, tests passing, how to use it.
+5. If the project is a library/package that the user publishes (npm, GitHub release): **check the release policy** — read `.asf-release.json` at the project root if present (see `references/07-release.md`). It defines **when** (user-stated conditional rules: "when X is true, publish automatically; when Y is true, do this…") and **how** (instructions the ASF drives with judgment — credentials, git sync, publish steps). If the policy authorizes automatic publishing for the current state, drive the release per `how`; otherwise **offer** to run the release and get explicit approval (the default stance: publishing is the user's decision). **Always test on publish / in production, if applicable** — verify the shipped artifact from the registry / smoke-test prod, never assume it works. Optionally offer to set up a CI/CD pipeline for publishing.
+6. Present a completion summary: what was built, specs met, tests passing, how to use it.
 
 ---
 
@@ -298,6 +308,12 @@ conflicts). Record the review + triage in the delivery report.
 - ❌ Breaking existing functionality during a refactor — refactoring preserves behavior
 - ❌ Marking a spec delivered from the delivery log instead of tracing the code — the log is a claim
 - ❌ Shipping machinery no surface consumes — delivered = visible in the product (UI or API)
+- ❌ A `// TODO`, `not implemented`, empty handler or `coming soon` on a user-reachable path — that is an absent feature wearing a name
+- ❌ Fake, seed, demo or lorem-ipsum data on a path the user reads as their own
+- ❌ An invented API signature, config key, endpoint, version or limit stated as fact — verify it or mark it unverified
+- ❌ Quietly deferring part of the ask ("v1 does X") instead of finishing it or telling the user
+- ❌ Presenting a stub as complete because the tests written against it pass
+- ❌ Leaving a deliberate stub unexplained — if the user asked for a scaffold, say so in the report
 - ❌ Trusting unit tests as proof of wiring — assert the operator-facing outcome end-to-end
 - ❌ Trusting an external plan's ✅ (IMPROVEMENT-PLAN / delivery log) — ingest its items as specs and verify them
 - ❌ Implementing a spec literally when it creates product tension — challenge it and resolve with the user
@@ -329,6 +345,7 @@ reads at most 06b + 06c; large work reads the ones its phase calls for.
 | `06f-stability.md` | stability patterns + error handling + observability (P06/P07/P08) | **if the deliverable makes external calls or is a service** |
 | `06g-test-design.md` | risk-based test derivation + determinism | Phase 6 large (test plan) / non-trivial tests |
 | `06h-security.md` | threat model, ASVS DoD, supply chain, agent tools | Phase 4/5 large; small = one line |
+| `06i-completeness.md` | **mandatory** no stubs / no fabricated data / no invented facts + completeness DoD | before implementing and before claiming done (always) |
 | `07-release.md` | release workflow + **configurable release policy** (`.asf-release.json`: when/how) + test-on-publish | before publishing |
 
 ## ASF self-modification policy (P22)

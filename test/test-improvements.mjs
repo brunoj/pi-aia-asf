@@ -17,7 +17,8 @@ export async function run({ extDir }) {
   const skill = fs.readFileSync(path.join(base, 'SKILL.md'), 'utf8');
   const refs = ['01-intake.md','02-research.md','04-adversarial.md','05-plan.md',
     '06-implementation.md','06b-testing-qa.md','06c-code-quality.md','06d-delegation.md',
-    '06e-code-health.md','06f-stability.md','06g-test-design.md','06h-security.md','07-release.md'];
+    '06e-code-health.md','06f-stability.md','06g-test-design.md','06h-security.md',
+    '06i-completeness.md','07-release.md'];
 
   console.log('=== 1. New references exist with read-when/skip-when headers ===');
   for (const f of ['06f-stability.md','06g-test-design.md','06h-security.md']) {
@@ -118,7 +119,7 @@ export async function run({ extDir }) {
 
   console.log('=== 11. No dangling pointers (every reference file is reachable) ===');
   const listed = refs.filter((f) => skill.includes(`\`${f}\``));
-  chk('all 13 references listed in index', listed.length === 13, `${listed.length}/13`);
+  chk(`all ${refs.length} references listed in index`, listed.length === refs.length, `${listed.length}/${refs.length}`);
 
   console.log('=== 12. P07 observability in 06f ===');
   const stab = read('06f-stability.md');
@@ -165,6 +166,30 @@ export async function run({ extDir }) {
   const relScript = fs.readFileSync(path.join(extDir, 'scripts', 'release.sh'), 'utf8');
   chk('release.sh echo says pi-aia-asf', relScript.includes('npm:pi-aia-asf@'));
   chk('release.sh no pi-vigilant echo', !relScript.includes('npm:pi-vigilant@'));
+
+  console.log('=== 15. P24 completeness standard (no stubs / no fake data / no invented facts) ===');
+  chk('06i-completeness.md exists', fs.existsSync(path.join(base, 'references', '06i-completeness.md')));
+  const comp = read('06i-completeness.md');
+  chk('06i has Read when / Skip when', comp.includes('**Read when:') && comp.includes('**Skip when:'));
+  chk('06i core rule (finish or declare)', comp.includes('Ship the real thing, or say out loud what is not real'));
+  chk('06i bans TODO / not implemented', comp.includes('not implemented') && comp.includes('coming soon'));
+  chk('06i bans fabricated data on user paths', comp.includes('lorem ipsum') && comp.includes('example.com'));
+  chk('06i bans invented facts', /Invented facts presented as checked/.test(comp));
+  chk('06i bans silently deferred scope', /Silently deferred scope/.test(comp));
+  chk('06i bans built-but-never-wired', comp.includes('Built-but-never-wired'));
+  chk('06i exceptions must be declared', comp.includes('declared, never silent') && comp.includes('The user asked for it'));
+  chk('06i demands evidence through the user entry point', /entry point the user will use/.test(comp));
+  chk('06i names the host guard', comp.includes('pi-vigilant') && comp.includes('clean scan is *not* proof'));
+  chk('06i has completeness DoD', comp.includes('Definition of Done — completeness'));
+  chk('SKILL.md mandatory read for 06i', skill.includes('Read `references/06i-completeness.md` before implementing'));
+  chk('SKILL.md discipline rule 11', skill.includes('11. **No stubs, no fake data, no invented facts'));
+  chk('SKILL.md Phase 7 completeness DoD', skill.includes('completeness DoD'));
+  chk('SKILL.md anti-pattern stub path', skill.includes('that is an absent feature wearing a name'));
+  chk('SKILL.md anti-pattern fake data', skill.includes('lorem-ipsum data on a path the user reads as their own'));
+  chk('SKILL.md anti-pattern invented facts', skill.includes('stated as fact — verify it or mark it unverified'));
+  chk('SKILL.md anti-pattern quiet deferral', skill.includes('Quietly deferring part of the ask'));
+  chk('SKILL.md anti-pattern green-tests-lie', skill.includes('because the tests written against it pass'));
+  chk('SKILL.md index row for 06i', skill.includes('| `06i-completeness.md` | **mandatory**'));
 
   console.log(`\n  PASS: ${pass}  FAIL: ${fail}`);
   process.exit(fail > 0 ? 1 : 0);
