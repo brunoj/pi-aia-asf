@@ -11,7 +11,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- (describe changes for 0.9.2)
+- **`references/06i-completeness.md` — the completeness standard (P24, mandatory)**.
+  Newer models increasingly ship work that *looks* finished: a function whose body is
+  a placeholder, a screen populated with invented records, a report citing a limit
+  nobody checked. Green tests do not catch it — the tests get written against the
+  stub, so the fake looks verified. The reference states the core rule (**ship the
+  real thing, or say out loud what is not real**), the banned patterns (`TODO` /
+  `not implemented` / `coming soon` on a user-reachable path, fake or seed data the
+  user reads as their own, invented facts stated as checked, silently deferred scope,
+  built-but-never-wired, mocks in production paths, config nothing sets), the
+  exceptions that must be **declared, never silent** (the user asked for a scaffold,
+  an approved deferral, a fake at a test seam), how to prove it is real (exercise each
+  part through the entry point the user will use and name that action in the delivery
+  report), and a completeness DoD.
+- **Wired in, not bolted on**: Phase 6 gains a mandatory read block and discipline
+  rule 11; Phase 7 gains the completeness DoD check; the anti-pattern list gains six
+  entries (stub wearing a name, fake data the user reads as their own, invented facts
+  stated as fact, quietly deferred scope, stub presented as complete because its own
+  tests pass, unexplained deliberate stub); the reference index marks 06i as always
+  read. Proportionality holds — small work reads only the core rule and the DoD.
+
+### Requires
+
+- The enforcement side lives in **pi-vigilant 0.6.2**, which scans the files a
+  session changed for stub / fabricated-data / fact-hole markers at final
+  verification and puts the `file:line` evidence in front of the agent. The rule and
+  the check are the same proposal: the agent must finish the work or state the
+  discrepancy.
 
 
 ## [0.9.1] - 2026-10-03
