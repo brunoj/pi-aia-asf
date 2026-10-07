@@ -11,11 +11,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- (describe changes for 0.10.0)
-
-
-### Added
-
 - **06b Rule 19 — test selection for the inner loop (P25)**. Rule 10's
   "full test suite green (not a subset)" is a **gate**, and it stays exactly
   where it is: the run before a commit is always the full suite. What Rule 19
