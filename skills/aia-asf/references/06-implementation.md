@@ -15,8 +15,11 @@
 
 1. Write the failing test for the next behavior
 2. Implement the minimum to pass
-3. Run the suite; refactor; re-run
-4. Only commit green
+3. Run the suite; refactor; re-run — steps 3's intermediate runs (not the
+   commit-gate run) may use a selected subset per **06b Rule 19**, and only
+   when certain the subset is warranted; default is full
+4. Only commit green — the pre-commit run is always the FULL suite (06b
+   Rule 10), never a subset, regardless of what ran in step 3
 
 For web interfaces, browser tests via pi-aia-browser are part of the test suite, not an afterthought.
 

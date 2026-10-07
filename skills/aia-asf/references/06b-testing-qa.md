@@ -139,7 +139,7 @@ never arrives, the wiring is dead — that is a failed test.
 ## Rule 10 — Definition of done (all must hold)
 
 - [ ] Typecheck/build passes
-- [ ] Full test suite green (not a subset)
+- [ ] Full test suite green (not a subset) — **the gate never moves: this checkbox always means a full run, even when Rule 19 permitted subset runs earlier in the loop that led here**
 - [ ] Regression test added for every bug fixed this cycle
 - [ ] Triggers **and** non-triggers tested for conditional behavior
 - [ ] Shipped artifact inspected (`npm pack` file list) and installed clean-room
@@ -325,3 +325,57 @@ production incident), the fix is not the end — the **loop** is:
 > **Real failure:** a package shipped with a broken `files` allowlist; the
 > fix landed but the *gap* ("no test inspects the packaged artifact") was not
 > closed until Rule 1 was added. The loop is what prevents the next one.
+
+## Rule 19 — Test selection for the inner loop (P25; the DoD gate never moves)
+
+Rule 10's full-suite checkbox is a **gate**, not a loop constraint. The gate
+never relaxes. What this rule relaxes is the **intermediate** runs inside one
+change's own red-green-refactor cycle (06-implementation "Test-first" steps
+1-3) — the runs that happen *before* the commit-gate run, on code you are
+still editing.
+
+**The rule, in the user's own words: run a partial (impact-area) subset only
+when certain that this is warranted; if not certain, or if the blast radius
+might be greater than the impact area, always run full. Default is full.**
+
+- **Burden of proof is on the subset, not on the full run.** Silence,
+  uncertainty, or "probably fine" all mean full. A subset run requires an
+  affirmative, checkable case.
+- **A subset run requires a stated impact statement** in the transcript,
+  before the run: the changed files, the tests selected because of them, and
+  *why nothing else can be reached*. A file list alone is not an impact
+  statement — restating the diff is not an argument for why the blast radius
+  stops there. No statement, or a statement that does not argue the
+  boundary → **not certain → full.**
+- **Certainty is impossible by definition (no judgment call — always full)**
+  when the changed footprint includes any of:
+  - shared/global state, a singleton, a cache, env/config, a feature flag
+  - `package.json`, the lockfile, or any dependency
+  - build, test, lint, or CI config, or the test harness itself
+  - a DB schema, a migration, or a shared fixture
+  - a public API/contract, CLI args, or a wire/shared type
+  - a cross-module refactor, a rename, a file move, or a deletion
+  - **any changed file with no entry in the project's test-impact map** — a
+    project that has not built a map always runs full; the relaxation only
+    ever applies where the mapping is known, never where it is guessed.
+- **The ~90s-and-under guard**: if the full suite's own measured runtime is
+  small enough that an assessment costs more than just running it, skip the
+  assessment and run full — state the measured number once rather than
+  re-litigating it every iteration.
+- **Reporting stays honest (Rule 11/17) no matter which path was taken.** A
+  subset run is reported as a subset run — "ran N/M suites (impact-area: X);
+  full suite not run this iteration" — never as "suite green". The Rule 10
+  checkbox is only ever satisfied by an actual full run, shown in this cycle,
+  regardless of how many subset runs preceded it.
+- **Never an escape from a failing test.** Selection decides *which* suites
+  run; it never decides whether a failing test counts. A failing test is
+  fixed or deleted (Rule 16), never excluded from the run that would have
+  caught it.
+- **If a defect escapes that a full run would have caught**, that is Rule 18:
+  the fix must say so, and the certainty bar for that class of change tightens
+  (added to the "certainty is impossible" list above if it recurs).
+
+This does not change Rule 10, Rule 11, or the commit-gate workflow: a project
+that commits after every green run already runs full before every commit, so
+Rule 19 only ever saves the intermediate runs inside a single change — it
+never reduces what runs before anything is committed.

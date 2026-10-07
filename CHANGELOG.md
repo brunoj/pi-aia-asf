@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **06b Rule 19 — test selection for the inner loop (P25)**. Rule 10's
+  "full test suite green (not a subset)" is a **gate**, and it stays exactly
+  where it is: the run before a commit is always the full suite. What Rule 19
+  relaxes is only the **intermediate red-green-refactor runs inside a single
+  change** — the runs on code you are still editing. The rule is the user's
+  own: **run a partial, impact-area subset only when certain that is
+  warranted; if not certain, or the blast radius *might* be larger, always run
+  full. Default is full** — so the burden of proof sits on the subset, and the
+  cheap direction to be wrong in is also the safe one.
+- **"Certain" is evidence, not a feeling.** A subset run must be preceded by a
+  stated **impact statement** — changed files, tests selected, and *why nothing
+  else can be reached*. Restating the file list does not qualify; no statement
+  means not certain, which means full. On top of that, a **mechanical
+  disqualifier list** removes judgment wherever "might be bigger" is the
+  honest answer: shared/global state, dependencies and lockfile, build/test/CI
+  config or the harness itself, schema/migrations/shared fixtures, public
+  contracts and shared types, cross-module refactor/rename/move/delete — and
+  **any changed file with no entry in the test-impact map**, so a project that
+  has not built a map always runs full. The relaxation only ever applies where
+  the mapping is known, never where it is guessed.
+- **Deliberately not built**: the drafted coin toss and `iteration % N`
+  counter are gone. An LLM cannot roll a dice — asked to flip one it picks the
+  answer that skips the slow run — and an undefined iteration boundary means
+  the trigger silently never fires. A subset streak also cannot survive a
+  commit, because every commit is full-gated. Below a measured ~90s full-suite
+  runtime the assessment is skipped entirely and the suite is just run.
+- **Wired in**: `06b-testing-qa.md` Rule 10's checkbox now says in place that
+  the gate never moves; `06-implementation.md` test-first steps 3 and 4 name
+  the loop/gate split; `SKILL.md` gains two anti-patterns (a subset run with no
+  impact statement, and a subset run passed off as the Rule 10 checkbox) and
+  the index count moves to 19 rules. Covered by
+  `test/test-test-selection.mjs` (26 assertions), which includes a regression
+  guard that **fails if the coin-toss or iteration-counter design ever returns**.
+
 ## [0.9.2] - 2026-10-04
 
 ### Added

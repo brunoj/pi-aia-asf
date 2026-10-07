@@ -324,6 +324,8 @@ conflicts). Record the review + triage in the delivery report.
 - ❌ Shipping a delivery summary without the report fields: spec status + evidence, test results, skipped checks, not-tested register (06b Rule 17)
 - ❌ Letting an escaped defect teach nothing — ask which gate should have caught it and close the gap (06b Rule 18)
 - ❌ Self-modifying the ASF's own rules during a task run — standards change only via the review process (P22)
+- ❌ Running a subset of tests inside the loop without a stated impact statement, or when uncertain whether the blast radius is larger — default is full (06b Rule 19)
+- ❌ Treating a subset run as satisfying the Rule 10 full-suite checkbox — the commit/DoD gate is always a real full run (06b Rule 19)
 
 ## Reference index (read on demand — never load all)
 
@@ -338,7 +340,7 @@ reads at most 06b + 06c; large work reads the ones its phase calls for.
 | `04-adversarial.md` | adversarial checklist (spec/architecture/security lenses) | Phase 4 (large) |
 | `05-plan.md` | PLAN.md template + ADRs + quality scenarios + ATAM-lite + views | Phase 5 (large) |
 | `06-implementation.md` | coding discipline, M4/M5, drift self-correction (P20) | Phase 6 |
-| `06b-testing-qa.md` | **mandatory** testing & QA standard (18 rules + DoD) | before writing tests (always) |
+| `06b-testing-qa.md` | **mandatory** testing & QA standard (19 rules + DoD) | before writing tests (always) |
 | `06c-code-quality.md` | **mandatory** modularity standard (9 rules, deep modules, smells) | before structuring code |
 | `06d-delegation.md` | intercom & subagents + independent reviewer gate (P19) | before delegating; Phase 7 review (large) |
 | `06e-code-health.md` | Code Health Gate (+ depth, supply-chain, secrets metrics) | Gate 8 (large) |

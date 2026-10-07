@@ -34,7 +34,7 @@ export async function run({ extDir }) {
   }
   chk('index has Read when column', skill.includes('| File | Covers | Read when |'));
   chk('index says never load all', skill.includes('never load all'));
-  chk('06b count updated to 18 rules', skill.includes('18 rules + DoD'));
+  chk('06b count updated to 19 rules', skill.includes('19 rules + DoD'));
 
   console.log('=== 3. P01–P04 in 05-plan.md ===');
   const plan = read('05-plan.md');

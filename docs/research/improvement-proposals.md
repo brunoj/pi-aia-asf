@@ -622,3 +622,150 @@ gaps (depth, determinism, security method).
 - Research notes: `10-architecture.md`, `20-software-craft.md`,
   `30-testing-qa.md`, `40-security.md`, `50-ai-era.md`, `SOURCES.md`,
   `00-asf-inventory.md`.
+
+---
+
+## P25 — Risk-based test selection for the inner loop (relax 06b Rule 10's "not a subset")
+
+- **Evidence**: user directive — "look into relaxing Rule 10", with the intent
+  stated as: decide, from project complexity and what the change touches, a
+  **sensible and sufficient subset** to run, and **periodically (a coin toss
+  every few iterations) run the FULL suite even on small problems**.
+  Measured cost on the ASF's own projects (this machine, this turn):
+  pi-vigilant **156s** / 10 suites, pi-aia-browser **52–65s** / 3 suites
+  (123s when run back-to-back with the others), pi-aia-asf **42s** / 8 suites.
+  At 156s an iteration, a 20-iteration cycle spends **~52 minutes** waiting on
+  the suite — and the agent is tempted to skip testing entirely, which is the
+  real failure mode.
+- **Gap**: 06b Rule 10 says "Full test suite green (**not a subset**)" and
+  06-implementation.md says "Run the suite; refactor; re-run / only commit
+  green" — with **no distinction between the inner loop and the gate**. So the
+  only sanctioned behaviour is a full run on every iteration. There is no
+  concept of test-impact selection, no cost threshold below which selection
+  would be pointless ceremony, and no periodic full run to catch cross-cutting
+  breakage before the very end.
+- **Root observation**: Rule 10 is a **Definition-of-Done checklist** — a gate
+  at the *end*. The expense is in the *inner loop*. Those two are separable,
+  and only the inner loop should be relaxed. **The gate must not move**: a
+  subset run must never satisfy a DoD checkbox.
+- **Proposed change** — new **06b Rule 19 "Test selection for the inner loop"**,
+  plus a one-line clarification on Rule 10's checkbox, plus a Phase 6 line:
+
+  **1. Separate loop from gate.**
+  - *Inner loop*: run a **selected subset** (fast feedback).
+  - *Gate* — before commit, before merge, at DoD, before release: **FULL suite,
+    always**. Non-negotiable, never relaxed, must be an actual full run in this
+    cycle with its output shown.
+
+  **2. Selection = affected closure, not guesswork.**
+  - Footprint = files changed this iteration (`git diff --name-only`).
+  - Map to tests via the project's test-impact map (`.asf-test.json`, or the
+    import graph, or module↔test convention).
+  - Include the **transitive dependents** — tests for modules that import a
+    changed module, not only its own test file.
+  - **Unknown footprint ⇒ FULL run.** If the change touches shared/global
+    state, build config, dependencies, the test harness, or cannot be mapped →
+    run full. The strategy degrades to today's behaviour whenever it cannot be
+    sure.
+
+  **3. Always-run core (never excludable).**
+  - regression tests added this cycle;
+  - the feature's **E2E outcome test** (Rules 12/14) for the spec in flight;
+  - the `testFile` named in every `met`/in-progress spec's `trace`;
+  - the shipped-artifact / smoke test (Rule 1).
+
+  **4. Cost threshold — proportionality guard.**
+  - Measure the full-suite runtime once and **state the number**.
+  - If it is ≤ `fastThresholdSeconds` (default **90s**), **always run full** —
+    selection is *forbidden*, it saves nothing and only adds miss risk.
+  - Above the threshold, selection applies. (This keeps small projects exactly
+    as they are today.)
+
+  **5. Periodic full run (the coin toss).**
+  At each iteration boundary after the first, run FULL if **any** of:
+  - `iteration % fullRunEvery == 0` (default **4**), **or**
+  - coin toss: `random() < coinToss` (default **0.5**) — catches cycles that end
+    on an awkward iteration count, so a subset streak can't silently run to the
+    end, **or**
+  - a **forced trigger**: shared/global state, config, dependency or harness
+    change; merge/rebase; a cross-module refactor; the first run after ≥2
+    consecutive subset-only iterations; before commit; before release.
+
+  **6. Honesty (this is where the relaxation could rot).**
+  - A subset run is **reported as a subset run**: "Ran 3/10 suites (affected:
+    X, Y, Z); full suite not run." Never "suite green" (Rule 11).
+  - Rule 17's Tests field must list suites run vs not run, per run.
+  - Selection is a **speed** mechanism, never an escape from a failing test: a
+    failing test is fixed or deleted (Rule 16), never excluded from a run.
+  - If a defect escapes that a full run would have caught, run the
+    escaped-defect loop (Rule 18) and **tighten** `fullRunEvery`/`coinToss`/
+    the always-run core.
+
+- **Optional config** (same precedent as P23's `.asf-release.json`), project
+  root, all defaults conservative:
+  ```json
+  { "fastThresholdSeconds": 90, "fullRunEvery": 4, "coinToss": 0.5,
+    "alwaysRun": ["test/e2e-*.mjs"], "map": { "src/foo.ts": ["test/foo-*.mjs"] } }
+  ```
+- **Priority**: high. **Effort**: M (docs + a selection helper + a test).
+  **Risk**: medium — the risk is *under-testing*, mitigated by: unknown ⇒ full,
+  always-run core, gate never moves, honest reporting, and the feedback loop.
+- **Non-regression**: does not weaken Rules 1–18. The DoD checkbox keeps its
+  meaning; only the per-iteration run becomes selectable. Small work and fast
+  suites are unaffected (threshold guard).
+
+### Decision (2026-10-07): ✅ **Approve (substantially revised)** — implemented as 06b Rule 19
+
+The design above was **rewritten during review**. Two review findings drove it:
+
+1. **The "~52 minutes" evidence was wrong.** It counted every iteration's full
+   run as overhead. But this project **commits after every change**, and the
+   pre-commit full run is the Rule 10 gate — which must never move. So those
+   runs are not overhead, they are the gate. The saving is only the
+   **intermediate red-green-refactor runs inside a single change** (steps 1–3
+   of the test-first loop), not the pre-commit run. The rule was re-scoped to
+   exactly that, and it is stated in the rule itself so a later run cannot
+   re-widen it.
+2. **The coin toss was unimplementable.** An LLM cannot generate a random
+   number; asked to flip a coin it *picks* one, and it picks the one that
+   skips the slow run. The `iteration % fullRunEvery` counter had the same
+   disease — no defined iteration boundary means nobody keeps the count and
+   the trigger silently never fires. **Both were deleted**, along with the
+   "N consecutive subset runs" backstop (redundant: every commit is
+   full-gated, so a subset streak cannot survive a commit).
+
+**What replaced them — the user's own rule, which is simpler and stricter:**
+
+> run a partial test on impact area only when **certain** that this is
+> warranted. If the assessment is that you are **not certain** and the splash
+> **might** be greater, then **always do full run**.
+
+This inverts the burden of proof: **default is full**, and a subset requires an
+affirmative case. It also removes the self-serving-judgment hole, because
+uncertainty — the easy direction to be wrong in — now costs the agent a slow
+run rather than a fast one.
+
+Two enforcement additions keep "certain" from becoming a feeling the agent
+asserts to save time:
+
+- **No impact statement ⇒ not certain.** The subset run must be preceded by a
+  stated argument for why the blast radius stops at the impact area. Restating
+  the file list is explicitly *not* such an argument.
+- **A mechanical disqualifier list** operationalizes "might be greater":
+  shared/global state, deps/lockfile, build/test/CI config or the harness,
+  schema/migrations/shared fixtures, public contracts/shared types, cross-module
+  refactor/rename/move/delete, and **any changed file with no entry in the
+  test-impact map**. No judgment on these — certainty is impossible by
+  definition, always full. The last item means a project that has not built a
+  map simply always runs full: the relaxation only ever applies where the
+  mapping is known, never where it is guessed.
+
+The ≤90s measured-runtime guard is kept (below it, assess nothing, run full).
+`.asf-test.json` is **not** introduced — no config file is needed to make the
+rule work, and an unused knob is drift surface.
+
+**Landed in**: `06b-testing-qa.md` Rule 19 (+ the Rule 10 checkbox
+cross-reference), `06-implementation.md` test-first steps 3–4, `SKILL.md`
+index count and two anti-patterns. Tested by `test/test-test-selection.mjs`
+(26 assertions), including a regression guard that **fails if the coin-toss or
+iteration-counter machinery ever returns**.
