@@ -11,11 +11,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- (describe changes for 0.11.0)
-
-
-### Added
-
 - **Browser verification now follows what a change TOUCHES, and happens in the
   build (06b Rule 9, strengthened in place)**. The rule already existed, but
   every formulation keyed on *"if the deliverable has a UI"* — which an agent
