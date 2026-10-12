@@ -44,12 +44,12 @@ interface AsfState {
 /** Definition-of-done checks (references/06b-testing-qa.md, Rule 10). */
 const QA_CHECKLIST: Array<{ key: string; label: string }> = [
   { key: "build", label: "Typecheck/build passes" },
-  { key: "tests", label: "Full test suite green (not a subset)" },
+  { key: "tests", label: "Full test suite green (not a subset) — the gate; Rule 19 never relaxes this checkbox" },
   { key: "regression", label: "Regression test added for every bug fixed this cycle" },
   { key: "triggers", label: "Triggers AND non-triggers tested for conditional behavior" },
   { key: "artifact", label: "Shipped artifact inspected (npm pack file list) + clean-room install" },
   { key: "observable", label: "Observable end state verified as a user would experience it" },
-  { key: "browser", label: "Web surfaces exercised through a real browser (n/a if none)" },
+  { key: "browser", label: "Every interface the change TOUCHES exercised through a real browser during the build (06b Rule 9) — page + action + assertion named; n/a with reason if none" },
   { key: "specs", label: "Every MUST spec 'met' with concrete evidence" },
   { key: "trace", label: "Spec-to-code traceability: every met spec has outcome → codePath → test" },
   { key: "code-health", label: "Code Health Gate passed (or enabled:false / gate.mode:warn with the report shown)" },

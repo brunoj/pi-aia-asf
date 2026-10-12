@@ -117,7 +117,7 @@ two-sided. Half a test suite hides half the bugs.
 - Check terminal states are reachable, and no state can block its own exit.
 - Test repeat/idempotent invocations and out-of-order calls.
 
-## Rule 9 — Browser testing is mandatory for any web surface
+## Rule 9 — Browser-test every interface you TOUCH, during the build
 
 API/curl checks do not replicate what a human sees. Via `pi-aia-browser`:
 
@@ -128,6 +128,44 @@ API/curl checks do not replicate what a human sees. Via `pi-aia-browser`:
 5. `browser_screenshot` for the record; check mobile + desktop viewports
 
 A 200 response with a blank or broken page is a **failure**.
+
+**The trigger is what the change TOUCHES, not whether the project "has a UI".**
+A deliverable-level trigger lets a small edit slide: "I only changed a helper"
+is exactly the change that reaches a rendered surface unnoticed. So the
+question is never *does this project have a UI* — it is **can this change reach
+one**. Anything below counts as touched, and must be exercised through the
+browser:
+
+- a page, route, component, widget, form, or template
+- anything that changes what is rendered: markup, styling, copy, formatting,
+  date/number/currency rendering, truncation, empty and error states
+- client-side state, routing, data fetching the view depends on
+- an API, serializer or query **that a UI consumes** (server-side changes are
+  not exempt just because the diff is in `src/server/`)
+- auth/permission paths that gate what a user sees, and uploads/downloads
+  a user triggers from a page
+
+**When uncertain, browser-test it — same inversion as Rule 19.** If you cannot
+argue that the change provably cannot reach a rendered surface, treat it as
+touched. "It's only a backend change" is not an argument; naming the render
+path it cannot affect is. The cheap direction to be wrong in must be the safe
+one, so uncertainty costs a browser run, never a skipped one.
+
+**This happens in the Phase 6 build loop, per change — not at final
+verification.** Open the touched interface in the browser *before committing
+that change*, while the context is warm and the defect is one edit wide.
+Deferring it to Phase 7 means the gate is the first time anyone has looked, by
+which point the cause is buried in the whole change. If the loop run was a
+Rule 19 subset, the browser/E2E suite for a touched surface is **never
+excludable** — selection may drop unrelated suites, never the one that looks at
+what you just changed.
+
+**Evidence, not assertion.** A browser run is reported with what was actually
+done: the page/URL opened, the action taken, and what was asserted — or
+explicitly `n/a: no rendered surface touched, because <reason>`. "Browser
+tested" with no page and no action named is not evidence (Rule 11). If
+`pi-aia-browser` is unavailable, **say so** and name what you did instead;
+never let a missing tool read as a passed check.
 
 **Silent async paths are the priority.** Fire-and-forget enrichment (an async
 budgeted analysis that fills in a card title after render) fails silently — the
@@ -144,7 +182,7 @@ never arrives, the wiring is dead — that is a failed test.
 - [ ] Triggers **and** non-triggers tested for conditional behavior
 - [ ] Shipped artifact inspected (`npm pack` file list) and installed clean-room
 - [ ] Observable end state verified as a user would experience it
-- [ ] Web surfaces exercised through a real browser
+- [ ] Web surfaces exercised through a real browser **in the build, for every interface the change touches** (Rule 9) — report names the page/URL opened, the action taken and what was asserted; `n/a` stated with a reason if nothing rendered is touched
 - [ ] Every MUST spec `met` with concrete evidence (`update_spec_status`)
 - [ ] **Spec-to-code traceability: every `met` spec carries `trace` (outcome → codePath → testFile + assertion); `/asf verify` mechanically validates it (large work)**
 - [ ] **Code Health Gate passed (or `enabled: false` / `gate.mode: warn` with the report shown)**

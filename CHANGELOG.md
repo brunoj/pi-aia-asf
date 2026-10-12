@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Browser verification now follows what a change TOUCHES, and happens in the
+  build (06b Rule 9, strengthened in place)**. The rule already existed, but
+  every formulation keyed on *"if the deliverable has a UI"* — which an agent
+  editing one helper in an existing app reads as not engaged, and "I only
+  changed a helper" is exactly the change that reaches a rendered surface
+  unnoticed. The trigger is now **can this change reach a rendered surface**,
+  with an explicit touched list: pages, routes, components, forms, templates;
+  markup, styling, copy, formatting, truncation, empty and error states;
+  client-side state, routing and the fetching a view depends on; **an API,
+  serializer or query that a UI consumes** (a server-side diff is not exempt
+  for living in `src/server/`); auth/permission paths that gate what a user
+  sees; user-triggered uploads and downloads.
+- **Moved from final verification into the Phase 6 loop.** "Must be verified"
+  was Phase 7 language, which makes the gate the first time anyone has looked —
+  by then the cause is buried in the whole change. The touched interface is now
+  opened in the browser **before committing that change**, while the context is
+  warm and the defect is one edit wide (test-first step 5).
+- **Same safety inversion as Rule 19**: uncertain whether the change reaches a
+  surface? Then it is touched. "It's only a backend change" is not an argument;
+  naming the render path it cannot affect is. Uncertainty costs a browser run,
+  never a skipped one.
+- **Closes a hole Rule 19 opened**: nothing previously stopped a subset run
+  from excluding the browser/E2E suite for the surface just changed. For a
+  touched surface that suite is now **never excludable** — selection may drop
+  unrelated suites, never the one that looks at what you just changed.
+- **Evidence, not assertion.** A run is reported with the page/URL opened, the
+  action taken and what was asserted — or `n/a: no rendered surface touched,
+  because <reason>`. Bare "browser tested" is named as an assertion rather than
+  evidence, and an unavailable `pi-aia-browser` must be said out loud instead of
+  reading as a passed check. Backed by the Rule 10 checkbox, the `/asf verify`
+  checklist item, four new anti-patterns, and `test/test-browser-touched.mjs`
+  (42 assertions, 6 negative controls). Rule 9 keeps its number, its five steps
+  and its silent-async paragraph — strengthened, not duplicated.
+
 ## [0.10.0] - 2026-10-07
 
 ### Added

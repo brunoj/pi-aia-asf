@@ -20,6 +20,10 @@
    when certain the subset is warranted; default is full
 4. Only commit green — the pre-commit run is always the FULL suite (06b
    Rule 10), never a subset, regardless of what ran in step 3
+5. Browser-verify every interface the change **touches** through
+   `pi-aia-browser` **before committing that change** (06b Rule 9) — not at
+   final verification. If you cannot argue the change provably cannot reach a
+   rendered surface, it counts as touched and gets a browser run.
 
 For web interfaces, browser tests via pi-aia-browser are part of the test suite, not an afterthought.
 
@@ -30,9 +34,13 @@ For web interfaces, browser tests via pi-aia-browser are part of the test suite,
 - If a legitimate need to touch another codebase arises (shared lib, dependency fix): **stop and ask the user**.
 - Exception: the user explicitly instructs otherwise — then note the instruction and proceed.
 
-## Browser testing (MANDATORY for web interfaces)
+## Browser testing (MANDATORY for every touched interface, in the build)
 
-Any deliverable with a UI/web surface must be verified through the browser to replicate the user's real experience:
+The trigger is **what the change touches**, not whether the project has a UI.
+If the change can reach a rendered surface — page, route, component, form,
+markup, styling, copy, formatting, client-side state, or an API a UI consumes —
+it gets a browser run, **during Phase 6 while building**, before that change is
+committed. Uncertain whether it reaches one? Then it is touched (06b Rule 9).
 
 1. `browser_init` — start the browser
 2. `browser_navigate` to the app URL (local dev server or deployed)
@@ -42,6 +50,11 @@ Any deliverable with a UI/web surface must be verified through the browser to re
 6. `browser_close` when done
 
 API-only verification is NOT sufficient for anything a human would see or click.
+
+Report it as evidence, not assertion: the page/URL opened, the action taken,
+what was asserted — or `n/a: no rendered surface touched, because <reason>`.
+If `pi-aia-browser` is unavailable, say so and name what you did instead; a
+missing tool must never read as a passed check.
 
 ## Commit messages
 

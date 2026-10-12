@@ -769,3 +769,64 @@ cross-reference), `06-implementation.md` test-first steps 3–4, `SKILL.md`
 index count and two anti-patterns. Tested by `test/test-test-selection.mjs`
 (26 assertions), including a regression guard that **fails if the coin-toss or
 iteration-counter machinery ever returns**.
+
+---
+
+## P26 — Browser-verify every interface a change TOUCHES, during the build
+
+- **Evidence**: user directive — "Ensure that pi-aia-asf enforces/suggests to
+  always test via the browser any touched interfaces in the building run."
+- **What already existed** (checked before writing, not assumed): 06b Rule 9
+  "Browser testing is mandatory for any web surface" (5 steps + the silent-async
+  paragraph), a `06-implementation.md` "Browser testing (MANDATORY for web
+  interfaces)" section, SKILL.md Phase 6 discipline rule 5, a Rule 10 DoD
+  checkbox, and the "verifying a UI only via API/curl" anti-pattern. So this was
+  **not** a missing-capability gap, and adding a second browser rule would have
+  created exactly the duplication 06c forbids (the "test copy that differs from
+  production" pattern). Rule 9 was strengthened in place instead.
+- **The three real gaps:**
+  1. **Deliverable-level trigger.** Every formulation keyed on *"if the
+     deliverable has a UI/website/web app"*. An agent editing one helper in an
+     existing app reads that as not-engaged — "I only changed a helper" is
+     precisely the change that reaches a rendered surface unnoticed. The trigger
+     is now **can this change reach a rendered surface**, with an explicit
+     touched list (page/route/component/form/template; markup, styling, copy,
+     formatting, truncation, empty and error states; client-side state, routing,
+     data fetching the view depends on; **an API, serializer or query that a UI
+     consumes** — server-side diffs are not exempt for living in `src/server/`;
+     auth/permission paths that gate visibility; user-triggered uploads and
+     downloads).
+  2. **Timing read as an end-of-run activity.** "Must be verified", "verify:
+     loads, journeys" are Phase 7 language. It is now **in the Phase 6 loop, per
+     change, before committing that change** — while the context is warm and the
+     defect is one edit wide. Deferring it makes the gate the first time anyone
+     looked, with the cause buried in the whole change.
+  3. **No teeth.** Completeness demands the exercising action be *named* in the
+     delivery report; browser testing demanded nothing. Now a run is reported
+     with the page/URL opened, the action taken and what was asserted — or
+     `n/a: no rendered surface touched, because <reason>`. Bare "browser tested"
+     is called out as an assertion, not evidence, and an unavailable
+     `pi-aia-browser` must be said out loud rather than read as a passed check.
+- **Interaction with Rule 19 (this proposal closes a hole P25 opened).** P25
+  permits subset runs in the loop; nothing stopped a subset from excluding the
+  browser/E2E suite for the surface just changed. Rule 9 now states that for a
+  touched surface the browser/E2E suite is **never excludable** — selection may
+  drop unrelated suites, never the one that looks at what you just changed.
+- **Same safety inversion as Rule 19.** Uncertain whether the change reaches a
+  rendered surface? Then it is touched. *"It's only a backend change"* is not an
+  argument; naming the render path it cannot affect is. Uncertainty costs a
+  browser run, never a skipped one — so the cheap direction to be wrong in is
+  the safe direction.
+- **Enforcement, stated honestly.** A skill rule is ultimately instruction; no
+  text mechanically forces an agent to open a browser. The available teeth are:
+  the Rule 10 DoD checkbox (now worded for touched interfaces + evidence), the
+  `/asf verify` checklist item in `index.ts` (so it appears in the mechanically
+  emitted gate), the delivery-report evidence field, and 42 assertions in
+  `test/test-browser-touched.mjs` with 6 negative controls. Anything stronger
+  would need a runtime hook that observes browser tool calls against the diff —
+  not built here, and worth a separate proposal if wanted.
+- **Priority**: high. **Effort**: S-M. **Risk**: low — the failure mode added is
+  *over*-testing (a browser run for a change that could not reach a surface),
+  which is bounded and cheap next to the alternative.
+- **Non-regression**: Rule 9 keeps its number, its 5 steps and its silent-async
+  paragraph; nothing was duplicated, nothing was removed.
