@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.1] - 2026-10-14
+
 ### Added
 
 - **06j §7 — who enforces the model gate.** The boundary is now written down:
