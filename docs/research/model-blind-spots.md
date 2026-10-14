@@ -403,7 +403,7 @@ everyone's dependency and no one's feature."
 | 4 | `06b` Rule 20 + DoD checkbox + `/asf verify` checklist item | gate + mechanically emitted prompt | **hard** (checkbox cannot be green without evidence) |
 | 5 | `04-adversarial` data & model lens | review questions | soft |
 | 6 | `05-plan.md` data-model & ownership section | the artifact the gate reads | soft, load-bearing for 2 |
-| 7 | vigilant `completeness` — `model` category, precise cascade-without-declaration pattern | runtime call-out on the session diff | semi-hard (fails open, notifies) |
+| 7 | ~~vigilant `completeness` — `model` category~~ | **not built — wrong package** (see exclusions) | ASF states the obligation as a MUST spec; the loop guard verifies completion generically |
 
 The pairing rule from the earlier discussion holds and is applied here: **every
 soft rule gets a hard counterpart, or it does not count as a gate.** Items 1, 5
@@ -411,7 +411,19 @@ and 6 are only credible because 2 and 4 exist to catch the case where the agent
 talks its way past them — which, from this session's own record of me
 rationalising around prose rules three times, is not a hypothetical.
 
-Two deliberate exclusions, to keep the mandate honest:
+Exclusions, to keep the mandate honest:
+
+- **No model check in pi-vigilant.** An earlier draft added a `model` category to
+  vigilant's completeness guard, instructing the agent to add `asf-model:` tags.
+  Reverted on the user's correction: *"vigilant is there to mostly guard the
+  loop; it should be able to work perfectly well without ASF and any specific
+  software development checks should be on ASF side… ASF would dictate certain
+  specifications and then vigilant checks if they are completed / done, as it
+  would with ANY incoming specifications from anywhere."* A guard that searches
+  for one framework's tag is no longer a general guard. What crosses the boundary
+  is the **specification**, never the check: ASF captures the model obligation as
+  a MUST spec, and vigilant's existing spec verification refuses "done" while it
+  is open.
 
 - **No pattern catalogue.** The scanner recognises a small illustrative set of
   cascade spellings across relational, ORM-mapped and document forms, and a

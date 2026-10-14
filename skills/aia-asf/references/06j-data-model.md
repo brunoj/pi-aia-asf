@@ -214,6 +214,21 @@ an opinion, and they are the part that works against any store.
       store exposes no constraints.
 - [ ] Or: `n/a: no persistence touched, because <reason>`.
 
+## 7. Who enforces this
+
+ASF states the obligation; the loop guard enforces completion **generically**.
+When a change touches persistence, capture the model obligations as MUST specs
+(`capture_spec`) — the ownership decision per relationship, the invariant and
+non-effect tests, the scan result — and mark each `met` with evidence, not
+assertion. The guard then verifies those specs at settle exactly as it verifies
+any specification that arrives from any source, and refuses "done" while a MUST
+spec is open.
+
+Keep model knowledge on this side of the boundary. The guard does not know what
+a cascade is, does not look at schemas, and must not have to — the day it
+inspects your data model is the day it stops being usable outside this factory.
+What crosses the boundary is the **specification**, never the check.
+
 ## Anti-patterns
 
 - **The instance that inherited its parent's lifecycle** — a fact about a
@@ -237,3 +252,6 @@ an opinion, and they are the part that works against any store.
 - **Silent zero** — a missing filter reported as an empty day. (M8)
 - **Reading a scan exception as a clean deliverable** — an accepted finding is a
   decision you must show, not a pass you may claim. (§4)
+- **Asking the loop guard to understand the model** — it verifies that specs are
+  done; teaching it cascade vocabulary puts a domain check in a general tool.
+  Capture the obligation as a spec instead. (§7)

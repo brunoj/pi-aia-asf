@@ -221,6 +221,12 @@ export async function run({ extDir }) {
     chk('SKILL.md does not oversell the scan', skillMd.includes('tripwire'));
 
     chk('the emitted QA checklist carries the model line', indexTs.includes('key: "model"') && indexTs.includes('invariant + non-effect tests'));
+
+    // Boundary: the guard stays general. Model knowledge lives on the ASF side;
+    // what crosses to the loop guard is the specification, never the check.
+    chk('06j states who enforces it (specs, not a model-aware guard)', j.includes('Who enforces this') && j.includes('never the check'));
+    chk('06j keeps the guard general', j.includes('does not know what a cascade is'));
+    chk('SKILL.md sends the obligation as a spec', skillMd.includes('Capture the obligations as MUST specs') && skillMd.includes('does not know what a cascade is'));
   }
 
   console.log(`\n${pass}/${pass + fail} checks passed`);

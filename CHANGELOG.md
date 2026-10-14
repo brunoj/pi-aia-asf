@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **06j §7 — who enforces the model gate.** The boundary is now written down:
+  ASF states the obligation, and the loop guard enforces completion
+  **generically**. When a change touches persistence, the model obligations are
+  captured as MUST specs (`capture_spec`) and marked `met` with evidence; the
+  guard verifies those specs at settle exactly as it verifies any specification
+  arriving from any source. What crosses the boundary is the **specification**,
+  never the check — the guard does not know what a cascade is and must not have
+  to. SKILL.md's Phase 6 model rule now says so directly, and the anti-pattern
+  list names the alternative ("asking the loop guard to understand the model").
+
 ## [0.12.0] - 2026-10-14
 
 ### Added
