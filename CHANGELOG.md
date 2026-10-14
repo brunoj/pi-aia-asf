@@ -7,6 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **The model gate (P27)** — ASF now inspects the data model, not only the code
+  shape. A new mandatory reference, `references/06j-data-model.md`, gives the
+  factory what it never had: ownership classes (composition / instance /
+  ledger), a required `asf-model:` declaration for every relationship a change
+  touches (class, owner, survives-parent), model rules **M1–M8**, the legitimate
+  exceptions, and a model Definition of Done. The obligation is the point — a
+  declaration that concludes "`CASCADE` is correct here" is a pass; what the gate
+  refuses is that nobody was asked.
+- **Two objective fitness functions in the Code Health Gate** (`model` level,
+  `lib/code-health/model.mjs`): a cascade declaration with no ownership
+  declaration, and the rebuild-by-delete signature (delete + re-insert of the
+  same table/collection in one window). Built in — no tool to install, so the
+  level can never be skipped for a missing dependency — reporting `file:line`
+  and the fix, waivable only with a greppable `asf-model-accept: <reason>`.
+  Documented as **a tripwire, not an authority**: `scanned: 0` is reported, never
+  hidden, and a clean scan is not a pass.
+- **Store-agnostic by design.** Declarations are recognised across relational,
+  ORM-mapped and document forms, and a project adds its own dialect with
+  `model.extraCascadePatterns` rather than waiting for a release. Where a store
+  exposes no constraint to inspect, the text says plainly that the invariant
+  tests are the only hard gate.
+- **Invariant and non-effect tests (06g §3)** — the missing half of the test
+  doctrine: survival tests with production-shaped data, non-effect assertions on
+  the tables the change does not name, zero-row invariant queries, and two-user
+  authorization tests. Every other rule asked *did the thing you wanted happen?*;
+  these ask *what must not have happened*.
+- **06b Rule 20 — the model is asserted, not assumed**, plus the Rule 10 DoD
+  model line, the `/asf verify` checklist item, a **Data & model questions** lens
+  in `04-adversarial.md`, a **Data model & ownership** table in the plan
+  template, test-first step 6 in `06-implementation.md`, and a **Model drift**
+  anti-pattern (extending a destructive persistence pattern because the file
+  above does it is drift, not precedent).
+
+### Fixed
+
+- **The rule count in `SKILL.md` can no longer silently disagree with 06b.** The
+  suite now derives the count from the `## Rule N —` headings instead of
+  asserting a hardcoded number, so adding a rule no longer requires editing two
+  test files (and a stale index fails).
+- **`docs/research/improvement-proposals.md` header** still claimed "research
+  phase only — no ASF code or docs have been changed" long after P23–P26 had
+  shipped. It now points at `review-decisions.md` as the authoritative record.
+
 ## [0.11.0] - 2026-10-12
 
 ### Added

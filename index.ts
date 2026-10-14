@@ -53,6 +53,7 @@ const QA_CHECKLIST: Array<{ key: string; label: string }> = [
   { key: "specs", label: "Every MUST spec 'met' with concrete evidence" },
   { key: "trace", label: "Spec-to-code traceability: every met spec has outcome → codePath → test" },
   { key: "code-health", label: "Code Health Gate passed (or enabled:false / gate.mode:warn with the report shown)" },
+  { key: "model", label: "Model (06j): every relationship the change touches has a written ownership declaration; store writes have invariant + non-effect tests (06g §3); /asf health model level passes or its findings are accepted with a reason; n/a with reason if no persistence touched" },
   { key: "surface", label: "Every delivered feature is consumed by a surface (UI or API) — nothing dead" },
   { key: "e2e", label: "Feature specs have an end-to-end behavioral test through the real entry point" },
   { key: "honest", label: "Skipped/inconclusive checks reported explicitly" },

@@ -61,7 +61,10 @@ export async function run({ extDir }) {
     impl.includes('always the FULL suite') && impl.includes('never a subset'));
 
   console.log('=== 6. SKILL.md wiring ===');
-  chk('index updated to 19 rules', skill.includes('19 rules + DoD'));
+  {
+    const n = (tq.match(/^## Rule \d+ —/gm) || []).length; // tq = 06b text
+    chk(`index rule count matches 06b headings (${n})`, skill.includes(`${n} rules + DoD`));
+  }
   chk('anti-pattern: subset without impact statement', skill.includes('without a stated impact statement'));
   chk('anti-pattern: subset satisfying the DoD checkbox', skill.includes('satisfying the Rule 10 full-suite checkbox'));
 

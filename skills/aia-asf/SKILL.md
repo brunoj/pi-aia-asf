@@ -236,6 +236,7 @@ Execute the task list milestone by milestone. Discipline rules:
 9. **Challenge approved designs (M4)**: if a spec's literal reading creates product tension (e.g. feedback clusters under "Plan" when "Plan = plans"), stop and resolve it with the user before implementing — never implement blindly and call it delivered.
 10. **Trace before claiming delivered (M5)**: the delivery log is a claim; the code is the evidence. Before marking anything ✅, trace the actual code path, confirm the output is consumed by a surface, and confirm the operator-facing outcome test passes.
 11. **No stubs, no fake data, no invented facts (`references/06i-completeness.md`)**: the deliverable is the real implementation. Finish it, or state the discrepancy plainly to the user — what is missing, why, what remains. Never let the user discover the gap by using the product.
+12. **The model is asserted, not assumed — for any change that WRITES to a store (06b Rule 20 / `references/06j-data-model.md`)**: the trigger is what the change writes, not where the diff lives — "only a backend change" is the case that needs it most. Declare ownership for every relationship touched (composition / instance / ledger, owner, survives-parent), and test the **non-effect**: seed the referencing rows with production-shaped data and assert they survive, and assert the tables the change does not name are unchanged (06g §3). Run `/asf health` and resolve or accept its findings. **Uncertain whether the model is touched? Then it is touched.** A green suite is not evidence here — the table a cascade empties is usually never populated by the suite that stayed green.
 
 ---
 
@@ -248,6 +249,13 @@ Also check the **modularity DoD** from `references/06c-code-quality.md` (Phase 7
 Also check the **stability DoD** (`references/06f-stability.md`): if the deliverable makes external calls, it has timeouts and bounded retries (idempotent only). And the **security DoD** (`references/06h-security.md`): no secrets in the repo, no untrusted input reaches a shell/query/path unvalidated, no unbounded resource use on user-controlled input; for agent-like tool surfaces, every tool is least-privilege with an abuse-case test.
 
 Also check the **completeness DoD** (`references/06i-completeness.md`): no stub, placeholder, unimplemented path or fabricated data left on a user-reachable path (or declared to the user with the reason); every part of the ask reachable from where the user enters it, with the exercising command/request/action named in the delivery report; nothing asked for quietly moved to "later"; no claim presented as verified when it was not. `pi-vigilant` scans the changed files for these markers at completion — resolve every finding or explain it; a clean scan is not proof of completeness.
+
+Also check the **model DoD** (`references/06j-data-model.md`) when the change
+writes to a store: every relationship touched has a written ownership
+declaration, the invariant and non-effect tests (06g §3) exist and are green,
+and `/asf health`'s model level passes or its findings are accepted with a
+reason. State the scan result honestly — `scanned: 0` means it looked at
+nothing, and that is said out loud, never reported as a pass.
 
 **Large work:** run `/asf verify` — it mechanically validates the **spec-to-code traceability matrix** (M1): every `met` spec must carry `trace` (outcome → codePath → testFile + assertion), testFile must exist, assertion must appear in it. FAIL rows block delivery. **Verify ingested specs from external planning docs too** — the doc's ✅ markers are claims, not evidence.
 
@@ -285,6 +293,10 @@ conflicts). Record the review + triage in the delivery report.
 - ❌ Deferring browser verification of a touched interface to final verification — open it in the build, before committing that change (06b Rule 9)
 - ❌ "It's only a backend change" with no render path named — if uncertain whether it reaches a surface, browser-test it (06b Rule 9)
 - ❌ Reporting "browser tested" without the page, action and assertion — that is an assertion, not evidence; and a missing browser tool must be said out loud, never read as passed (06b Rule 9)
+- ❌ A green suite that never populated the table the change destroys — asserting only the intended effect is not evidence about the model (06j, 06g §3)
+- ❌ `CASCADE` / delete-and-reinsert chosen because the store defaulted to it or the file above does it — a default and a precedent are both non-decisions (06j M1, M4)
+- ❌ Reporting a clean model scan as a passed check when the level scanned nothing, or trusting the scan where the store exposes no constraints to inspect — the scan is a tripwire; the invariant tests are the gate (06j §5)
+- ❌ Treating the model gate as about "projects that have a database schema" — the trigger is whether **this change writes to a store**, in any store (06b Rule 20)
 - ❌ Vague commits or CHANGELOG placeholders
 - ❌ Declaring done while specs are still `open`
 - ❌ Publishing anything beyond the configured release policy — no `.asf-release.json` means the default: always get the user's explicit go-ahead
@@ -341,17 +353,18 @@ reads at most 06b + 06c; large work reads the ones its phase calls for.
 |---|---|---|
 | `01-intake.md` | question bank, probing, external planning docs (M6) | Phase 1 (large) |
 | `02-research.md` | research playbook, search templates | Phase 2 (large) |
-| `04-adversarial.md` | adversarial checklist (spec/architecture/security lenses) | Phase 4 (large) |
-| `05-plan.md` | PLAN.md template + ADRs + quality scenarios + ATAM-lite + views | Phase 5 (large) |
+| `04-adversarial.md` | adversarial checklist (spec/architecture/data-model/security lenses) | Phase 4 (large) |
+| `05-plan.md` | PLAN.md template + ADRs + quality scenarios + ATAM-lite + views + ownership table | Phase 5 (large) |
 | `06-implementation.md` | coding discipline, M4/M5, drift self-correction (P20) | Phase 6 |
-| `06b-testing-qa.md` | **mandatory** testing & QA standard (19 rules + DoD) | before writing tests (always) |
+| `06b-testing-qa.md` | **mandatory** testing & QA standard (20 rules + DoD) | before writing tests (always) |
 | `06c-code-quality.md` | **mandatory** modularity standard (9 rules, deep modules, smells) | before structuring code |
 | `06d-delegation.md` | intercom & subagents + independent reviewer gate (P19) | before delegating; Phase 7 review (large) |
-| `06e-code-health.md` | Code Health Gate (+ depth, supply-chain, secrets metrics) | Gate 8 (large) |
+| `06e-code-health.md` | Code Health Gate (+ depth, supply-chain, secrets, model metrics) | Gate 8 (large) |
 | `06f-stability.md` | stability patterns + error handling + observability (P06/P07/P08) | **if the deliverable makes external calls or is a service** |
-| `06g-test-design.md` | risk-based test derivation + determinism | Phase 6 large (test plan) / non-trivial tests |
+| `06g-test-design.md` | risk-based test derivation + determinism + invariant/non-effect tests (P27) | Phase 6 large (test plan) / non-trivial tests |
 | `06h-security.md` | threat model, ASVS DoD, supply chain, agent tools | Phase 4/5 large; small = one line |
 | `06i-completeness.md` | **mandatory** no stubs / no fabricated data / no invented facts + completeness DoD | before implementing and before claiming done (always) |
+| `06j-data-model.md` | **mandatory when the work writes to a store** — ownership classes, model rules M1-M8, legitimate exceptions, invariant/non-effect tests + model DoD | before implementing any store write, and before claiming done |
 | `07-release.md` | release workflow + **configurable release policy** (`.asf-release.json`: when/how) + test-on-publish | before publishing |
 
 ## ASF self-modification policy (P22)

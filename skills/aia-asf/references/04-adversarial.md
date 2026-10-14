@@ -52,6 +52,25 @@ Challenge every spec and design decision like a hostile reviewer. For each item,
 - **Rollback**: if this ships and breaks, how do we revert?
 - **Observability**: logs, metrics, errors — can we see it working in production?
 
+## Data & model questions (P27 — when the work touches persistence)
+
+The code and the behaviour get reviewed; the model usually does not, and a model
+defect is invisible to every behavioural test (full rules in
+[06j-data-model.md](06j-data-model.md)). For every entity the change touches:
+
+- **Ownership**: who creates this row, who may delete it, and does it survive its
+  parent? If nobody can answer, that is the finding.
+- **Fan-out**: what else points at this row, and what happens to those rows when
+  it is deleted — by a constraint, by an ORM mapping, or by a loop someone wrote?
+- **Identity**: what makes two rows the same thing, and does anything enforce it?
+- **Invariants**: what must *always* be true of this data, and is it enforced
+  somewhere that cannot be bypassed, or only asserted in a handler?
+- **Non-effects**: which tables/collections must be unchanged by this operation —
+  and does any test look at them?
+
+"The suite is green" is not an answer to any of these; the suite almost certainly
+never populated the table in question.
+
 ## Resolution rules
 
 - Finding → **new spec** (capture_spec) or **spec change** (capture superseding spec; old one becomes obsolete)
@@ -61,3 +80,6 @@ Challenge every spec and design decision like a hostile reviewer. For each item,
 ## Adversarial gate
 
 Summarize: findings found, specs added/changed, risks accepted → user confirmation.
+For persistence work, the summary states the ownership answers found missing
+(06j) — an unanswered ownership question is a finding like any other, not a
+detail to discover during implementation.

@@ -27,6 +27,7 @@ Three levels, each with objective thresholds (all configurable):
 | design | module depth (interface vs implementation) | report-only heuristic | report-only (never gates) |
 | supply chain | dependency vulnerabilities | npm audit / osv-scanner | warn (high/critical fails) |
 | secrets | secrets in repo | gitleaks | warn (any finding fails) |
+| model | undeclared cascade / rebuild-by-delete | built-in scan (P27) | any finding fails |
 
 **Depth metric (P05, report-only):** a heuristic that flags **shallow
 pass-through modules** — modules whose interface is nearly as large as their
@@ -39,6 +40,16 @@ run as part of the gate. They are **warn by default** (report, don't block)
 for small work; for large work a high/critical vulnerability in a runtime
 dependency or any secret finding blocks delivery. See
 `references/06h-security.md` for the full rules.
+
+**Model level (P27):** two objective fitness functions over persistence code —
+a cascade with no ownership declaration, and the delete-then-reinsert signature.
+Built in (no tool to install, so it can never be skipped for a missing
+dependency), and it reports the concrete `file:line` and the fix. It is a
+**tripwire, not an authority**: the pattern set is illustrative and
+store-agnostic in principle, so a clean scan means it caught nothing, not that
+the model is sound — the obligation sits in the DoD (06b Rule 20) and the
+invariant tests (06g §3). Full rules in
+[06j-data-model.md](06j-data-model.md).
 
 Metrics for languages the project does not use are silently skipped. Metrics
 whose tool is not installed are skipped (or fail the gate when
@@ -82,6 +93,14 @@ switched on/off independently.
   },
   "architecture": {
     "dependencyRules": { "enabled": false, "config": ".asf-code-health.rules.mjs" }
+  },
+  "model": {
+    "enabled": true,
+    "requireDeclaration": true,
+    "deleteRebuild": true,
+    "declarationWindowLines": 8,
+    "rebuildWindowLines": 30,
+    "extraCascadePatterns": []
   },
   "supplyChain": {
     "npmAudit": { "enabled": true, "failOn": "high" },

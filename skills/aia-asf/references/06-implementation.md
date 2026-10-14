@@ -24,6 +24,11 @@
    `pi-aia-browser` **before committing that change** (06b Rule 9) — not at
    final verification. If you cannot argue the change provably cannot reach a
    rendered surface, it counts as touched and gets a browser run.
+6. Assert the **model** before committing a change that writes to a store
+   (06b Rule 20 / 06j): write the ownership declaration for each relationship
+   touched, and the invariant + non-effect test (06g §3) that fails until the
+   model is right — then run `/asf health` and resolve or accept its findings.
+   Do this while the change is one edit wide, not at final verification.
 
 For web interfaces, browser tests via pi-aia-browser are part of the test suite, not an afterthought.
 
@@ -124,6 +129,11 @@ are drifting):
   browser verification).
 - **Quality drift** — accepting a shortcut that changes behavior or leaves
   dead machinery, then marking it delivered (M5).
+- **Model drift** — extending a destructive persistence pattern because the
+  surrounding code already does it: inheriting a cascade, or writing another
+  delete-and-reinsert "like the handler above". The file doing it first is not
+  a justification; it is an unreviewed model you are now compounding. Stop and
+  resolve it (06j), even when the ask would be satisfied by copying it.
 
 **Self-correction loop (autonomous, no user needed):**
 

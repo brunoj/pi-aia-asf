@@ -73,12 +73,32 @@ its own sake — the Architecture/Design prose is the primary artifact.
 
 ## Architecture / Design
 - Modules and their responsibilities (small, single-purpose — see `references/06c-code-quality.md`)
-- Data model / schema (if any)
+- Data model / schema (if any) — expanded in the next section when the work
+touches persistence
 - Key flows (request lifecycle, event flow)
 - Interfaces / contracts between components
 - **Where shared truth lives** (single source of truth map: which module owns each shared capability)
 - **Layering**: one-way dependency rules between layers; what each layer may/may not import
 - **Standalone testability**: how each module is exercised outside the host with the same calls
+
+## Data model & ownership (P27 — when the work touches persistence)
+
+The artifact the model gate reads. One row per relationship the change touches;
+if you cannot fill a row, that is a finding for Phase 4, not a blank to skip
+(full rules in `references/06j-data-model.md`).
+
+| Relationship | Class | Owner | Survives parent? | Delete semantics | Enforced by |
+|---|---|---|---|---|---|
+| `org_action_items → checklist_questions` | instance | the organisation | **yes** | `SET NULL` + detach-and-keep | FK + invariant test |
+| `checklist_steps → checklist_templates` | composition | the template version | no | `CASCADE` | FK + `asf-model:` tag |
+
+Also state, for the change as a whole:
+
+- **Identity**: what makes two rows the same thing, and what enforces it.
+- **Invariants** that must always hold, and where each is enforced (constraint vs
+  handler — a handler assertion is a claim, a constraint is a guarantee).
+- **Invariant / non-effect tests** that will prove it (06g §3), listed by name.
+- `n/a: no persistence touched, because <reason>` when it genuinely does not apply.
 
 ## Spec-to-code traceability matrix
 For every spec, the operator-facing outcome, the code path that delivers it, and the test that asserts it. This is what `/asf verify` checks mechanically at delivery (M1).

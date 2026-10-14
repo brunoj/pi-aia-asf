@@ -1,13 +1,14 @@
 # ASF Improvement Proposals — research findings, mapped to gaps
 
-**Status**: research phase only. **No ASF code or docs have been changed.** Each
-proposal below is individually reviewable; nothing is implemented until you approve
-it. Review them one by one — I will implement only what you approve.
+**Status**: living record. P01–P22 were the original research batch and are all
+reviewed; P23–P27 followed from user directives. Each proposal carries its own
+decision block, and **[review-decisions.md](review-decisions.md)** is the
+authoritative approve/reject record — a proposal is implemented only after the
+PO or the user approves it (user directives count as approval authority).
 
-**How to read**: each proposal has ID, evidence (research note + source), the gap in
-the current ASF, the concrete proposed change, priority, effort (S/M/L), and risk.
-Proposals marked **bundle** are small and naturally ship together, but each is still
-individually approvable.
+**How to read**: each proposal has ID, evidence, the gap in the current ASF, the
+concrete change, priority, effort (S/M/L), and risk. Proposals marked **bundle**
+are small and naturally ship together, but each is still individually approvable.
 
 **Scale rule applies to every proposal**: nothing here adds ceremony to small work.
 Every proposal is scoped to large work (or is an optional tool that degrades
@@ -830,3 +831,84 @@ iteration-counter machinery ever returns**.
   which is bounded and cheap next to the alternative.
 - **Non-regression**: Rule 9 keeps its number, its 5 steps and its silent-async
   paragraph; nothing was duplicated, nothing was removed.
+
+## P27 — The model gate: prevent bad data-model design, not its symptoms
+
+- **Evidence**: a production incident. `PUT /api/admin/checklist/{version}`
+  rebuilt a template by deleting and re-inserting its steps and questions;
+  `org_action_items.question_id` carried `ON DELETE CASCADE`; every
+  organisation's generated action items were deleted. Recovery replayed from
+  saved answers (46 → 327 rows) and lost completion state. The user's mandate:
+  *"implement upgrades to asf / vigilant that take care of this on a fundamental
+  level (so not the symptom management you started with first, but preventing
+  bad design that can lead to this)."*
+- **The diagnosis this proposal is built on.** Every gate ASF owns inspects
+  **code shape**: 06c modules, 06e functions, 06g test technique, 06b observable
+  behaviour, 06h security posture. None inspects the **model**. Worse, the
+  Definition of Done is entirely behavioural — build passes, suite green,
+  artifact inspected, surface consumes it, E2E passes — and **all of that passed
+  on the code that ate the data**. The meta-blind spot, stated once: *every gate
+  we own asserts the intended effect; not one asserts the non-effect.* A
+  rebuild-by-delete is also not "poor engineering" to an agent — it is the
+  shortest correct-looking implementation of "sync these rows", invisible as a
+  smell because ASF has no vocabulary for persistence smells at all.
+- **Research**: `docs/research/model-blind-spots.md` — 14 defect classes
+  invisible to the current gates (ownership/lifecycle, identity, concurrency,
+  object authorization, time, units, locale, scale cliffs, unit-of-work,
+  contract evolution, deletion semantics, environment divergence, silent-zero,
+  cross-session interference), plus online practice: Vernon's aggregate rules,
+  architecture fitness functions, the ActiveRecord `dependent:` matrix
+  (including the `restrict_*` options nobody uses), expand-contract migrations,
+  OWASP IDOR two-user methodology, Postgres RLS for tenancy, and the soft-delete
+  cascade-decision table whose own conclusion validated the design: *the
+  exercise's value is forcing per-rule decisions rather than providing one
+  answer.*
+- **What landed** (each soft rule paired with a hard counterpart, per the
+  standing rule that prose an LLM can rationalise around is not a gate):
+  `06j-data-model.md` (ownership classes, the `asf-model:` declaration, M1–M8,
+  legitimate exceptions, model DoD); `06e` **`model` level** with two objective
+  fitness functions, built into the existing harness (levels, thresholds,
+  baseline, ratchet, `gate.mode`) so no new architecture was needed; `06g` §3
+  invariant & non-effect tests; `06b` **Rule 20** + the Rule 10 model line;
+  `04-adversarial` data & model lens; `05-plan` ownership table;
+  `06-implementation` test-first step 6 + **Model drift**; `index.ts`
+  QA_CHECKLIST item.
+- **Two user corrections that shaped the design.**
+  1. **Store-agnostic, by requirement**: *"not all (not nearly) database systems
+     ASF works with will be SQL — plenty of schema-free like mongo and so on."*
+     The defect is not SQL-shaped: an instance inheriting its parent's lifecycle
+     happens in a FK action, an ORM mapping attribute, a document-store delete
+     dependency, or a loop someone wrote. The scanner recognises a small
+     illustrative set across those forms, projects add dialect via
+     `model.extraCascadePatterns`, and **where the store exposes no constraint to
+     inspect, the invariant tests are the only hard gate** — said in the text, so
+     nobody reads a schema scan as covering a store it cannot see.
+  2. **No over-enumeration.** ASF is a general software factory; a normative
+     reference that catalogues products, dialects and helper-function names
+     implies coverage nobody can maintain. An earlier draft's
+     "cascade into a table that has an owner column" and "named recursive-delete
+     helper" rules were **dropped**, not trimmed: both infer from a name, and a
+     gate that fires on a guess gets rationalised around or switched off — and
+     either way the real rule dies with it.
+- **Honesty about the mechanism.** The scanner is documented as **a tripwire, not
+  an authority**; `scanned: 0` must be reported rather than hidden; an
+  `asf-model-accept: <reason>` waiver is greppable so an accepted exception stays
+  visible instead of becoming a silent pass. The obligation, not the scan, is the
+  gate: Rule 10's checkbox and the invariant tests.
+- **Out of scope, deliberately.** Backup/restore/rollback (user: symptom
+  management) and a `tool_call` blocker on destructive commands — the incident's
+  actual trigger was a human clicking a checkbox in an admin UI, which no
+  agent-facing gate could have stopped. That asymmetry is the reason the schema
+  fix and the agent gate are both needed: the schema protects against
+  human-caused damage, the gates against agent-caused damage.
+- **Priority**: high. **Effort**: M. **Risk**: false positives on unusual
+  dialects, bounded by the greppable waiver and `extraCascadePatterns`; the
+  failure mode added is *asking for a declaration*, which is cheap.
+- **Verification**: `test/test-model-gate.mjs` — 70 assertions: the incident as a
+  fixture, a negative control per rule (declared cascade silent, upsert not a
+  rebuild, different tables not a rebuild, `map.delete` not a DELETE, unknown
+  dialect invisible until configured), a real-build check that the level returns
+  `fail` and exit 1, a documented-gap assertion for the hand-rolled
+  document-store cascade the scan cannot see, and the normative wiring across
+  eight files. Full suite 372 checks / 10 suites / 0 failures; negative control
+  on the wiring (remove Rule 20 → suite fails).

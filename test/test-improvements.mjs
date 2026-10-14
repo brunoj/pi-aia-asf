@@ -34,7 +34,14 @@ export async function run({ extDir }) {
   }
   chk('index has Read when column', skill.includes('| File | Covers | Read when |'));
   chk('index says never load all', skill.includes('never load all'));
-  chk('06b count updated to 19 rules', skill.includes('19 rules + DoD'));
+  {
+    // Derived, not hardcoded: the index must state the real rule count, so
+    // adding a rule never requires editing this assertion (and a stale count
+    // in SKILL.md cannot pass).
+    const b = fs.readFileSync(path.join(extDir, 'skills', 'aia-asf', 'references', '06b-testing-qa.md'), 'utf8');
+    const n = (b.match(/^## Rule \d+ —/gm) || []).length;
+    chk(`06b rule count matches the index (${n})`, skill.includes(`${n} rules + DoD`), `SKILL.md index vs ${n} headings`);
+  }
 
   console.log('=== 3. P01–P04 in 05-plan.md ===');
   const plan = read('05-plan.md');

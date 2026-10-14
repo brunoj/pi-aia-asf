@@ -194,6 +194,7 @@ never arrives, the wiring is dead — that is a failed test.
 - [ ] **Delivery report complete (P14): every spec with status + evidence, every test run with result, every skipped/inconclusive check listed with reason, and the not-tested register (what was deliberately not tested and why)**
 - [ ] **Stability line (06f): if the deliverable makes external calls, it has timeouts and bounded retries (idempotent only)**
 - [ ] **Security line (06h): no secrets in the repo; no untrusted input reaches a shell/query/path unvalidated; no unbounded resource use on user-controlled input**
+- [ ] **Model line (06j): every relationship the change touches carries a written ownership declaration; store writes have invariant and non-effect tests (06g §3); `/asf health` model level passes or its findings are accepted with a reason — `n/a: no persistence touched, because <reason>` otherwise**
 
 ## Rule 11 — Report honestly
 
@@ -417,3 +418,35 @@ This does not change Rule 10, Rule 11, or the commit-gate workflow: a project
 that commits after every green run already runs full before every commit, so
 Rule 19 only ever saves the intermediate runs inside a single change — it
 never reduces what runs before anything is committed.
+
+## Rule 20 — The model is asserted, not assumed (P27)
+
+**The trigger is what the change WRITES, not where the diff lives.** Any change
+that writes to a store — relational, document, key-value, queue, object store, or
+a file another component reads — goes through
+[06j-data-model.md](06j-data-model.md). A diff that only touches `src/server/`
+is not exempt; the model *is* the backend.
+
+Three obligations, and each has a mechanical counterpart because prose alone is
+something an agent can satisfy by nodding:
+
+1. **Declare ownership** for every relationship touched: class
+   (composition / instance / ledger), owner, and whether the child survives its
+   parent (06j §2). No declaration is not a neutral state — it means the
+   relationship was never reviewed.
+2. **Test the non-effect**, not only the intended effect (06g §3): seed the
+   referencing rows with production-shaped data and assert they survive; assert
+   the tables the change does not name are unchanged. A suite that never
+   populated the destroyed table cannot see the destruction.
+3. **Run the scan** — `/asf health` model level. It is a tripwire, not an
+   authority: pattern-shaped and store-shaped, so a clean scan means it caught
+   nothing. If it reports `scanned: 0`, say so; never let a scan you did not run
+   or that saw nothing read as a passed check.
+
+**When uncertain whether the model is touched, it is touched** — the same
+inversion as Rule 9 and Rule 19. "It's only a backend change" is not an argument.
+
+**Evidence, not assertion.** The delivery report names the declarations written,
+the invariant tests added, and the scan result. A bare "model reviewed" is not
+evidence. An accepted finding (`asf-model-accept: <reason>`) is a decision you
+show, not a pass you claim.
