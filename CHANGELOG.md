@@ -9,9 +9,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.12.2] - 2026-10-14
 
-### Added
+### Fixed
 
-- (describe changes for 0.12.2)
+- **`npm run check` now checks.** It was `tsc --noCheck …` with a compiler that
+  was not even resolvable here — `node_modules` is a hand-built symlink tree
+  pointing at the global pi install, which `npm install` cannot reconcile, so
+  the declared devDependency was never installed. Three layers of nothing:
+  no compiler, no checking, and — even when a compiler was found — the host API
+  resolved to `any`.
+  - `scripts/typecheck.sh` + `tsconfig.typecheck.json`: strict typecheck of
+    `index.ts` against the pinned host API, installed into gitignored `.tools/`
+    and mapped explicitly. Prints the compiler **and** host-types versions it
+    ran, so the gate cannot silently run something other than what is declared.
+  - **`lib/code-health/index.d.mts`** — the Code Health gate stays plain ESM on
+    purpose, but at the call site its entire surface was `any`. This is the
+    boundary: a field added to `runHealth`'s return that is not declared here is
+    now a type error rather than a silent pass. Verified by mutation —
+    `h.noSuchFieldOnPurpose` → `TS2339`.
+  - **devDependencies were stale**: pinned at pi `0.83.0` while the extension
+    runs against pi `1.2.0`. Now `1.2.0`, with `typebox` at the `1.3.27` the
+    host ships.
+
+### Changed
+
+- **Releases are gated.** `scripts/release.sh` runs the typecheck and the full
+  suite before anything is versioned, tagged or published.
 
 ## [0.12.1] - 2026-10-14
 
