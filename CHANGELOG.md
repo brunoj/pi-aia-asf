@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **06j §5 had drifted back into enumerating products.** The section now carries
+  the store-agnostic *rule* — the defect is not SQL-shaped, and the distinction
+  that makes a hand-written cascade decidable is the **reference** (a row removing
+  itself vs one entity deciding the fate of another) — instead of a table of
+  store families and a list of ORM dialects. Which dialects the scanner
+  recognises is an implementation detail in `lib/code-health/model.mjs`, reported
+  per finding so you can see what it looked at; the standard states categories and
+  leaves the rest to `model.extraCascadePatterns` /
+  `model.extraHandWrittenPatterns`. A recognised dialect is not a coverage
+  promise: an unknown persistence shape is a `scanned: 0` you say out loud, not a
+  clean bill of health. The fixtures keep naming the concrete dialects — that is
+  where a pattern set belongs.
+
 ## [0.13.2] - 2026-10-16
 
 ### Added
