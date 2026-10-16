@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Notes
+
+- **`npm audit` triage for this line: accepted, not fixed — and the reason is
+  recorded rather than skipped.** Three advisories report (1 moderate,
+  2 high), all tracing to `undici` and `brace-expansion`. None of them ships
+  with ASF: `dependencies` is `{}` and the packed artifact (50 files) contains
+  no `node_modules` and neither package. They are reachable only through the
+  **peer** host package `@earendil-works/pi-coding-agent`, which is the user's
+  own pi installation and is pinned in `devDependencies` solely so typecheck can
+  run against a known host version (`host types 1.2.0`).
+  - `npm audit fix` would bump that pin. It was deliberately **not** run: it
+    would move the host-types version the entire typecheck and suite are
+    calibrated against, for no change whatsoever in what an installed ASF
+    contains. The fix belongs to the pi release, not to this manifest.
+  - Consequence for anyone reading this: an `npm audit` hit on ASF is a signal
+    about your **pi install**, and should be resolved by updating pi. Checking
+    the shipped surface is the `dependencies: {}` line plus the pack list above,
+    not the audit count.
+
 ## [0.13.3] - 2026-10-16
 
 ### Fixed
