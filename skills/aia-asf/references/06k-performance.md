@@ -57,10 +57,17 @@ than accepted.
 **A number without its contract is not a specification. Report it as incomplete;
 do not accept it, and do not quietly drop it.**
 
+**And a measurement without a target is not a verdict.** ASF does not decide a
+consumer's SLA. `perf.target` is the one parameter in the table that ships **no
+default**, and with nobody having declared one the output is the literal string
+`no-default: needs a declared target` — never a silent pass, and never a number
+ASF made up. A perfectly well-formed measurement that has nothing to compare
+against has told you something and concluded nothing; say that.
+
 | Claim type | Required, all of it |
 |---|---|
-| **Latency** | percentile · load it was measured at · sample count · environment · lab or field |
-| **Throughput** | arrival model (closed-loop or open-loop) · duration · environment · sample count |
+| **Latency** | percentile · load it was measured at · sample count · environment · lab or field · **the target it is judged against** |
+| **Throughput** | arrival model (closed-loop or open-loop) · duration · environment · sample count · **the target it is judged against** |
 | **Regression** | statistical comparison · interleaved randomized measurement · retained raw samples · observed CV · sample count · environment |
 
 Wrong, and how it must be reported:

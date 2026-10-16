@@ -484,6 +484,12 @@ do not accept it, and do not quietly drop it.**
 | Throughput | arrival model (closed-loop or open-loop) · duration · environment · sample count |
 | Regression | statistical comparison · interleaved randomized measurement · retained raw samples · observed CV · sample count · environment |
 
+Latency and throughput claims additionally carry **the target they are judged
+against**. ASF ships no default for it (`perf.target` is the one parameter with
+no general default): with no declared target the output is
+`no-default: needs a declared target`, never a silent pass and never a number
+ASF invented — deciding a consumer's SLA is a product decision, not a default.
+
 Full text, rationale and the arrival-model trap:
 [06k-performance.md](06k-performance.md) §2. The DoD line *"performance targets
 from the spec are met"* is unfalsifiable without this — which is why it has

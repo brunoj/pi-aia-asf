@@ -86,6 +86,32 @@ check("only explicit user configuration can leave the band", overridden.value ==
 check("and then it is labelled as an override", overridden.origin === "override");
 check("and says it is outside the band", /OUTSIDE the band/.test(overridden.why), overridden.why);
 
+section("a parameter with no defensible default says so instead of guessing");
+
+{
+  const undeclared = resolveParam("perf.target", {});
+  check("with nobody having declared a target it resolves to NO value", undeclared.value === null);
+  check("and its origin is 'no-default', never 'default'", undeclared.origin === "no-default", undeclared.origin);
+  check("the verdict text is exactly the one the spec names", undeclared.why === "no-default: needs a declared target", undeclared.why);
+  check("and it is not silently counted as a pass by resolveAll", resolveAll({})["perf.target"].value === null);
+
+  const declared = resolveParam("perf.target", { projectConfig: { "perf.target": "p95 < 200ms" } });
+  check("a declared target resolves normally", declared.value === "p95 < 200ms" && declared.origin === "project");
+
+  // The point of the whole branch: ASF must not decide a consumer's SLA for them.
+  check("perf.target is the only parameter allowed to have a null general default",
+    Object.entries(PARAMS).filter(([k, v]) => v.general === null).map(([k]) => k).join(",") === "perf.target",
+    Object.entries(PARAMS).filter(([, v]) => v.general === null).map(([k]) => k).join(","));
+  check("every other parameter can explain its own number",
+    Object.entries(PARAMS)
+      .filter(([k]) => k !== "perf.target")
+      .every(([k, v]) => typeof v.source === "string" && v.source.trim().length > 10 && typeof v.meaning === "string" && v.meaning.length > 10),
+    Object.entries(PARAMS)
+      .filter(([k, v]) => k !== "perf.target" && !(typeof v.source === "string" && v.source.trim().length > 10 && typeof v.meaning === "string" && v.meaning.length > 10))
+      .map(([k]) => k)
+      .join(","));
+}
+
 section("non-adaptive constants cannot be calibrated or configured");
 check("the non-adaptive set is declared", NON_ADAPTIVE.includes("bench.significance") && NON_ADAPTIVE.includes("valid.scannedZeroIsPass"));
 check("scanned-zero-is-pass is false and stays false", resolveParam("valid.scannedZeroIsPass", { overrides: { "valid.scannedZeroIsPass": true } }).value === false);
@@ -112,7 +138,7 @@ writeProjectConfig(tmp, { "bench.samples": 45 });
 const rows = screenModel({ projectDir: tmp, measurements: { suiteRuntimeMs: 42000 } });
 check("every parameter is a row", rows.length === keys.length, `${rows.length} vs ${keys.length}`);
 check("each row shows the current value", rows.every((r) => typeof r.currentValue === "string"));
-check("each row shows where the value came from", rows.every((r) => ["default", "project", "calibrated", "override"].includes(r.origin)));
+check("each row shows where the value came from", rows.every((r) => ["default", "project", "calibrated", "override", "no-default"].includes(r.origin)));
 check("each row shows its band", rows.every((r) => typeof r.band === "string"));
 check("each row shows its source", rows.every((r) => /source:/.test(r.description)));
 check("the configured value is visible as configured", rows.find((r) => r.id === "bench.samples").origin === "project");
@@ -127,6 +153,21 @@ check("an unknown key in a config file is reported", consumedProblems.some((p) =
 check("a known key is not reported", !consumedProblems.some((p) => p.startsWith("bench.samples")));
 check("a key whose gate no longer exists is reported", assertParametersAreConsumed({ "bench.samples": 30 }, { knownGates: ["some-other-gate"] }).some((p) => /no longer exists/.test(p)));
 check("a parameter with no consuming gate is reported", assertParametersAreConsumed({}).length === 0);
+// The guard must keep its teeth: the flag that exempts a parameter from a band
+// is the same flag that forbids it from shipping a default, so a fabricated
+// number cannot smuggle itself in as "no default needed".
+check("a parameter that claims no default but ships one is reported", (() => {
+  PARAMS["__probe.target"] = { key: "__probe.target", general: 42, type: "number", band: null, requiresDeclaredTarget: true, source: "probe", gate: "measurement", meaning: "probe" };
+  try { return assertParametersAreConsumed({}).some((p) => /fabricated number/.test(p)); }
+  finally { delete PARAMS["__probe.target"]; }
+})());
+check("and an adaptive numeric parameter with no band is still reported", (() => {
+  PARAMS["__probe.knob"] = { key: "__probe.knob", general: 10, type: "number", band: null, source: "probe", gate: "measurement", meaning: "probe" };
+  try { return assertParametersAreConsumed({}).some((p) => /a band requires adaptability/.test(p)); }
+  finally { delete PARAMS["__probe.knob"]; }
+})());
+check("the probe parameters are gone afterwards", !PARAMS["__probe.target"] && !PARAMS["__probe.knob"]);
+
 check("the draft validator refuses junk before anything is written", validateDraft({ "bench.samples": "thirty" }).length === 1, validateDraft({ "bench.samples": "thirty" }).join("; "));
 check("and accepts a good draft", validateDraft({ "bench.samples": 40 }).length === 0);
 

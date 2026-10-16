@@ -43,7 +43,7 @@ section("measurement contract — a bare number is not a specification");
 
 const incomplete = checkMeasurementContract({ kind: "latency", p95: "200ms" });
 check("a latency claim without load, samples, environment or lab/field is NOT accepted", incomplete.ok === false);
-check("it reports exactly what is missing", incomplete.missing.sort().join(",") === "environment,labOrField,load,percentile,samples", incomplete.missing.join(","));
+check("it reports exactly what is missing", incomplete.missing.sort().join(",") === "environment,labOrField,load,percentile,samples,target", incomplete.missing.join(","));
 check("and it says what a complete claim needs", /percentile/.test(incomplete.hint || ""));
 
 const complete = checkMeasurementContract({
@@ -53,10 +53,25 @@ const complete = checkMeasurementContract({
   samples: 30,
   environment: "CI, 4 cores",
   labOrField: "lab",
+  target: "p95 < 200ms",
 });
 check("the same claim with its contract is accepted", complete.ok === true, complete.missing.join(","));
 
-const tput = checkMeasurementContract({ kind: "throughput", duration: "10m", environment: "staging", samples: 5 });
+// A measurement can be perfectly well-formed and still be judging nothing.
+// ASF does not invent the target — that is a product decision — so the output
+// is the literal string the spec names, never a silent pass.
+const noTarget = checkMeasurementContract({
+  kind: "latency",
+  percentile: "p95",
+  load: "200 concurrent users",
+  samples: 30,
+  environment: "CI, 4 cores",
+  labOrField: "lab",
+});
+check("a complete measurement with no declared target is still not a verdict", noTarget.ok === false && noTarget.missing.includes("target"));
+check("and it says 'no-default: needs a declared target' out loud", noTarget.noDefault === "no-default: needs a declared target", JSON.stringify(noTarget.noDefault));
+
+const tput = checkMeasurementContract({ kind: "throughput", duration: "10m", environment: "staging", samples: 5, target: ">= 500 rps" });
 check("a throughput claim without an arrival model is rejected", tput.ok === false && tput.missing.includes("arrivalModel"));
 check("because coordinated omission changes the answer", /arrival model/i.test(tput.hint || ""));
 
@@ -65,6 +80,7 @@ check("a regression claim with the full method is accepted", reg.ok === true);
 check("without the CV it is not", checkMeasurementContract({ ...reg.claim, cv: undefined }).ok === false);
 check("without interleaving it is not", checkMeasurementContract({ ...reg.claim, interleaved: undefined }).ok === false);
 check("without raw samples it is not", checkMeasurementContract({ ...reg.claim, rawSamples: undefined }).ok === false);
+check("a regression claim needs no target — it compares two arms, not a threshold", reg.ok === true && !reg.noDefault);
 
 check("an unknown claim kind is reported, not passed", checkMeasurementContract({ kind: "vibes" }).ok === false);
 check("a null claim is reported", checkMeasurementContract(null).ok === false);

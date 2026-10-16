@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A measurement without a target no longer reads as a verdict.** 0.13.0
+  shipped the measurement contract but left the last clause of the requirement
+  unimplemented: *where no defensible default exists the output is
+  `no-default: needs a declared target`, never a silent pass*. Now:
+  - **`perf.target` is the one parameter that ships no default.** A latency or
+    throughput target is a product decision; a number ASF invented would be a
+    fabricated specification. With nobody having declared one, the parameter
+    resolves to `value: null, origin: "no-default"` and the verdict text is the
+    literal `no-default: needs a declared target`.
+  - **`target` is required on latency and throughput claims.** A claim can carry
+    a complete measurement contract — percentile, load, samples, environment,
+    lab-or-field — and still be judging nothing. That is now reported, with
+    `noDefault` set on the result. A **regression** claim still needs no target:
+    it compares two arms rather than a threshold.
+  - **The parameter guard keeps its teeth.** The flag that exempts a parameter
+    from a band is the same flag that *forbids* it from shipping a general
+    default, so a fabricated number cannot smuggle itself in as "no default
+    needed". Adding `perf.target` also tripped the existing guard for a missing
+    `meaning` field — the guard working as intended on its first real test.
+  - `SKILL.md`/06k/06b state the rule where the contract is stated, and the
+    config screen shows `no-default` as a first-class origin.
+
 ## [0.13.0] - 2026-10-16
 
 ### Added
