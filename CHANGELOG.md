@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.4] - 2026-10-16
+
 ### Fixed
 
 - **The model-blind-spot research (D1/D2) could not be verified against its own
