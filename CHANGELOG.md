@@ -7,6 +7,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The model-blind-spot research (D1/D2) could not be verified against its own
+  sources, and now it can.** Both deliverables existed; neither had been audited,
+  and the audit found three real problems.
+  - **Seven quotations attributed to unnamed sources were removed.** The document
+    leaned on block quotes from "a soft-delete design guide", "the tenancy
+    source", "a team that learned it the expensive way" and the BEA book — none
+    carrying a URL. Checked by exact-phrase search and by fetching the cited
+    URLs: `orphans-by-policy`, `humans forget filters … RLS policies forget
+    nothing` and `we paid for the trash folder twice` return **zero results**,
+    and the InfoQ and O'Reilly fitness-function URLs return **404**. An
+    unfindable quotation is worse than no citation — it reads as evidence and
+    invites downstream reuse — so each was deleted, and the claims that still
+    matter were restated as explicitly-labelled **T3** reasoning. Where a primary
+    source says it better, it replaced the paraphrase: the PostgreSQL manual's own
+    default-deny text is stronger and checkable than the quote it replaced.
+    The deletions are listed in a withdrawn table rather than dropped silently.
+  - **What remains is now genuinely T1** — fetched and read this pass, with URLs
+    and page numbers: Vernon's four aggregate rules (ArchiLab, ch. 10 pp.
+    347–388), the OWASP IDOR methodology, PostgreSQL §5.9, the Thoughtworks
+    fitness-function article. `SOURCES.md` gained the Model section with T1/T2/T3
+    classes per 02-research.md, including a row that admits the Rails `dependent:`
+    option list was **not** read and must be checked before any option name
+    reaches normative text.
+  - **The inventory had gone stale.** It was measured against `06a–06i` and never
+    re-derived after `06j`, `06k`, the gate layer and the model fitness level
+    shipped — so it still claimed all 14 classes were invisible. Re-scored against
+    the current gate set with the H/M/S enforcement classes: six classes (3
+    concurrency, 5 time, 6 numeric/unit, 7 locale, 9 unit-of-work, 12 environment)
+    remain **completely uninspected**, and that is now stated as a count instead of
+    a mood.
+  - **The audit covered only half the mandate.** The spec says "ASF **and
+    vigilant**"; vigilant had never been audited. It now has its own table — Loop
+    Guardian, spec verification, completeness guard, obligations container,
+    tool-timeout abort — and the honest conclusion: vigilant inspects the agent and
+    the claim, not the deliverable's design, and by the package boundary it must.
+    So for those six classes, **if ASF does not inspect them, nobody does.** There
+    is no second line of defence in the other package.
+  - **The meta-finding got a status.** "Not one gate asserts the non-effect" was
+    written before 06g §3 added non-effect assertions; it now reports itself as
+    half-closed — the language exists, the compulsion exists only where a blocker
+    was built.
+- **`test/test-model-research.mjs` (42 checks) guards all of the above**, because
+  the failure mode is recurrence rather than novelty: it asserts the inventory is
+  contiguous and fully re-scored, that vigilant is audited, that every sourced
+  subsection resolves to a URL or is labelled T3, and that each withdrawn phrase
+  survives only as a record and never as a quotation. **Negative control verified**
+  — injecting an unattributed quote back into §2.6 makes it fail, and removing it
+  passes.
+
 ### Notes
 
 - **`npm audit` triage for this line: accepted, not fixed — and the reason is

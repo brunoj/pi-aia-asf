@@ -28,10 +28,20 @@ passing for the same reason.
 
 ### Method
 
-I enumerated every rule and section heading in the normative references
-(`SKILL.md` + `references/01…07`, 06a–06i) and classified what each one
-*inspects*. That is the honest way to find blind spots: you cannot audit for a
-dimension you never named.
+Two passes, because an inventory is only as honest as the gate set it was measured
+against.
+
+**Pass 1 (as taken).** I enumerated every rule and section heading in the
+normative references (`SKILL.md` + `references/01…07`, 06a–06i) and classified
+what each one *inspects*. That is the honest way to find blind spots: you cannot
+audit for a dimension you never named.
+
+**Pass 2 (added on verification).** Pass 1 predated `06j`, `06k`, the gate layer
+and the model fitness level, and it audited ASF only — the mandate names vigilant
+too. The inventory is therefore re-scored below against the gate set as it stands
+now, with vigilant's own subsystems audited alongside. A blind-spot list that is
+not re-derived when the gate set grows silently turns into an excuse list: either
+it claims blindness that has been fixed, or it hides coverage nobody built.
 
 What the ASF inspects today, by dimension:
 
@@ -158,6 +168,59 @@ peer application's live orchestrator, and two apps shared one Redis instance
 differing only by `db` index. 06d's rule ("never run parallel subagents against
 the same file") is far narrower than the actual hazard surface.
 
+### Re-derived against the gate set as it stands now
+
+The audit above was taken against `06a–06i`. Since then `06j` (data model),
+`06k` (performance), the gate layer (`lib/gates/`: blockers, ledger, authority,
+settle, report, measurement, config, declarations) and the model fitness level
+have shipped, so an inventory that still said "all 14 invisible" would be
+over-claiming blindness — the same sin as over-claiming coverage. Re-scored
+against what exists today, using the enforcement classes from `06b` (**H** hard
+blocker, **M** mechanical verdict only if the check runs, **S** self-attested):
+
+| # | Class | Now | Class |
+|---|---|---|---|
+| 1 | Ownership and lifecycle across boundaries | **06j §1–4** + `undeclared-cascade`, `handwritten-cascade` | **H** |
+| 2 | Identity and uniqueness | `delete-then-reinsert` catches rebuild-by-delete; the identity question itself is still prose | M |
+| 3 | Concurrency on shared state | **nothing inspects it** — 06f is outbound calls only | — |
+| 4 | Object/tenant-level authorization | **06g §3** two-user authorization tests (OWASP-derived) | M |
+| 5 | Time and clock semantics | **nothing inspects it** | — |
+| 6 | Numeric and unit semantics | **nothing inspects it** | — |
+| 7 | Locale and text domain | **nothing inspects it** | — |
+| 8 | Scale cliffs | **06k** measurement contract, placement, load scenarios; "state the expected data volume" is still not required | M |
+| 9 | Unit-of-work / partial-failure boundaries | **nothing inspects it** — no concept of a transaction boundary | — |
+| 10 | Contract evolution | expand-contract prose in 06j/07, sourced T3 | S |
+| 11 | Deletion semantics as a subsystem | **06j** + 06g §3 cascade/restore/purge/event tests | M |
+| 12 | Environment divergence | **nothing inspects it** — no test must see production-shaped config or data | — |
+| 13 | Silent-zero / plausible-empty | our own gates honour `scanned: 0` ≠ pass; the *product's* empty results are uninspected | M/S |
+| 14 | Cross-session / shared-resource interference | 06d's same-file rule only | S |
+
+**Six classes — 3, 5, 6, 7, 9, 12 — remain completely uninspected.** Not
+partially covered, not weakly covered: no rule, no gate, no test dimension, no
+anti-pattern. That is the honest inventory, and it is a better starting point
+than the original claim, because a gap you can count is a gap you can schedule.
+
+### And vigilant? (the other half of the audit)
+
+The mandate says the gate set is "ASF **and vigilant**", so vigilant was audited
+the same way. What vigilant actually inspects:
+
+| Vigilant subsystem | What it inspects | Contributes to any class above? |
+|---|---|---|
+| Loop Guardian (D1/D2/D3) | loop *shape* — identical repeats, cycles, analysis stall | no — it inspects the agent, not the deliverable |
+| Spec verification | MUST specs still open at settle | no — enforces whatever ASF declared, store-agnostic by design |
+| Completeness guard | stub / fake-data **markers** in changed files | no — markers, not design |
+| Obligations container | loads declarations generically, carries `source` verbatim | no — a container interprets nothing |
+| Tool-timeout abort | a call exceeding its ceiling | no |
+
+So vigilant contributes **nothing** to classes 3, 5, 6, 7, 9 and 12 — and that is
+correct, not a defect. It is a loop-and-claim guard, and the package boundary the
+owner drew ("vigilant should be able to work perfectly well without ASF"; "what
+crosses the boundary is the specification, never the check") means a design
+dimension can only ever be ASF's. The consequence worth stating plainly: **for
+those six classes, if ASF does not inspect them, nobody does.** There is no
+second line of defence waiting in the other package.
+
 ### The meta-blind spot (the actual finding)
 
 Strip the classes apart and one pattern remains:
@@ -179,219 +242,315 @@ A gate set that verifies only intended effects cannot see a model defect,
 because a model defect *is* an unintended effect on something outside the
 specification.
 
+**Status of the meta-finding now.** 06g §3 added the non-effect assertions
+(survival tests, non-effect assertions, zero-row invariant queries, two-user
+authorization), so for the *model* class this is no longer true — it is addressed
+doctrine, class **M**: a verdict appears if the check runs, and nothing forces it
+to run. It remains true for the six uninspected classes above, and it remains the
+reason M is a weaker class than H: an assertion nobody is compelled to write is a
+suggestion. The honest summary is that the meta-blind spot has been **half-closed
+— the language now exists; the compulsion exists only where a blocker was built.**
+
 ---
 
 ## Part 2 — Deliverable 2: what established engineering practice does
 
-Findings below are grouped by the mechanism they suggest, not by source.
+Findings are grouped by the mechanism they suggest, not by source.
 
-### 2.1 Aggregates: the model question was formalised decades ago
+### Evidence classes (read this before trusting a sentence below)
 
-Vernon's *IDDD* ("Red Book") gives four aggregate design rules, quoted via the
-ArchiLab summary of ch. 10:
+Per [02-research.md](../../skills/aia-asf/references/02-research.md), every
+finding carries its class:
 
-1. **Model true invariants in consistency boundaries.** An invariant is a rule
-   that must *always* hold; a properly designed aggregate "can be modified in
-   any way required by the business with its invariants completely consistent
-   within a single transaction" — hence *one aggregate per transaction*.
+- **T1** — fetched and read from the authoritative source in this pass. Quoted
+  text is verbatim from the URL given, with page numbers where the source has
+  them.
+- **T2** — measured locally with a reproducible script.
+- **T3** — reasoned, not verified. A starting position, never a rule, and never
+  presented as something a source says.
+
+**A correction to an earlier draft of this document.** The first version of
+Part 2 carried several block quotes attributed to unnamed sources ("a soft-delete
+design guide", "the tenancy source", "a team that learned it the expensive way").
+None carried a URL. When each was checked — exact-phrase search, and the cited
+URLs — they did not resolve: `orphans-by-policy`, `humans forget filters … RLS
+policies forget nothing` and `we paid for the trash folder twice` return **zero
+results**, and the InfoQ and O'Reilly URLs for the fitness-function material
+return **404**. A quotation nobody can find is not evidence; it is a fabrication
+risk wearing evidence's clothes, and it is worse than no citation because it
+invites downstream reuse. Those passages are **removed**. Where the underlying
+claim is still worth making it is restated as T3 reasoning, and where a primary
+source states it better, the primary source replaced it. The dropped material is
+listed at the end of this Part so the deletion is auditable rather than silent.
+
+### 2.1 Aggregates: the model question was formalised decades ago — **T1**
+
+Source: *Aggregate Design Rules according to Vaughn Vernon's "Red Book"*, ArchiLab
+(Prof. Dr. Stefan Bente, TH Köln), summarising Vernon, *Implementing
+Domain-Driven Design*, ch. 10, pp. 347–388.
+<https://www.archi-lab.io/infopages/ddd/aggregate-design-rules-vernon.html>
+Fetched and read; the quotes below are verbatim with the page numbers the source
+gives.
+
+1. **Model true invariants in consistency boundaries.** An invariant is "a rule
+   that must always hold true", and (p. 354) *"A properly designed Aggregate is
+   one that can be modified in any way required by the business with its
+   invariants completely consistent within a single transaction."* The source's
+   own gloss is the operative consequence: in one transaction you modify **one**
+   aggregate, "and never more than one" — hence *consistency boundary*.
 2. **Design small aggregates.** Large aggregates are named an anti-pattern, and
-   the cause is diagnostic: "the false invariants and a desire for compositional
-   convenience drove the design". Also: "Don't let the `0..*` fool you; the
-   number of associations will almost never be zero and will keep growing."
-3. **Reference other aggregates by identity, not object reference.** "If you
-   don't hold any reference, you can't modify another Aggregate. So the
-   temptation to modify multiple Aggregates in the same transaction could be
-   squelched by avoiding the situation in the first place."
+   the diagnosis is the part that matters to us (p. 356): *"It was deficient from
+   the start because the false invariants and a desire for compositional
+   convenience drove the design, to the detriment of transactional success,
+   performance, and scalability."* Also p. 356: *"Don't let the '0..\*' fool you;
+   the number of associations will almost never be zero and will keep growing
+   over time."*
+3. **Reference other aggregates by identity, not object reference** (p. 361):
+   *"Prefer references to external Aggregates only by their globally unique
+   identity, not by holding a direct object reference (or 'pointer')."*
 4. **Use eventual consistency outside the aggregate boundary.**
 
 The mapping to the incident is exact. `org_action_items` held a direct FK
 reference into `checklist_questions` — an object reference across an ownership
-boundary (Rule 3) — and the template-save transaction modified both the template
+boundary (Rule 3) — and the template-save transaction modified the template
 aggregate and the instance aggregate in one commit (Rule 1). The invariant that
 was never modelled is the one whose absence caused the loss: *an organisation's
 action item survives edits to the template that generated it.*
 
-Two further points from the same source matter for how we adopt this:
+Two consequences for how ASF adopts this:
 
-- These are **Architecture Principles, not absolute rules** — defaults you may
-  deviate from *with a documented reason*, and the source explicitly recommends
-  **ADRs** for the deviation. That is the mechanism I want (declare, or fail),
-  and it is independently recommended.
-- Rule 2's diagnosis — *compositional convenience* — names the motive that
-  produces rebuild-by-delete. It is not ignorance; it is the shortest code path.
-  A rule that only says "don't" loses to convenience. A rule that makes the
-  cheap path the safe path wins.
+- The source presents these as **rules of thumb with documented exceptions**
+  (pp. 367ff.), recommending the deviation be written down. That is the mechanism
+  this document proposes — *declare, or fail* — and it is what makes the gate
+  survivable: the escape hatch is a declaration, not a bypass.
+- Rule 2's diagnosis names the **motive** that produces rebuild-by-delete. It is
+  not ignorance; it is the shortest code path. A rule that only says "don't"
+  loses to convenience. A rule that makes the cheap path the safe path wins.
 
-### 2.2 Cascade semantics are a decision, and "nobody decided" is the failure mode
+### 2.2 Cascade semantics are a decision — and the option set is already standardised
 
-The strongest single sentence found, from a soft-delete design guide:
+**T1 (primary source, read).** Rails' `has_many … dependent:` is the clearest
+statement of the principle in a mainstream framework: the association declares
+what happens to children when the parent is destroyed, and the default
+`@author.destroy` takes the books with it (Active Record Associations guide,
+§1.2, <https://guides.rubyonrails.org/association_basics.html>). The important
+structural fact is that **the framework makes you choose at the point the
+relationship is declared** — the decision cannot be deferred to the call site
+where nobody is thinking about it.
 
-> **Cascade semantics need design:** deleting a parent while children stay live
-> creates orphans-by-policy; decide per relationship (cascade tombstones, block
-> deletion until empty, or detach-and-keep) **before production decides for you
-> via confusing bugs.**
+**T3 (our reasoning, not a sourced claim).** The safe default should be *refuse
+while children exist*, not *take them too*. Rails exposes refusal options
+alongside cascade options in its `dependent:` vocabulary; the full option list
+was **not** read from the guide in this pass, so treat the specific option names
+as unverified and check them against the guide before any of them reaches
+normative text. What is safe to say is the shape: a mature framework offers
+cascade, nullify, and refuse, and *refuse* is a first-class option rather than an
+afterthought.
 
-That is our incident, written by someone else, in 2026. It also enumerates the
-complete option set that the affected team had not considered: cascade, block,
-or **detach-and-keep** — and detach-and-keep is precisely the fix they shipped
-(detach actions, delete the template, reattach by `question_number`).
+**T3 (our reasoning).** The classification that 06j §2 uses — composition /
+instance / ledger, with detach-and-keep as a legitimate answer — is ours, derived
+from the incident's own resolution (they detached the action items, deleted the
+template, and reattached by `question_number`). It is not quoted from a source.
+It is offered as a starting taxonomy to be argued with, and the value is in
+forcing the per-relationship decision at all, which is the same reason a required
+declaration is worth having even when the answer is "CASCADE is right here".
 
-Rails' option matrix shows the industry already has this vocabulary and we
-borrowed none of it: `dependent: :destroy`, `:delete_all`, `:nullify`,
-`:restrict_with_exception`, `:restrict_with_error`, `:destroy_async`. The
-existence of **`restrict_*`** is the important part — the safe default is *refuse
-the deletion while children exist*, not *take them too*.
+### 2.3 Push enforcement down to a layer that cannot forget — **T1**
 
-The same guide's decision table is directly reusable as an ASF classification:
+Source: PostgreSQL documentation, §5.9 *Row Security Policies*,
+<https://www.postgresql.org/docs/current/ddl-rowsecurity.html>. Fetched and read.
 
-| Entity class | Undo expected? | Retention? | Verdict |
-|---|---|---|---|
-| Documents / projects | yes | sometimes | soft delete + purge schedule |
-| Users / accounts | rarely, but compliance | yes (GDPR tension) | anonymise + tombstone stub |
-| Transactions / payments | **no — correctness forbids** | absolutely | **hard delete forbidden**; void/adjust |
-| Cache-like ephemera | nobody cares | no | hard delete immediately |
+Two facts from the manual do the work, and both are stronger than the
+second-hand paraphrase this document previously used:
 
-And its uniqueness section validates the *mechanism* I propose, in its own
-words: inventorying every business rule when adopting tombstones matters because
-"the exercise's value is **forcing per-rule decisions rather than providing one
-answer**." A required declaration is valuable even when the answer is
-"CASCADE is right here", because the alternative is that nobody was asked.
+- Without policies, privileges are not enough: *"By default, tables do not have
+  any policies, so that if a user has access privileges to a table according to
+  the SQL privilege system, all rows within it are equally available for querying
+  or updating."* An application-level `WHERE tenant_id = …` is a convention
+  enforced by every code path remembering it.
+- RLS is **default-deny**: *"If no policy exists for the table, a default-deny
+  policy is used, meaning that no rows are visible or can be modified."*
 
-### 2.3 Push enforcement down to a layer that cannot forget
+That second sentence is also the honest caveat, and it is the manual's, not ours:
+the strongest form of enforcement-in-the-database fails **silently and empty** —
+a missing or wrong policy returns zero rows rather than an error. This is class
+13 (silent-zero) arriving as the price of class 4's fix, and it is why the
+mitigation is a rule rather than a suggestion: **instrument the boundary** — a
+query that should return rows returning none, on a tenant-scoped path, is an
+event worth logging and alerting on, not a clean result.
 
-Three independent sources converge on one principle: **layering beats
-vigilance.**
+The corollary for gate design is the reason this section exists: **a rule enforced
+only in application code is a claim, not a guarantee** — and the same is true of a
+rule enforced only in prose in a skill file. Both need a mechanical counterpart.
+It also yields a cheap objective test type ASF did not previously have: **queries
+that must return zero rows** — invariants written as assertions and run in the
+suite. (That prescription is now in 06g §3; the *pattern* is ours, and the
+earlier draft's attribution of it to an unnamed source is withdrawn.)
 
-- On tenancy: "you're trusting every code path to correctly apply a filter that
-  is invisible to the database… There's no compiler error for *you forgot
-  WHERE tenant_id*." Fix: Postgres row-level security, or schema-per-tenant —
-  "humans forget filters under deadline pressure; RLS policies forget nothing."
-- On constraints: database-level enforcement is "the only reliable guarantee of
-  data quality across heterogeneous access paths", because a caller with direct
-  table access bypasses the application but not the schema. Oracle's own
-  guidance: "whenever possible, enforce business rules with constraints."
-- On soft deletes: repository filter → database view → RLS policy → scheduled
-  consistency audits ("queries that SHOULD return zero").
+### 2.4 Authorization is tested with two users, mechanically — **T1**
 
-The corollary for our gate design: **a rule enforced only in application code is
-a claim, not a guarantee** — and the same is true of a rule enforced only in
-prose in a skill file. Both need a mechanical counterpart. It also gives us a
-cheap, objective test type we do not have: **queries that must return zero rows**
-(invariants as SQL assertions, run in the suite).
+Source: OWASP *Insecure Direct Object Reference Prevention Cheat Sheet*,
+<https://cheatsheetseries.owasp.org/cheatsheets/Insecure_Direct_Object_Reference_Prevention_Cheat_Sheet.html>.
+Fetched and read; the following is verbatim.
 
-One honest caveat from the tenancy source, which we should pass on rather than
-hide: RLS "is invisible until it isn't" — a wrong policy returns zero rows
-silently, and connection poolers reset session variables between transactions.
-Enforcement-in-the-database is not free, and *class 13 (silent-zero)* is the
-price of the strongest version of it. The mitigation the source gives is worth
-adopting verbatim as a rule: **instrument the boundary itself** — log when the
-context is missing, alert on the pattern, "turn a silent failure mode into a
-noisy one."
-
-### 2.4 Authorization is tested with two users, mechanically
-
-The OWASP IDOR cheat sheet reduces the class to three ingredients — an object, a
-reference to it, and a **missing object-level authorization check** — and gives a
-methodology that is objective enough to gate on:
+IDOR has exactly three ingredients: an **object**, a **reference** to it, and a
+**missing object-level authorization check**. And the methodology is objective
+enough to gate on:
 
 1. Create User A and User B.
-2. Create objects owned by each.
-3. Authenticate as A, attempt to read/update/delete/export B's objects by
-   manipulating the reference.
-4. Verify denial "regardless of whether the object identifier is predictable or
-   unguessable", **for every operation** including administrative ones.
+2. Create objects owned by each user (documents, support tickets, invoices, etc.).
+3. Authenticate as User A and attempt to access User B's objects by modifying
+   object references in requests.
+4. Verify that the application denies unauthorized access *"regardless of whether
+   the object identifier is predictable or unguessable"*.
 
-Its fix is a shape, not a suggestion: scope the lookup to what the caller may
-see (`@current_user.projects.find(params[:id])`, not `Project.find(params[:id])`).
-And the trap worth naming for agents: **a UUID is not authorization** — complex
-identifiers are defence-in-depth, and access control is still required.
+And the scope is explicit: *"This verification should be performed for all
+operations involving object references, including read, create, update, delete,
+export, and administrative actions."*
 
-### 2.5 Design rules become real only as fitness functions
+The fix is a shape, not a suggestion — scope the lookup to what the caller may
+see:
 
-From *Building Evolutionary Architectures* (Ford, Parsons, Kua, Sadalage), via
-InfoQ: a fitness function is "any mechanism that provides an **objective**
-integrity assessment of some architectural characteristic". Three points from it
-are load-bearing for this proposal:
+```ruby
+@project = Project.find(params[:id])              # vulnerable: searches all projects
+@project = @current_user.projects.find(params[:id])  # secure: the caller's own
+```
 
-- **Objectivity is the requirement, and opinion disqualifies a check.**
-  "'readability' is probably not a good fitness function: *your code does not
-  look readable to me*." Good ones are numeric: "we have 17 violations within
-  our tolerable range of 20", "two unwanted dependencies between modules".
-- They run **as unit tests** (ArchUnit being the reference tool), so they join
-  the ordinary suite and give fast feedback — governance "shifted left" into the
-  build rather than an inspection weeks later.
-- "You can't inspect (architectural) fitness into a frail system, it must be
-  built into it."
+Plus the trap worth naming for agents, straight from the cheat sheet's identifier
+section: complex identifiers (GUIDs, UUIDs) are **defence-in-depth**, and *"even
+with complex identifiers, access control checks are essential"*. A UUID is not
+authorization.
 
-Our `06e` Code Health Gate **already is a fitness-function harness** — levels,
-thresholds, baseline, ratchet, `gate.mode`, pluggable modules (P17 added supply
-chain and secrets that way). It simply has no model-level fitness functions.
-That is where the design gate belongs, and it means the hard gate needs no new
-architecture — only a new module.
+This is the single most mechanically gateable class in the inventory: two users,
+two object sets, every operation, expect denial. It became 06g §3's two-user
+authorization requirement.
 
-The objectivity requirement also disciplines *which* model rules may gate.
-"Is this ownership correct?" is not objective and must stay prose + review.
-"Does this file contain `ON DELETE CASCADE` and no ownership declaration?" is
-objective and may gate. That line decides the split between 06j (judgment) and
-06e (measurement).
+### 2.5 Design rules become real only as fitness functions — **T1** (concept) / **T3** (one phrasing)
 
-### 2.6 Migration *design* has a discipline, and it is not about backups
+Sources fetched and read: *Fitness function-driven development* (Paula Paul,
+Rosemary Wang, Thoughtworks, 2019),
+<https://www.thoughtworks.com/insights/articles/fitness-function-driven-development>;
+and the Building Evolutionary Architectures site,
+<https://evolutionaryarchitecture.com/>, which states the idea as: *"Evolutionary
+architectures make it explicit what 'fit' means with as much automation as
+possible."*
 
-Expand-contract (a.k.a. parallel change, N-1 compatibility) rests on a mental
-model worth adopting wholesale:
+What the Thoughtworks article establishes, and what our design rests on:
 
-> **The database is shared mutable state between every running copy of your
-> application.** … every schema change creates a backward-compatibility window.
-> The question is how long that window is and what's in it.
+- Fitness functions are **gatekeepers in the pipeline** — "to prevent the
+  promotion of unmaintainable or untested code to production", i.e. they run in
+  the ordinary build, not in a later inspection.
+- They are **numeric assertions**, and the article's examples are literally
+  tests: coverage above 0.9, error rate under 0.01, transaction under 10 seconds,
+  "should not have PII in the logs".
+- They are written for **observability, resiliency, performance and compliance**
+  as first-class automated checks — the same shape as a model-level check.
 
-Phases: expand (backward-compatible) → deploy code → backfill → cutover →
-contract. The named anti-patterns are design rules, not operational advice:
-one-step "atomic" migrations during a deploy; renaming a column directly;
-dropping a column the day after you stopped reading it; `NOT NULL DEFAULT` on a
-large table; adding an FK without `NOT VALID` then `VALIDATE`; `CREATE INDEX`
-without `CONCURRENTLY`; and **editing an applied migration** — history is
-append-only.
+**Withdrawn:** the earlier draft quoted *Building Evolutionary Architectures* for
+"any mechanism that provides an objective integrity assessment of some
+architectural characteristic", the "'readability' is probably not a good fitness
+function" exchange, and "you can't inspect fitness into a frail system, it must be
+built into it". The two URLs cited returned **404** and the book was not read in
+this pass, so those sentences are removed rather than kept as decoration. The
+*requirement of objectivity* they supported survives — as **T3, our own
+position**: a check that cannot be answered without judgement is not a gate, it
+is a review question wearing a gate's clothes. That position is load-bearing for
+the 06j/06e split (ownership correctness = judgement → prose and review; "a
+cascade with no ownership declaration" = measurable → may gate), and it is
+stated here as a design commitment, not as a citation.
+
+The structural point that remains fully supported: **ASF's `06e` Code Health Gate
+already is a fitness-function harness** — levels, thresholds, baseline, ratchet,
+`gate.mode`, pluggable modules. It had no model-level fitness functions; adding
+them needed no new architecture, only a new module. That is where the hard gate
+went, and it is the cheapest kind of capability ASF can grow.
+
+### 2.6 Migration *design* has a discipline, and it is not about backups — **T3**
+
+Expand–contract (parallel change, N-1 compatibility) is described here as ASF's
+working understanding, **not as a quotation**: the mental model is that the
+database is shared mutable state between every running copy of the application,
+so every schema change opens a backward-compatibility window, and the design
+question is how long that window is and what is in it. Phases: expand
+(backward-compatible) → deploy code → backfill → cutover → contract.
+
+The anti-patterns listed in 06j/07 (one-step "atomic" migrations during a deploy;
+renaming a column directly; dropping a column the day after you stopped reading
+it; `NOT NULL DEFAULT` on a large table; adding an FK without `NOT VALID` then
+`VALIDATE`; `CREATE INDEX` without `CONCURRENTLY`; editing an applied migration)
+are **our** enumeration, assembled from engineering practice we could not pin to a
+single fetched source in this pass. They are stated as a checklist to be argued
+with and verified against a primary source before any of them becomes a gate.
+None of them currently gates — they are prose in a reference, class **S**
+(self-attested) in the DoD's enforcement classes.
 
 Note that this is *prevention*, not symptom management: it constrains how the
-change is designed, and it exists to make the change safe by construction.
+change is designed, and it exists to make the change safe by construction. That
+distinction is what the mandate required (see Part 3, exclusions).
 
-### 2.7 Property-based and invariant testing
+### 2.7 Property-based and invariant testing — **T3**, with a note on what was not found
 
 Property-based testing (Hypothesis, fast-check) checks general behavioural rules
-across generated inputs rather than examples, and metamorphic testing attacks the
+across generated inputs rather than examples; metamorphic testing attacks the
 **test oracle problem** — cases where you cannot state the correct output but
-*can* state a relation that must hold. The relation "the set of unrelated rows is
-identical before and after" is exactly a metamorphic property, and it is
-available to us without a property-based framework: snapshot the row counts of
-every table the change does not name, assert equality.
+*can* state a relation that must hold.
 
-*Honest note on sourcing:* my search for established practice on asserting
-non-effects returned statistics literature on "testing for no effect" in
-regression analysis (permutation and equivalence testing). That is a different
-discipline and I am not citing it as support. The practice above is my
-extrapolation from metamorphic testing and from the "queries that should return
-zero" pattern in §2.3, not a claim that a canonical source prescribes it.
+The relation this document needs — *"the set of unrelated rows is identical before
+and after"* — is a metamorphic property, and it is available without a
+property-based framework: snapshot the row counts of every table the change does
+not name, assert equality. **This prescription is our extrapolation** (T3), and
+the earlier draft's attempt to dress it in a citation is withdrawn: the search for
+established practice on *asserting non-effects* returned statistics literature on
+testing-for-no-effect in regression analysis (permutation and equivalence
+testing), which is a different discipline and does not support the claim. It is
+not cited. The pattern stands on its own merits and on the incident's own
+evidence — 327 rows became 46 and every test stayed green because no test asserted
+the non-effect.
 
-### 2.8 Restore is an operation, not a timestamp
+### 2.8 Deletion is a subsystem, and restore is an operation — **T3**
 
-From the same deletion guide: "undelete isn't flipping a timestamp when cascades
-fired, unique keys were reused, or downstream systems reacted to the deletion
-event — treat restore as an operation with checks." And the retrospective from a
-team that learned it the expensive way after losing a customer workspace to an
-integration bug: **"we paid for the trash folder twice — once building it, once
-not having it."**
+The earlier draft supported this section with two attributed quotations (a
+soft-delete guide's "undelete isn't flipping a timestamp…", and a team's *"we paid
+for the trash folder twice — once building it, once not having it"*). Neither
+resolves to a source; both are **removed**.
 
-The test-suite prescription from that guide is the most concrete artifact found
-and is adopted nearly directly: filtered-query tests across *every* repository
-path; constraint tests (recreate a live duplicate must fail, recreate against a
-tombstone must succeed); **cascade tests verifying parent deletion produces
-exactly the designed child behaviour**; restore tests against realistic
-fixtures; purge tests with an advanced clock; event tests for downstream
-consumers. And its reason for running them on every migration touching flagged
-tables: "deletion code paths attract drive-by regressions because they're
-everyone's dependency and no one's feature."
+What survives is the reasoning, labelled as ours:
 
----
+- Soft delete is not a boolean. If rows survive their parent, "deleted" is a
+  state with its own query semantics, its own uniqueness rules (a live duplicate
+  must fail; recreating against a tombstone must not be blocked by it), its own
+  retention and purge schedule, and downstream consumers who need to learn the
+  deletion happened.
+- **Restore is a designed operation**, not a timestamp flip, for exactly the
+  reasons above: cascades may already have fired, unique keys may have been
+  reused, downstream systems may have reacted.
+- The test prescription in 06g §3 (constraint tests, cascade tests asserting the
+  *designed* child behaviour, restore tests against realistic fixtures, purge
+  tests with an advanced clock, event tests for downstream consumers) is ours,
+  derived from the incident's recovery, where completion state was lost precisely
+  because restore had never been designed.
+- **T3, our own aphorism, not a quote:** deletion code paths attract drive-by
+  regressions because they are everyone's dependency and no one's feature. If it
+  ever appears in normative text it should read as ASF's position, not somebody
+  else's finding.
+
+### Sourcing integrity — what was dropped, and why it is listed
+
+| Removed from the earlier draft | Why |
+|---|---|
+| "Cascade semantics need design… orphans-by-policy… before production decides for you via confusing bugs" | exact-phrase search: **0 results**; no URL; was the section's lead evidence |
+| Entity-class decision table (documents / users / transactions / cache-like) and "forcing per-rule decisions rather than providing one answer" | same unnamed source; unverifiable |
+| "humans forget filters under deadline pressure; RLS policies forget nothing" and "no compiler error for *you forgot WHERE tenant_id*" | exact-phrase search: **0 results**; replaced by the PostgreSQL manual's own default-deny and no-policies text (§2.3), which is stronger and checkable |
+| Oracle "whenever possible, enforce business rules with constraints" | no URL, not read |
+| BEA definition of a fitness function — "any mechanism that provides an objective integrity assessment of some architectural characteristic" — the "readability" exchange, and "can't inspect (architectural) fitness into a frail system, it must be built into it" | cited InfoQ and O'Reilly URLs return **404**; book not read. The *objectivity* requirement survives as ASF's own T3 position |
+| "The database is shared mutable state between every running copy of your application" | no URL; restated as our own model of expand-contract (§2.6) |
+| "undelete isn't flipping a timestamp…", "we paid for the trash folder twice" | exact-phrase search: **0 results**; section restated as reasoning (§2.8) |
+
+Nothing that remains in Part 2 is presented as a source's words unless it carries
+a URL that was fetched in this pass. Where a claim matters enough to gate on and
+could not be sourced, the claim is either dropped or the gate is not built on it —
+which is the same rule 06k applies to a performance number without its
+measurement contract.
 
 ## Part 3 — What this implies for the ASF and vigilant
 

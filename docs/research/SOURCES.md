@@ -158,3 +158,42 @@ results (orientation only, not load-bearing).
   `05-plan.md`, `06-implementation.md`, `06b-testing-qa.md`, `06c-code-quality.md`,
   `06d-delegation.md`, `06e-code-health.md`, `07-release.md`
 - `index.ts` (commands, QA_CHECKLIST, M1 validation)
+
+## Model blindness (model-blind-spots.md — P27)
+
+Evidence classes per [02-research.md](../../skills/aia-asf/references/02-research.md):
+**T1** fetched and read in this pass · **T2** measured locally, reproducible ·
+**T3** reasoned, not verified — a starting position, never a rule.
+
+| Source | URL | Used for | Class |
+|---|---|---|---|
+| ArchiLab — *Aggregate Design Rules according to Vaughn Vernon's "Red Book"* (Prof. Dr. Stefan Bente, TH Köln) | https://www.archi-lab.io/infopages/ddd/aggregate-design-rules-vernon.html | §2.1 Vernon's four aggregate rules, quoted verbatim with page numbers (ch. 10 pp. 347–388; p. 354 "properly designed Aggregate… invariants completely consistent within a single transaction"; p. 356 "false invariants and a desire for compositional convenience drove the design"; p. 356 "Don't let the 0..* fool you"; p. 361 "Prefer references to external Aggregates only by their globally unique identity"; exceptions pp. 367ff.) | **T1** fetched + read |
+| OWASP — *Insecure Direct Object Reference Prevention Cheat Sheet* | https://cheatsheetseries.owasp.org/cheatsheets/Insecure_Direct_Object_Reference_Prevention_Cheat_Sheet.html | §2.4 the three IDOR ingredients; the 4-step two-user methodology verbatim ("Create User A and User B… denies unauthorized access regardless of whether the object identifier is predictable or unguessable"); scope "read, create, update, delete, export, and administrative actions"; scoped-lookup fix `@current_user.projects.find(params[:id])`; "even with complex identifiers, access control checks are essential" → became 06g §3 two-user authorization | **T1** fetched + read |
+| PostgreSQL docs — §5.9 *Row Security Policies* | https://www.postgresql.org/docs/current/ddl-rowsecurity.html | §2.3 push-enforcement-down, from the manual's own words: without policies "all rows within it are equally available"; **default-deny** "If no policy exists for the table… no rows are visible or can be modified" — which is also the source of the silent-zero caveat that class 13 prices | **T1** fetched + read |
+| Thoughtworks — *Fitness function-driven development* (Paula Paul, Rosemary Wang, 2019) | https://www.thoughtworks.com/insights/articles/fitness-function-driven-development | §2.5 fitness functions as pipeline gatekeepers ("prevent the promotion of unmaintainable or untested code to production"); numeric assertion examples (coverage >0.9, error rate <0.01, transaction <10s, "should not have PII in the logs"); observability/resiliency/performance/compliance as automated checks | **T1** fetched + read |
+| Building Evolutionary Architectures (site) | https://evolutionaryarchitecture.com/ | §2.5 "Evolutionary architectures make it explicit what 'fit' means with as much automation as possible" | **T1** fetched + read |
+| Rails Guides — *Active Record Associations* §1.2 | https://guides.rubyonrails.org/association_basics.html | §2.2 the framework makes the cascade decision at the point the relationship is declared (`has_many :books, dependent: :destroy`; `@author.destroy` takes the books) | **T1** fetched + read (the full `dependent:` option list was **not** read — see withdrawn below) |
+| ASF self-audit, current gate set | `skills/aia-asf/references/06b` (23 rules), `06c` (9 rules), `06j`, `06k`, `lib/gates/` (blockers, ledger, authority, settle, report, measurement, config, declarations), `lib/code-health/model.mjs` (`MODEL_RULES`), `pi-vigilant/lib/` (loop-guardian, completeness, obligations) | Part 1 pass-2 re-scoring of the 14 classes to H/M/S; the vigilant subsystem audit and the "for classes 3,5,6,7,9,12 nobody else inspects them" conclusion | **T2** measured, reproducible |
+
+### Withdrawn — cited in an earlier draft, could not be verified, removed
+
+Recorded so the deletion is auditable and nobody re-imports them from an old
+revision. Each was checked by exact-phrase search and by fetching the URL cited.
+
+| Removed claim | Check result |
+|---|---|
+| "Cascade semantics need design… orphans-by-policy… before production decides for you via confusing bugs" (unnamed "soft-delete design guide") | exact-phrase search **0 results**; no URL. Was §2.2's lead evidence |
+| Entity-class decision table + "forcing per-rule decisions rather than providing one answer" | same unnamed source; unverifiable |
+| "humans forget filters under deadline pressure; RLS policies forget nothing"; "no compiler error for *you forgot WHERE tenant_id*" | exact-phrase search **0 results**; replaced by the PostgreSQL manual's own text (§2.3), which is checkable and stronger |
+| Oracle "whenever possible, enforce business rules with constraints" | no URL; not read |
+| BEA definition of a fitness function ("objective integrity assessment of some architectural characteristic"), the "readability" exchange, "can't inspect fitness into a frail system" | cited InfoQ + O'Reilly URLs return **HTTP 404**; book not read. The objectivity requirement survives as an explicit **T3** ASF position, not a citation |
+| "The database is shared mutable state between every running copy of your application" | no URL; restated as our own expand-contract model (§2.6, **T3**) |
+| "undelete isn't flipping a timestamp…"; "we paid for the trash folder twice — once building it, once not having it"; "deletion code paths attract drive-by regressions…" | exact-phrase search **0 results**; §2.8 restated as reasoning, its aphorisms labelled ours |
+| Rails `dependent:` full option list (`:nullify`, `:restrict_with_exception`, `:restrict_with_error`, `:destroy_async`) | the guide was fetched but the options section was **not** read in this pass — option names must be verified against the guide before any reaches normative text; the *shape* (cascade / nullify / refuse all exist, refuse is first-class) is what §2.2 now claims |
+| Statistics literature on testing-for-no-effect (permutation / equivalence testing) | different discipline; never supported the non-effect claim; not cited |
+
+**Rule this section enforces:** nothing in `model-blind-spots.md` is presented as
+a source's words unless it carries a URL fetched and read in this pass. A claim
+that could not be sourced is either dropped, or the gate is not built on it — the
+same discipline 06k applies to a performance number without its measurement
+contract.
