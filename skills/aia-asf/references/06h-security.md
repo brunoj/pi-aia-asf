@@ -41,14 +41,45 @@ page:
 ## 2. ASVS-based Definition of Done (large work)
 
 Use OWASP ASVS 5.0 as the checklist source. **Select the chapters that apply
-to the deliverable** — do not run the whole list:
+to the deliverable** — do not run the whole list.
 
-| Deliverable type | Applicable chapters (ASVS 5.0) |
+The chapter numbers and names below are the **real ASVS 5.0 ones**, verified
+against the source project at tag `v5.0.0_release`. This matters: ASVS 5.0
+re-numbered relative to 4.0, and a table carrying 4.0 labels under a "5.0"
+heading makes the DoD line *"the applicable ASVS chapter checks pass"*
+unfalsifiable — nobody can tell whether chapter V5 was checked when nobody
+agrees what V5 is. `test/test-security-mapping.mjs` pins this table to the
+source project, so drift fails a test instead of quietly making the checklist
+mean nothing.
+
+| # | ASVS 5.0 chapter | Applies to |
+|---|---|---|
+| V1 | Encoding and Sanitization | everything that renders or transforms untrusted input |
+| V2 | Validation and Business Logic | everything that accepts input or makes a decision |
+| V3 | Web Frontend Security | web/UI deliverables |
+| V4 | API and Web Service | any HTTP/API surface (includes 4.3.1 query cost analysis) |
+| V5 | File Handling | anything reading or writing user-controlled paths |
+| V6 | Authentication | anything with identities |
+| V7 | Session Management | anything with sessions |
+| V8 | Authorization | anything with per-user visibility |
+| V9 | Self-contained Tokens | JWT/opaque-token issuance |
+| V10 | OAuth and OIDC | delegated login |
+| V11 | Cryptography | anything storing or transmitting secrets |
+| V12 | Secure Communication | any network transport |
+| V13 | Configuration | everything (includes 13.1.2 pool limits, 13.1.3 resource-management strategy) |
+| V14 | Data Protection | anything persisting data |
+| V15 | Secure Coding and Architecture | everything (includes 15.1.3/15.2.2 availability, 15.4.x concurrency) |
+| V16 | Security Logging and Error Handling | everything (includes 16.5.2 degradation on resource failure) |
+| V17 | WebRTC | only if WebRTC is used |
+
+**By deliverable type** (start here, then prune with the table above):
+
+| Deliverable type | Chapters |
 |---|---|
-| Web/API service | V1 (architecture), V2 (auth), V3 (session), V4 (access control), V5 (input validation), V6 (output encoding), V7 (crypto), V8 (errors), V14 (config), V15 (API) |
-| CLI / local tool | V1, V5, V6, V8, V14 (no session/auth chapters) |
-| Library/package | V1, V5, V6, V8, V14 (the library's own surface) |
-| Agent/tool surface | V1, V4, V5, V6, V8 + the agent chapter below |
+| Web/API service | V1–V8, V11–V16 (+V9/V10 if tokens or delegated login) |
+| CLI / local tool | V1, V2, V5, V13, V14, V15, V16 (no session/auth chapters) |
+| Library/package | V1, V2, V4, V5, V13, V14, V15, V16 (the library's own surface) |
+| Agent/tool surface | V1, V2, V4, V5, V13, V15, V16 + the agent chapter below |
 
 **Level selection:** L1 (baseline) for internal tools; L2 for anything
 internet-facing or holding user data; L3 only for high-value targets. Default
@@ -56,6 +87,23 @@ is L2 for internet-facing, L1 otherwise. Record the chosen level in the plan.
 
 **DoD line (large work):** *"the applicable ASVS chapter checks pass at the
 chosen level; the level and chapter selection are recorded in the plan."*
+That line is only falsifiable because the table above is correct — which is what
+the test is for.
+
+### 2.1 Performance and resource requirements are ASVS's, not a separate list
+
+ASVS 5.0 already carries the availability and resource requirements
+(**15.1.3**, **15.2.2**, **13.1.2**, **13.1.3**, **13.2.6**, **4.3.1**,
+**15.4.3**, **15.4.4**, **16.5.2**). They are security requirements *and*
+performance requirements, and **ASF refuses to maintain two lists of them**
+(06c Rule 9: a document that duplicates another document's content is a second
+place to be wrong).
+
+So: the security DoD line and the performance scenario share **one abuse-case
+load run** against the most expensive endpoint untrusted input can reach. Run it
+once; cite the same evidence in both places. The requirement text and the
+evidence mapping live in
+[06k-performance.md](06k-performance.md) §7 — read it, do not restate it here.
 
 ## 3. Supply chain & secrets (P17)
 

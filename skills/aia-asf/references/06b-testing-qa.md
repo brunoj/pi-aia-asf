@@ -195,6 +195,26 @@ never arrives, the wiring is dead — that is a failed test.
 - [ ] **Stability line (06f): if the deliverable makes external calls, it has timeouts and bounded retries (idempotent only)**
 - [ ] **Security line (06h): no secrets in the repo; no untrusted input reaches a shell/query/path unvalidated; no unbounded resource use on user-controlled input**
 - [ ] **Model line (06j): every relationship the change touches carries a written ownership declaration; store writes have invariant and non-effect tests (06g §3); `/asf health` model level passes or its findings are accepted with a reason — `n/a: no persistence touched, because <reason>` otherwise**
+- [ ] **Performance line (06k): every numeric claim carries its measurement contract (Rule 21); the CI-cheap tier ran per commit and the scheduled tier ran before release, or the run that did not happen is listed as not run; the abuse-case load run ran once and is cited in both 06h and 06k**
+- [ ] **Evidence ledger (P42): the report's evidence section is rendered from what the harness observed — suite runs, health verdict, browser verification or structured n/a — not written by hand. Anything the harness did not observe is listed as a gap, never as a tick**
+- [ ] **Gate friction (P45): `/asf gates` output is included; any gate reporting `scanned: 0` is reported as examined-nothing, not as a pass; any authority transition a gate made this session is shown with its reason**
+
+### Enforcement classes — which of these lines someone actually checks (P35)
+
+Every item above carries a class, and the class is shown in the rendered report
+so nobody can present a self-attested item as a verified one:
+
+| Class | Meaning | Who enforces it |
+|---|---|---|
+| **H** | **hard** — cannot be declared done without satisfying it | a `tool_call` blocker refuses the action (06b Rule 23) |
+| **M** | **mechanical verdict** — produced only if the check is run | a gate; `scanned: 0` means it did not run, and that is not a pass |
+| **S** | **self-attested** — an expectation, never a blocker | you, and the reviewer sees that it was you |
+
+The rendered checklist and delivery report come from
+`lib/gates/report.mjs`, which assembles them from the ledger, the gate verdicts
+and the authority state. **A gap stays visible as a gap.** The honest
+alternative to a green tick that means nothing is a line that says it was not
+verified.
 
 ## Rule 11 — Report honestly
 
@@ -450,3 +470,86 @@ inversion as Rule 9 and Rule 19. "It's only a backend change" is not an argument
 the invariant tests added, and the scan result. A bare "model reviewed" is not
 evidence. An accepted finding (`asf-model-accept: <reason>`) is a decision you
 show, not a pass you claim.
+
+---
+
+## Rule 21 — A numeric performance claim carries its measurement contract (P31)
+
+**A number without its contract is not a specification. Report it as incomplete;
+do not accept it, and do not quietly drop it.**
+
+| Claim type | Required, all of it |
+|---|---|
+| Latency | percentile · load · sample count · environment · lab or field |
+| Throughput | arrival model (closed-loop or open-loop) · duration · environment · sample count |
+| Regression | statistical comparison · interleaved randomized measurement · retained raw samples · observed CV · sample count · environment |
+
+Full text, rationale and the arrival-model trap:
+[06k-performance.md](06k-performance.md) §2. The DoD line *"performance targets
+from the spec are met"* is unfalsifiable without this — which is why it has
+never once been checked.
+
+## Rule 22 — Performance work is placed, not scheduled (P34)
+
+The question is not *whether* to benchmark but **which check earns its cost
+where**. CI-cheap per commit (query-count tripwire, query-plan scan, one
+bounded scenario) inside `perf.cheapBudgetSeconds`; the expensive scenarios
+(scalability, stress, soak, resource ceiling) scheduled inside
+`perf.scheduledBudgetSeconds`. A deep suite in the per-commit path gets switched
+off within a week, and the coverage that *would* have earned its place goes with
+it. See [06k-performance.md](06k-performance.md) §3.
+
+## Rule 23 — Every gate ships with a negative control, an autonomous exit, and a budget (P27)
+
+A gate is a claim about the world, and a claim nobody tested is a liability.
+Four obligations attach to every gate ASF adds:
+
+**1. Two fixtures, never one.** A **fire** fixture (an input that must make it
+fire — proof of power) and a **near-miss** fixture (an input that must NOT fire
+— proof it is not firing on everything, and the test that protects correct
+work). The count of gates with fixtures equals the count of gates; the suite
+asserts it, so a gate cannot be added and quietly left untested.
+
+> **A gate whose near-miss starts failing is a bug in the gate, not a test to
+> update.** Under time pressure the human failure mode is always to relax the
+> test. Do not.
+
+**2. `scanned: 0` is never a pass.** A check that examined nothing reports
+`scanned: 0` and says so. This applies to the gates *and to the tests of the
+gates* — the failure being prevented is not a gate that wrongly blocks, it is a
+gate that silently stops checking anything and still reports green.
+
+**3. An autonomous exit, always.** ASF is an autonomous loop; a gate must not
+become a round-trip to a human. `block: true, reason` returns the reason **to
+the model** — agent-facing feedback, never a UI prompt seeking approval. The
+load-bearing corollary: **if the only exit from a blocker is a human decision,
+the blocker is misdesigned and belongs in the report, not in the path.**
+
+**4. A utility budget, and automatic demotion.** A gate earns authority
+(`probation → active`) with a stated number of clean runs **plus at least one
+caught fixture case** — because a gate that never fires looks exactly like a gate
+that works, so promotion must prove power, not quiet. It loses authority
+(`active → demoted`) automatically when its measured false-positive rate exceeds
+`gate.falsePositiveBudget` or it blocks more than `gate.blocksPerRunBudget`
+times in one run. Every transition is append-only, needs a reason, and appears
+in the delivery report. **A gate that changes its own power is exactly the kind
+of change that must be visible, never silent.**
+
+**Fail-safe is stated per rule, never inherited.** A crashing gate blocks the
+tool in pi's model. That is right for the secret rule and wrong for the
+convenience rules, so each rule declares `failSafe: "block" | "allow"`. A broken
+convenience check must not stop the loop — and it reports itself rather than
+passing silently.
+
+**A bypass request is not evidence that a gate is wrong.** It is recorded as
+friction. Otherwise the exploit is to bypass a gate until it demotes.
+
+**Configuration is three-tiered and banded.** General defaults are researched
+and sourced; project calibration may move a value **only inside the documented
+band**; anything outside the band is explicit user configuration and is labelled
+`override`. Statistical-validity constants (`bench.significance`,
+`valid.interleavedComparison`, `valid.rawSamplesRetained`,
+`valid.scannedZeroIsPass`) are **non-adaptive** — flexing them invalidates the
+measurement rather than tuning it, and a project may not calibrate its way out
+of a valid comparison. It may only make the comparison more patient. See
+`/asf config`.

@@ -135,6 +135,40 @@ Delegation changes **who does the work**, never **what must be proven**:
 - Subagent findings enter the record as **claims** until verified against code or tests.
 - For LARGE work, the approval gate is unaffected: no subagent may start implementation before plan approval.
 
+### A delegated verification prompt states its measurement contract (P31)
+
+When the thing being delegated is a **verification** — "check that this meets the
+performance target" — the prompt must carry the contract, or the subagent will
+return a number and a verdict that mean nothing. A verifier handed `is p95 under
+2s?` will answer yes or no, and neither answer is evidence.
+
+Every delegated performance-verification prompt states:
+
+```
+Claim under test : <metric> <comparison> <value>
+Percentile       : p50 / p95 / p99 (which one, and why)
+Load             : <concurrency or arrival rate>, <closed-loop | open-loop>
+Samples          : <n per arm>, warmups <n>
+Environment      : <machine/CI/cores>, load average at run time
+Lab or field     : <synthetic harness | observed production traffic>
+Method           : <statistical test>, alpha <α>, effect-size threshold
+Order            : interleaved, randomized
+```
+
+If any of those is missing from the **spec**, do not invent it: report the claim
+as incomplete (06b Rule 21) and ask, or state the assumption you are making in
+the prompt itself. A subagent that silently invents a load level has produced a
+measurement of nothing.
+
+And apply the same rule to the subagent's **answer**: a returned number without
+its contract is a claim, not a result. `"p95 was 180ms"` is not a pass; `"p95 was
+180ms at 200 concurrent users, open-loop, 30 samples per arm, interleaved, CI
+4 cores, load average 0.4, Mann–Whitney p=0.31, ratio 1.02 → no regression"` is.
+
+A verifier that examined nothing reports `scanned: 0` and that is **not a pass**
+— a subagent returning "no issues found" having run no scenario is the most
+expensive kind of green.
+
 ---
 
 ## Part 3 — Independent reviewer gate (P19, large work)

@@ -1,0 +1,404 @@
+{
+  "source": "aia-asf",
+  "$comment": [
+    "ASF's standing obligations, declared for the loop guard to verify.",
+    "",
+    "This file records ENFORCEMENT, never meaning. What each rule actually",
+    "requires lives in skills/aia-asf/references/*.md and is the human artefact;",
+    "a test asserts the two agree in both directions (P44). If a sentence here",
+    "starts carrying the substance of a rule, it is in the wrong file.",
+    "",
+    "Triggers use the guard's general vocabulary only (always, area:, path-glob:,",
+    "tool:, when-spec-matches:). There are no phase numbers, no DoD words and no",
+    "cascade vocabulary here: what crosses the boundary is the specification,",
+    "never the check. If ASF needs a new trigger kind, it must be justified",
+    "without naming ASF.",
+    "",
+    "class is the honest label: H cannot be declared done without satisfying it,",
+    "M produces a verdict only if the check is run, S is an expectation and must",
+    "never block."
+  ],
+  "obligations": [
+    {
+      "id": "no-secret-in-tracked-file",
+      "requirement": "No credential, private key or token-shaped value is written into a tracked file",
+      "area": "security",
+      "priority": "must",
+      "trigger": [
+        "always"
+      ],
+      "class": "H",
+      "recurring": true,
+      "signal": {
+        "kind": "test",
+        "file": "test/test-gates.mjs",
+        "assertion": "secret-in-tracked-file"
+      },
+      "trace": {
+        "outcome": "a write of a secret-shaped value to a tracked path is refused, with the environment-variable exit named",
+        "codePath": "tool_call → evaluateBlockers → blockSecretWrite",
+        "testFile": "test/test-gates.mjs",
+        "assertion": "secret-in-tracked-file"
+      }
+    },
+    {
+      "id": "test-subset-states-impact-area",
+      "requirement": "A partial test run states its impact area; the default remains the full suite",
+      "area": "testing",
+      "priority": "must",
+      "trigger": [
+        "tool:bash"
+      ],
+      "class": "H",
+      "recurring": true,
+      "signal": {
+        "kind": "test",
+        "file": "test/test-gates.mjs",
+        "assertion": "test-subset-without-impact"
+      },
+      "trace": {
+        "outcome": "a subset invocation without a stated impact area is refused and the agent is told to run the full suite or state the area",
+        "codePath": "tool_call → evaluateBlockers → blockTestSubset",
+        "testFile": "test/test-gates.mjs",
+        "assertion": "test-subset-without-impact"
+      }
+    },
+    {
+      "id": "full-suite-green-before-push",
+      "requirement": "No push or publish happens while the session has no recorded full-suite green run",
+      "area": "testing",
+      "priority": "must",
+      "trigger": [
+        "tool:bash"
+      ],
+      "class": "H",
+      "recurring": true,
+      "signal": {
+        "kind": "test",
+        "file": "test/test-gates.mjs",
+        "assertion": "push-without-recorded-green"
+      },
+      "trace": {
+        "outcome": "git push / publish is refused until a full-suite run exiting 0 is recorded this session",
+        "codePath": "tool_call → evaluateBlockers → blockPushWithoutGreen",
+        "testFile": "test/test-gates.mjs",
+        "assertion": "push-without-recorded-green"
+      }
+    },
+    {
+      "id": "destructive-git-needs-clean-tree",
+      "requirement": "Destructive git operations are refused while the working tree is dirty",
+      "area": "constraints",
+      "priority": "must",
+      "trigger": [
+        "tool:bash"
+      ],
+      "class": "H",
+      "recurring": true,
+      "signal": {
+        "kind": "test",
+        "file": "test/test-gates.mjs",
+        "assertion": "destructive-git-dirty-tree"
+      },
+      "trace": {
+        "outcome": "reset --hard / clean -f / force push are refused until the work is committed or stashed",
+        "codePath": "tool_call → evaluateBlockers → blockDestructiveGitDirty",
+        "testFile": "test/test-gates.mjs",
+        "assertion": "destructive-git-dirty-tree"
+      }
+    },
+    {
+      "id": "health-run-with-verdict",
+      "requirement": "/asf health is executed this session and produces a recorded verdict; a run that examined nothing is reported, not passed",
+      "area": "testing",
+      "priority": "must",
+      "trigger": [
+        "when-spec-matches:\\b(done|deliver|complete|release)\\b"
+      ],
+      "class": "M",
+      "recurring": true,
+      "signal": {
+        "kind": "test",
+        "file": "test/test-gates.mjs",
+        "assertion": "health-run"
+      },
+      "trace": {
+        "outcome": "the delivery report shows the health verdict and its scanned count; scanned: 0 is never read as a pass",
+        "codePath": "agent_before_settle → sessionFacts → ledger health-run",
+        "testFile": "test/test-gates.mjs",
+        "assertion": "health-run"
+      }
+    },
+    {
+      "id": "full-suite-actually-ran",
+      "requirement": "The full test suite actually ran this session for non-small work — recorded, not claimed",
+      "area": "testing",
+      "priority": "must",
+      "trigger": [
+        "when-spec-matches:\\b(done|deliver|complete|release)\\b"
+      ],
+      "class": "M",
+      "recurring": true,
+      "signal": {
+        "kind": "test",
+        "file": "test/test-gates.mjs",
+        "assertion": "suite-run"
+      },
+      "trace": {
+        "outcome": "settlement is refused until a full-suite run exiting 0 is observed in the ledger",
+        "codePath": "tool_call → deriveSuiteRun → ledger → agent_before_settle",
+        "testFile": "test/test-gates.mjs",
+        "assertion": "suite-run"
+      }
+    },
+    {
+      "id": "browser-verification-for-touched-surfaces",
+      "requirement": "Every web surface a change touches is verified in a real browser during Phase 6, or a structured n/a with a reason is recorded",
+      "area": "ui-ux",
+      "priority": "must",
+      "trigger": [
+        "path-glob:src/**/*.tsx",
+        "path-glob:src/**/*.jsx",
+        "path-glob:app/**/*.tsx",
+        "path-glob:pages/**/*.tsx",
+        "path-glob:public/**/*.html",
+        "path-glob:static/**/*.html"
+      ],
+      "class": "M",
+      "recurring": true,
+      "signal": {
+        "kind": "test",
+        "file": "test/test-gates.mjs",
+        "assertion": "browser-verify"
+      },
+      "trace": {
+        "outcome": "the delivery report lists each touched surface with its browser assertion, or an n/a carrying a reason",
+        "codePath": "tool_call(write/edit) → path trigger → agent_before_settle → sessionFacts",
+        "testFile": "test/test-gates.mjs",
+        "assertion": "browser-verify"
+      }
+    },
+    {
+      "id": "measurement-contract-on-numeric-claims",
+      "requirement": "Every numeric performance claim states its full contract: latency needs percentile, load, sample count, environment and lab-or-field; throughput needs an arrival model and duration; a regression claim needs a statistical comparison, interleaved randomized measurement, raw samples and the observed CV",
+      "area": "performance",
+      "priority": "must",
+      "trigger": [
+        "when-spec-matches:\\b(p95|p99|latency|throughput|qps|requests per second|benchmark|regression)\\b"
+      ],
+      "class": "M",
+      "recurring": true,
+      "signal": {
+        "kind": "test",
+        "file": "test/test-performance-gates.mjs",
+        "assertion": "measurement-contract"
+      },
+      "trace": {
+        "outcome": "a bare number such as p95 < 2s is reported as an incomplete claim rather than accepted as a spec",
+        "codePath": "capture_spec → measurementContract → report",
+        "testFile": "test/test-performance-gates.mjs",
+        "assertion": "measurement-contract"
+      }
+    },
+    {
+      "id": "escalation-needs-evidence",
+      "requirement": "A performance escalation (asf-perf-accept) carries a measurement at a declared load, the scenario it was measured against, the named structural alternative and its cost, and is signed by a human — never by the agent implementing the work",
+      "area": "performance",
+      "priority": "must",
+      "trigger": [
+        "when-spec-matches:\\basf-perf-accept\\b"
+      ],
+      "class": "M",
+      "recurring": true,
+      "signal": {
+        "kind": "test",
+        "file": "test/test-performance-gates.mjs",
+        "assertion": "escalation-evidence"
+      },
+      "trace": {
+        "outcome": "an escalation without measurement or human signature is reported as not closed",
+        "codePath": "report → escalation validation",
+        "testFile": "test/test-performance-gates.mjs",
+        "assertion": "escalation-evidence"
+      }
+    },
+    {
+      "id": "security-high-findings-closed",
+      "requirement": "Every High security finding is closed or carries a signed asf-security-accept with a compensating control and expiry; Medium findings are closed or have a filed follow-up ticket",
+      "area": "security",
+      "priority": "must",
+      "trigger": [
+        "when-spec-matches:\\basf-security-accept\\b|\\bHigh finding\\b"
+      ],
+      "class": "M",
+      "recurring": true,
+      "signal": {
+        "kind": "test",
+        "file": "test/test-delivery-report.mjs",
+        "assertion": "security gate"
+      },
+      "trace": {
+        "outcome": "an unsigned or expired acceptance is reported as an open finding rather than a closed one",
+        "codePath": "report → security acceptance validation",
+        "testFile": "test/test-delivery-report.mjs",
+        "assertion": "security gate"
+      }
+    },
+    {
+      "id": "asvs-chapter-mapping-is-correct",
+      "requirement": "The security chapter table in 06h-security.md uses the real ASVS 5.0 chapter numbering and names, and no security checklist is maintained alongside ASVS",
+      "area": "security",
+      "priority": "must",
+      "trigger": [
+        "path-glob:skills/aia-asf/references/06h-security.md"
+      ],
+      "class": "M",
+      "recurring": true,
+      "signal": {
+        "kind": "test",
+        "file": "test/test-security-mapping.mjs",
+        "assertion": "asvs-5.0-chapter"
+      },
+      "trace": {
+        "outcome": "the DoD line 'every applicable ASVS chapter checked' becomes falsifiable, and 4.0/5.0 drift fails a test",
+        "codePath": "test → parse 06h table → compare against pinned ASVS 5.0 chapter list",
+        "testFile": "test/test-security-mapping.mjs",
+        "assertion": "asvs-5.0-chapter"
+      }
+    },
+    {
+      "id": "asvs-performance-requirements-reachable",
+      "requirement": "The ASVS performance and resource requirements (time-consuming functionality, consumer timeouts, per-user parallel limits, query cost analysis, connection-pool limits, resource-management strategy with timeouts and retry/back-off, graceful degradation, thread starvation, resource release) are reachable from ASF's own text and are evidenced by the abuse-case load run",
+      "area": "security",
+      "priority": "must",
+      "trigger": [
+        "path-glob:skills/aia-asf/references/06h-security.md",
+        "path-glob:skills/aia-asf/references/06k-performance.md"
+      ],
+      "class": "M",
+      "recurring": true,
+      "signal": {
+        "kind": "test",
+        "file": "test/test-security-mapping.mjs",
+        "assertion": "asvs-performance-requirements"
+      },
+      "trace": {
+        "outcome": "one abuse-case load run satisfies both the security clause and the performance scenario, and the evidence is shared rather than duplicated",
+        "codePath": "06k abuse case → report → security DoD line",
+        "testFile": "test/test-security-mapping.mjs",
+        "assertion": "asvs-performance-requirements"
+      }
+    },
+    {
+      "id": "gate-ships-with-negative-control",
+      "requirement": "No gate ships without two fixtures: one that must make it fire and one near-miss that must make it pass; the count of gates with fixtures equals the count of gates",
+      "area": "testing",
+      "priority": "must",
+      "trigger": [
+        "path-glob:lib/gates/*.mjs",
+        "path-glob:lib/gates/*.ts"
+      ],
+      "class": "M",
+      "recurring": true,
+      "signal": {
+        "kind": "test",
+        "file": "test/test-gates.mjs",
+        "assertion": "coverage"
+      },
+      "trace": {
+        "outcome": "a gate that silently stops checking anything fails the suite instead of reporting green",
+        "codePath": "test/gate-harness.mjs → checkGate + assertCoverage",
+        "testFile": "test/test-gates.mjs",
+        "assertion": "coverage"
+      }
+    },
+    {
+      "id": "config-parameter-is-consumed",
+      "requirement": "Every parameter in /asf config exists in the parameter table and is consumed by a named gate; non-adaptive validity constants cannot be configured",
+      "area": "constraints",
+      "priority": "must",
+      "trigger": [
+        "path-glob:lib/gates/defaults.mjs"
+      ],
+      "class": "S",
+      "recurring": true,
+      "signal": {
+        "kind": "test",
+        "file": "test/test-config-screen.mjs",
+        "assertion": "parameter-consumed"
+      },
+      "trace": {
+        "outcome": "no unused knobs accumulate in the configuration surface",
+        "codePath": "/asf config → PARAMS → validateParam",
+        "testFile": "test/test-config-screen.mjs",
+        "assertion": "parameter-consumed"
+      }
+    },
+    {
+      "id": "model-decision-recorded-for-persistence",
+      "requirement": "A change touching persisted data records the model decision (what is persisted, what is derived, why) and the data model is stated in plain language before implementation",
+      "area": "functionality",
+      "priority": "must",
+      "trigger": [
+        "when-spec-matches:\\b(persist|schema|migration|table|column|foreign key|collection|document store|denormali)\\b"
+      ],
+      "class": "M",
+      "recurring": true,
+      "signal": {
+        "kind": "test",
+        "file": "test/test-model-gate.mjs",
+        "assertion": "asf-model"
+      },
+      "trace": {
+        "outcome": "a derived-value-stored-as-if-source decision is caught before implementation rather than after release",
+        "codePath": "06j model gate → asf-model comment → test-model-gate",
+        "testFile": "test/test-model-gate.mjs",
+        "assertion": "asf-model"
+      }
+    },
+    {
+      "id": "docs-move-with-the-code",
+      "requirement": "Documentation that describes changed behaviour is updated in the same change, and no document is left describing behaviour that no longer exists",
+      "area": "documentation",
+      "priority": "should",
+      "trigger": [
+        "always"
+      ],
+      "class": "S",
+      "recurring": true,
+      "signal": {
+        "kind": "test",
+        "file": "test/test-docs-rule.mjs",
+        "assertion": "Rule 9 — Documents are code"
+      },
+      "trace": {
+        "outcome": "the delivery report states which documents moved with the code",
+        "codePath": "Phase 6 docs rule → delivery report",
+        "testFile": "test/test-docs-rule.mjs",
+        "assertion": "Rule 9 — Documents are code"
+      }
+    },
+    {
+      "id": "dod-checklist-answered",
+      "requirement": "The Definition of Done checklist is answered item by item in the delivery report, with each item's enforcement class visible",
+      "area": "documentation",
+      "priority": "should",
+      "trigger": [
+        "when-spec-matches:\\b(done|deliver|complete)\\b"
+      ],
+      "class": "S",
+      "recurring": true,
+      "signal": {
+        "kind": "test",
+        "file": "test/test-delivery-report.mjs",
+        "assertion": "Delivery report"
+      },
+      "trace": {
+        "outcome": "the reviewer sees which items were verified and which remain self-attested",
+        "codePath": "06-implementation DoD → delivery report rendering",
+        "testFile": "test/test-delivery-report.mjs",
+        "assertion": "Delivery report"
+      }
+    }
+  ]
+}

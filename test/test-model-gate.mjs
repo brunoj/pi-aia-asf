@@ -196,7 +196,16 @@ export async function run({ extDir }) {
     chk('Rule 20 exists', b.includes('## Rule 20 — The model is asserted, not assumed'));
     chk('the DoD carries the model line', b.includes('Model line (06j)'));
     chk('n/a requires a reason', b.includes('no persistence touched'));
-    chk('exactly 20 rules (no silent duplication)', (b.match(/^## Rule \d+ —/gm) || []).length === 20);
+    // Contiguity and uniqueness, not a fixed count: a count assertion has to be
+    // edited every time a rule is added, and an edited count assertion is exactly
+    // how a duplicated or skipped rule number slips in. This is stronger and it
+    // does not rot.
+    const ruleNums = (b.match(/^## Rule (\d+) —/gm) || []).map((m) => Number(m.match(/\d+/)[0]));
+    chk(
+      'rules are contiguous 1..N with no duplication or gap',
+      ruleNums.length >= 20 && ruleNums.every((n, i) => n === i + 1),
+      `got ${ruleNums.length}: ${ruleNums.join(",")}`,
+    );
 
     const g = read('06g-test-design.md');
     chk('06g carries the invariant and non-effect tests', g.includes('Invariant and non-effect tests (P27)'));
@@ -214,7 +223,13 @@ export async function run({ extDir }) {
     chk('implementation makes it a build-time step', i.includes('Assert the **model**') && i.includes('one edit wide'));
     chk('model drift is a named drift anti-pattern', i.includes('**Model drift**'));
 
-    chk('SKILL.md indexes 20 rules and 06j', skillMd.includes('(20 rules + DoD)') && skillMd.includes('06j-data-model.md'));
+    // Same lesson as the rule-count check above: pin that SKILL.md's index
+    // AGREES with the headings, not that it names a particular number.
+    const ruleCount = (b.match(/^## Rule (\d+) —/gm) || []).length;
+    chk(
+      `SKILL.md's index agrees with the 06b heading count (${ruleCount}) and indexes 06j`,
+      skillMd.includes(`${ruleCount} rules + DoD`) && skillMd.includes('06j-data-model.md'),
+    );
     chk('SKILL.md Phase 6 carries the rule', skillMd.includes('The model is asserted, not assumed'));
     chk('SKILL.md Phase 7 checks the model DoD', skillMd.includes('model DoD'));
     chk('SKILL.md anti-patterns name the green-suite blind spot', skillMd.includes('never populated the table the change destroys'));

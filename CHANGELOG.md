@@ -7,6 +7,96 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **The enforcement layer (`lib/gates/`, wired into `/asf`).** Until now every
+  ASF gate was a sentence in a markdown file that the agent was asked to
+  remember. These are code that runs, each with the two fixtures that make it
+  trustworthy.
+  - **`defaults.mjs` — three-tier configuration.** Every tunable ships with a
+    researched general default (with its source), a documented adaptation band,
+    and project calibration allowed **only inside the band**. A value outside
+    the band is explicit user configuration and is labelled `override`, never
+    silently obeyed. Statistical-validity constants (`bench.significance`,
+    `valid.interleavedComparison`, `valid.rawSamplesRetained`,
+    `valid.scannedZeroIsPass`) are **non-adaptive** — a project may not
+    calibrate its way out of a valid comparison, only make it more patient.
+  - **`ledger.mjs` — the evidence ledger.** Entries are derived from observed
+    tool traffic (suite runs, health verdicts, browser verification). There is
+    **no model-callable way to append an entry**, malformed entries are rejected
+    and recorded, and `scanned: 0` is reported as *examined nothing*, never as a
+    pass.
+  - **`authority.mjs` — gate authority is earned and revocable.**
+    `probation → active` requires clean runs **plus at least one caught fixture
+    case** (a gate that never fires looks exactly like a gate that works). An
+    active gate is demoted automatically when its false-positive rate or
+    blocks-per-run exceeds budget. Every transition is append-only, needs a
+    reason, and appears in the delivery report. A bypass request is recorded as
+    friction, not as evidence that the gate is wrong.
+  - **`blockers.mjs` — objective `tool_call` blockers.** Secrets in a tracked
+    file, a test subset run without stating its impact area, push without a
+    green full suite, destructive git on a dirty tree. Each declares its own
+    `failSafe: "block" | "allow"` — a crashing secret check blocks, a crashing
+    convenience check does not stop the loop. Every blocker has an autonomous
+    exit the agent can take itself; nothing here opens a UI prompt for approval.
+  - **`settle.mjs` — the completion gate**, bounded at `MAX_CONTINUATIONS = 2`.
+    Past the cap the gaps are **reported**, not blocked forever.
+  - **`measurement.mjs` — the measurement contract and the comparison.** A bare
+    numeric claim (`p95 < 2s`) is detected and reported as incomplete rather
+    than accepted. Regression verdicts use significance **plus effect size**
+    with retained raw samples — a naive ±15% threshold missed a real +10%
+    regression in 40/40 local trials where this caught 40/40. On a busy machine
+    the verdict is `skipped: machine busy`: no verdict, not a pass.
+  - **`acceptance.mjs`, `report.mjs`** — perf/security acceptance validation and
+    the delivery report, which is **assembled from the ledger and gate verdicts,
+    not written**, and shows each DoD item's enforcement class (H / M / S) so a
+    self-attested item cannot read as a verified one.
+  - **`config.mjs` + `declarations.mjs`** — the config screen (unknown parameters
+    refused, non-adaptive ones reported as ignored, out-of-band values clamped
+    and labelled) and the obligation declarations, which carry **no consumer
+    vocabulary** and are validated against the tests that enforce them.
+- **New commands:** `/asf rules [H|M|S|area]`, `/asf config`, `/asf gates`,
+  `/asf report [--checklist]`.
+- **`obligations.d/aia-asf.json`** — ASF's 17 standing obligations declared for
+  the loop guard, `source: "aia-asf"`, carried verbatim by the guard, which
+  never interprets it.
+- **`references/06k-performance.md`** — the measurement contract, CI-cheap vs
+  scheduled placement, load scenarios (including the arrival-model trap),
+  escalation, and the ASVS performance/resource overlap.
+- **5 new suites, 292 checks** (`test-gates`, `test-performance-gates`,
+  `test-config-screen`, `test-delivery-report`, `test-security-mapping`) on a
+  shared `test/gate-harness.mjs` that requires **a fire fixture and a near-miss
+  fixture for every gate**, and meta-asserts that gate count equals covered
+  gate count so a gate cannot be added and quietly left untested.
+
+### Changed
+
+- **06h is now pinned to real ASVS 5.0 numbering** (`v5.0.0_release`, V1–V17).
+  The previous chapter table had been written from memory and was wrong. ASF
+  does not maintain a second security checklist alongside ASVS, and one
+  abuse-case load run now satisfies both the security and performance DoD.
+- **06b gains Rules 21–23** (measurement contract, performance placement, gate
+  autonomy/negative-controls/budget) and four new DoD lines; the rule count in
+  `SKILL.md` is now asserted to *agree* with the heading count rather than to
+  equal a hardcoded number, which is what let the drift through.
+- **02-research.md gains T1/T2/T3 evidence classes.** Every shipped default
+  cites its class and source; a T3 value is never presented as a rule, and "a
+  default that cannot explain itself is a guess with better formatting".
+- **06d: a delegated verification prompt must carry its measurement contract**,
+  and a returned number without one is a claim, not a result.
+
+### Fixed
+
+- **`obligations.d/` was not in `package.json` `files`** — found by clean-room
+  verification, not by the suite. An installed ASF would have shipped the
+  enforcement code with no declarations for it to load, so `/asf rules` would
+  have reported an empty and perfectly green list.
+- **`assertSignalsExist` reported false drift in every consumer project.** It
+  ran against the installed package, which ships no `test/`, producing one
+  bogus failure per obligation. It now says once that the check was skipped
+  because this is not the declaring repo — and still fails hard where a `test/`
+  directory exists and a named file or assertion is genuinely missing.
+
 ## [0.12.2] - 2026-10-14
 
 ### Fixed

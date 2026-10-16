@@ -219,7 +219,10 @@ Keep the plan **implementation-ready**: any competent engineer (or agent) can ex
 > **Read on demand (only if they apply):** `references/06f-stability.md` if the
 > deliverable makes external calls; `references/06g-test-design.md` for the
 > test plan or non-trivial tests; `references/06h-security.md` if the
-> deliverable handles untrusted input, secrets, or agent-like tool surfaces.
+> deliverable handles untrusted input, secrets, or agent-like tool surfaces;
+> `references/06k-performance.md` if the spec contains a number, or the change
+> adds a query, a loop over a collection, a background job, a cache, or a
+> user-facing endpoint.
 
 Execute the task list milestone by milestone. Discipline rules:
 
@@ -249,6 +252,24 @@ Also check the **modularity DoD** from `references/06c-code-quality.md` (Phase 7
 Also check the **stability DoD** (`references/06f-stability.md`): if the deliverable makes external calls, it has timeouts and bounded retries (idempotent only). And the **security DoD** (`references/06h-security.md`): no secrets in the repo, no untrusted input reaches a shell/query/path unvalidated, no unbounded resource use on user-controlled input; for agent-like tool surfaces, every tool is least-privilege with an abuse-case test.
 
 Also check the **completeness DoD** (`references/06i-completeness.md`): no stub, placeholder, unimplemented path or fabricated data left on a user-reachable path (or declared to the user with the reason); every part of the ask reachable from where the user enters it, with the exercising command/request/action named in the delivery report; nothing asked for quietly moved to "later"; no claim presented as verified when it was not. `pi-vigilant` scans the changed files for these markers at completion — resolve every finding or explain it; a clean scan is not proof of completeness.
+
+Also check the **performance DoD** (`references/06k-performance.md`): every
+numeric claim in the spec carries its **measurement contract** (percentile, load,
+sample count, environment, lab-or-field — for throughput an arrival model and
+duration; for a regression, the statistical comparison, interleaving, raw samples
+and the observed CV). A bare number such as `p95 < 2s` is **reported as an
+incomplete claim, not accepted as a spec**. The CI-cheap tier (query-count
+tripwire, query-plan scan, one bounded scenario) ran per commit; the scheduled
+tier (scalability, stress, soak, resource ceiling) ran before release — and a run
+that did not happen is listed as not run, never omitted. The **abuse-case load
+run** against the most expensive endpoint untrusted input can reach runs **once**
+and is cited in both the security DoD and the performance DoD.
+
+Also check the **evidence and gate lines** of the DoD (06b Rule 10, P42/P45):
+`/asf gates` shows what the harness observed (suite runs, health verdict, browser
+verification or structured n/a) and what each gate charged. **`scanned: 0` is
+never a pass** — a check that examined nothing is reported as examined-nothing,
+and a gap stays visible as a gap rather than becoming a tick.
 
 Also check the **model DoD** (`references/06j-data-model.md`) when the change
 writes to a store: every relationship touched has a written ownership
@@ -297,6 +318,16 @@ conflicts). Record the review + triage in the delivery report.
 - ❌ `CASCADE` / delete-and-reinsert chosen because the store defaulted to it or the file above does it — a default and a precedent are both non-decisions (06j M1, M4)
 - ❌ Reporting a clean model scan as a passed check when the level scanned nothing, or trusting the scan where the store exposes no constraints to inspect — the scan is a tripwire; the invariant tests are the gate (06j §5)
 - ❌ Treating the model gate as about "projects that have a database schema" — the trigger is whether **this change writes to a store**, in any store (06b Rule 20)
+- ❌ Accepting `p95 < 2s` as a specification — a number without its load, sample count, environment and lab-or-field is an incomplete claim, and it is **reported**, not approved (06b Rule 21, 06k §2)
+- ❌ A ±% threshold as a regression verdict — a naive 15% gate missed a real 10% regression in 40 of 40 local trials; significance plus effect size caught all 40 (06k §4)
+- ❌ Reporting "no regression" from a benchmark run on a busy machine — there is no verdict there; the harness says `skipped: machine busy` and so must you (06k §4)
+- ❌ Closed-loop load presented as capacity — coordinated omission hides the overload region, which is the only region a capacity decision cares about (06k §2)
+- ❌ Putting the deep load scenarios in the per-commit path — they get switched off within a week and take the coverage that earned its place with them (06b Rule 22, 06k §3)
+- ❌ Reducing a performance target to the measured value and calling the spec met — that is deleting the specification, not meeting it (06k §6)
+- ❌ The agent signing its own `asf-perf-accept` or `asf-security-accept` — the party that missed the target cannot waive it (06k §6)
+- ❌ Shipping a gate with only a fire fixture — a gate that silently stops checking anything reports green forever unless a near-miss proves it can tell the difference (06b Rule 23)
+- ❌ Relaxing a failing near-miss test to make the suite pass — that is a bug in the gate, not a test to update (06b Rule 23)
+- ❌ Letting a project calibrate `bench.significance`, the interleaving rule, or raw-sample retention — those are what make a comparison valid, not tuning knobs (06b Rule 23, `/asf config`)
 - ❌ Vague commits or CHANGELOG placeholders
 - ❌ Declaring done while specs are still `open`
 - ❌ Publishing anything beyond the configured release policy — no `.asf-release.json` means the default: always get the user's explicit go-ahead
@@ -356,7 +387,7 @@ reads at most 06b + 06c; large work reads the ones its phase calls for.
 | `04-adversarial.md` | adversarial checklist (spec/architecture/data-model/security lenses) | Phase 4 (large) |
 | `05-plan.md` | PLAN.md template + ADRs + quality scenarios + ATAM-lite + views + ownership table | Phase 5 (large) |
 | `06-implementation.md` | coding discipline, M4/M5, drift self-correction (P20) | Phase 6 |
-| `06b-testing-qa.md` | **mandatory** testing & QA standard (20 rules + DoD) | before writing tests (always) |
+| `06b-testing-qa.md` | **mandatory** testing & QA standard (23 rules + DoD, incl. the measurement contract, performance placement and the gate rules) | before writing tests (always) |
 | `06c-code-quality.md` | **mandatory** modularity standard (9 rules, deep modules, smells) | before structuring code |
 | `06d-delegation.md` | intercom & subagents + independent reviewer gate (P19) | before delegating; Phase 7 review (large) |
 | `06e-code-health.md` | Code Health Gate (+ depth, supply-chain, secrets, model metrics) | Gate 8 (large) |
@@ -365,6 +396,7 @@ reads at most 06b + 06c; large work reads the ones its phase calls for.
 | `06h-security.md` | threat model, ASVS DoD, supply chain, agent tools | Phase 4/5 large; small = one line |
 | `06i-completeness.md` | **mandatory** no stubs / no fabricated data / no invented facts + completeness DoD | before implementing and before claiming done (always) |
 | `06j-data-model.md` | **mandatory when the work writes to a store** — ownership classes, model rules M1-M8, legitimate exceptions, invariant/non-effect tests + model DoD | before implementing any store write, and before claiming done |
+| `06k-performance.md` | **the measurement contract (Rule 21), CI-cheap vs scheduled placement (Rule 22), load scenarios, gate rules (Rule 23)** — one abuse-case run shared with 06h | any numeric claim in the spec, any new query/endpoint/loop/job; Phase 7 large |
 | `07-release.md` | release workflow + **configurable release policy** (`.asf-release.json`: when/how) + test-on-publish | before publishing |
 
 ## ASF self-modification policy (P22)
