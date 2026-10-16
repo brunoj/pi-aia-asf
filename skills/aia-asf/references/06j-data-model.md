@@ -182,13 +182,38 @@ requirement: "is this ownership correct?" is judgment and stays in review, while
 defect is not SQL-shaped: an instance inheriting its parent's lifecycle happens
 in a relational FK action, in an ORM mapping attribute, in a document store's
 delete dependency, in a key-value prefix wipe, or in a loop someone wrote to
-delete children by hand. The scan recognises a small illustrative set of those
-spellings and a project adds its own dialect with `model.extraCascadePatterns`
-rather than waiting for a release. **Where the store has no constraint to
-inspect, the scan has nothing to attach to and the invariant tests below are the
-only hard gate** — say which of the two you relied on, and if the scan reported
-`scanned: 0`, say that too. A clean scan means the tripwire caught nothing, not
-that the model is sound.
+delete children by hand. Three rules run:
+`undeclared-cascade` (a cascade declaration with no ownership declaration),
+`delete-then-reinsert` (rebuild-by-delete over one table or collection), and
+`handwritten-cascade` — the store-agnostic half, for stores that have **no
+constraint to declare the cascade in the first place**:
+
+| Store family | What the cascade looks like when nobody wrote it down |
+|---|---|
+| **MongoDB / Mongoose** | `deleteMany({ userId })` over a child collection — no FK action exists, so this code *is* the cascade |
+| **Firestore** | a recursive `collectionGroup` / subcollection delete; missing a nested subcollection is the standard failure |
+| **DynamoDB** | `DeleteItem` / `BatchWriteItem` driven by a parent key across tables; GSI/LSI are wiped with the table, items are not |
+| **CouchDB** | documents selected and marked `_deleted: true` in one `bulkDocs` |
+| **Redis** | a key-pattern wipe — `keys('session:<id>:*')` then `del`/`unlink`; the prefix *is* the parent |
+| **Elasticsearch** | `deleteByQuery` on a parent field; no referential integrity exists to fall back on |
+
+ORM-level declarations are matched too — `CascadeType.REMOVE`/`ALL`,
+`orphanRemoval = true`, `DeleteBehavior.Cascade`, `onDelete: Cascade`
+(Prisma/Sequelize), `on_delete=models.CASCADE` (Django),
+`dependent: :destroy` / `:delete_all` (Rails), `cascade = "…delete…"`
+(SQLAlchemy) — so the gate is not SQL DDL only.
+
+A fire here asks for a **declaration**; it does not claim the ownership is
+wrong, which stays a judgement in review. A delete of a row by its own identity
+(`deleteOne({ _id: id })`) is not a cascade and does not fire — a rule that
+fires on ordinary deletes gets switched off, and the coverage goes with it.
+Projects add dialects with `model.extraCascadePatterns` and
+`model.extraHandWrittenPatterns` rather than waiting for a release.
+
+**Where the store has no constraint to inspect, the scan has nothing to attach
+to and the invariant tests below are the only hard gate** — say which of the two
+you relied on, and if the scan reported `scanned: 0`, say that too. A clean scan
+means the tripwire caught nothing, not that the model is sound.
 
 **Invariant and non-effect tests** — [06g-test-design.md](06g-test-design.md) §3:
 survival tests, non-effect assertions, zero-row invariant queries, two-user

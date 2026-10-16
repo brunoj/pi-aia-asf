@@ -89,13 +89,58 @@ export async function run({ extDir }) {
   }
 
   {
-    // There is no constraint here to inspect. The invariant tests (06g §3) are
-    // the gate for this shape — asserting the gap keeps it from being forgotten.
+    // This was the documented gap; it is now closed. In a store with no
+    // constraint to inspect, the hand-written cascade IS the ownership
+    // decision, and the scan can see its shape.
     const f = scan(
       'repositories/actions.ts',
       'import { Collection } from "mongodb";\nasync function wipe(ids) {\n  await db.collection("org_action_items").deleteMany({ question_id: { $in: ids } });\n  await db.collection("checklist_questions").deleteMany({ template_id: { $in: ids } });\n}\n',
     );
-    chk('DOCUMENTED GAP: a hand-rolled document-store cascade is not caught (invariant tests carry it)', !rulesOf(f).includes('undeclared-cascade'));
+    chk('the hand-rolled document-store cascade that ate the production data is caught', f.length >= 1 && rulesOf(f).includes('handwritten-cascade'), f.map((x) => x.rule).join(','));
+    chk('and it names the store family so the report says what it looked at', f.every((x) => !x.store || x.store === 'document'), f.map((x) => x.store).join(','));
+    chk('the finding points at the declaration that would satisfy it', /asf-model:/.test(f[0].message) && /asf-model-accept/.test(f[0].message));
+
+    // The near-miss side of the same shape: a delete of a row by its OWN
+    // identity is not a cascade, and must not fire — otherwise every Mongo
+    // project drowns in findings and the rule gets switched off.
+    const own = scan('repositories/users.ts', 'await db.collection("users").deleteOne({ _id: id });\n');
+    chk('deleting a row by its own id is NOT a cascade (near-miss)', !rulesOf(own).includes('handwritten-cascade'), own.map((x) => x.rule).join(','));
+    const declared = scan('repositories/orders.ts', '// asf-model: orders -> users = instance, owner: users\nawait db.collection("orders").deleteMany({ userId });\n');
+    chk('a DECLARED hand-written cascade is satisfied (near-miss)', !rulesOf(declared).includes('handwritten-cascade'), declared.map((x) => x.rule).join(','));
+    const notDelete = scan('repositories/orders.ts', 'await db.collection("orders").updateMany({ userId }, { $set: { archived: true } });\n');
+    chk('an updateMany by reference is not a cascade (near-miss)', !rulesOf(notDelete).includes('handwritten-cascade'));
+  }
+
+  {
+    // Store-agnostic by name, not by aspiration (06j §5): the dialects the
+    // standard commits to recognising, each with a fixture that must fire.
+    const dialects = [
+      ['MongoDB', 'document', 'await db.collection("orders").deleteMany({ userId });\n'],
+      ['Firestore', 'document', 'const kids = db.collectionGroup("comments").where("postId", "==", id);\nkids.get().then(s => s.forEach(d => d.ref.delete()));\n'],
+      ['DynamoDB', 'wide-column', 'await docClient.deleteItem({ TableName: "Orders", Key: { orderId: id, customerId: cust } }).promise();\n'],
+      ['CouchDB', 'document', 'const docs = rows.map(r => Object.assign(r, { _deleted: true }));\nawait db.bulkDocs(docs);\n'],
+      ['Redis', 'key-value', "const keys = await redis.keys('session:' + userId + ':*');\nawait redis.del(...keys);\n"],
+      ['Elasticsearch', 'search', "await client.deleteByQuery({ index: 'comments', body: { query: { term: { postId: id } } } });\n"],
+    ];
+    for (const [name, store, src] of dialects) {
+      const f = scan('repositories/x.ts', src);
+      chk(`${name}: a hand-written cascade is caught (${store})`, rulesOf(f).includes('handwritten-cascade'), f.map((x) => x.rule).join(','));
+    }
+    // And the near-miss side for each family that could over-fire.
+    const nearMisses = [
+      ['Redis plain del of one known key', "await redis.del('cache:feed');\n"],
+      ['Firestore query on a plain field', "const q = db.collection('users').where('name', '==', 'x');\n"],
+      ['CouchDB bulk insert', 'await db.bulkDocs(newDocs);\n'],
+      ['ES delete-by-query on a non-reference', "await client.deleteByQuery({ index: 'logs', body: { query: { term: { level: 'debug' } } } });\n"],
+      ['DynamoDB point read', 'await docClient.get({ TableName: "Orders", Key: { orderId } }).promise();\n'],
+    ];
+    for (const [name, src] of nearMisses) {
+      const f = scan('repositories/x.ts', src);
+      chk(`near-miss stays clean: ${name}`, !rulesOf(f).includes('handwritten-cascade'), f.map((x) => x.rule).join(','));
+    }
+    chk('the rule is switchable off like the others', !rulesOf(scan('repositories/x.ts', 'await db.collection("orders").deleteMany({ userId });\n', { handWrittenCascade: false })).includes('handwritten-cascade'));
+    chk('a project can add its own dialect', rulesOf(scan('repositories/x.ts', 'await store.purgeWhere({ ownerId: o });\n', { extraHandWrittenPatterns: ['purgeWhere'] })).includes('handwritten-cascade'));
+    chk('an invalid project pattern is dropped, not a crash', (() => { try { scan('repositories/x.ts', 'await store.purgeWhere({ ownerId: o });\n', { extraHandWrittenPatterns: ['('] }); return true; } catch { return false; } })());
   }
 
   {
@@ -161,7 +206,7 @@ export async function run({ extDir }) {
     chk('hasPersistenceFiles recognises schemas and dialects', hasPersistenceFiles(['db/schema.sql']) && hasPersistenceFiles(['prisma/schema.prisma']) && hasPersistenceFiles(['app/models/user.rb']) && hasPersistenceFiles(['src/repositories/items.ts']));
     chk('hasPersistenceFiles says no for a pure app', !hasPersistenceFiles(['src/app.ts', 'README.md']));
     chk('isModelRelevant covers source, DSLs and SQL', ['a.sql', 'prisma/schema.prisma', 'm.ts', 'models/x.py', 'Order.java', 'x.rb'].every(isModelRelevant) && !isModelRelevant('README.md'));
-    chk('only the two rules exist — no heuristics crept back in', MODEL_RULES.join(',') === 'undeclared-cascade,delete-then-reinsert', MODEL_RULES.join(','));
+    chk('only the three rules exist — no heuristics crept back in', MODEL_RULES.join(',') === 'undeclared-cascade,delete-then-reinsert,handwritten-cascade', MODEL_RULES.join(','));
 
     // The claim that matters: does it actually fail a build?
     const gdir = fs.mkdtempSync(path.join(os.tmpdir(), 'asf-model-gate-'));

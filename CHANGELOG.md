@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **The model gate is now store-agnostic in fact, not just in intent.** It knew
+  SQL DDL and ORM cascade spellings and nothing else, so in a document, key-value,
+  wide-column or search store — where there is no constraint to declare a cascade
+  in — the gate was blind to the exact defect it exists to catch. A third rule,
+  `handwritten-cascade`, catches the cascade that exists only as code someone
+  wrote: a multi-delete driven by a reference to *another* entity.
+  - Covered by name: **MongoDB/Mongoose** (`deleteMany({ userId })`, including
+    ES6 shorthand), **Firestore** (`collectionGroup` / recursive subcollection
+    delete, where the field name is an argument, not a key), **DynamoDB**
+    (`DeleteItem` / `BatchWriteItem` keyed by a parent), **CouchDB** (`_deleted:
+    true` in a `bulkDocs`), **Redis** (the key-pattern wipe — the prefix *is* the
+    parent), **Elasticsearch** (`deleteByQuery` on a parent field). ORM
+    declarations were already matched: `CascadeType.REMOVE`/`ALL`,
+    `orphanRemoval`, `DeleteBehavior.Cascade`, Prisma/Sequelize `onDelete:
+    Cascade`, Django `on_delete=models.CASCADE`, Rails `dependent: :destroy` /
+    `:delete_all`, SQLAlchemy `cascade = "…delete…"`.
+  - **Near-miss fixtures guard the false-positive side**, because a rule that
+    fires on ordinary deletes gets switched off and the coverage goes with it:
+    deleting a row by its own identity, `updateMany` by reference, a Redis `del`
+    of one known key, a Firestore query on a plain field, a CouchDB bulk insert,
+    an ES delete-by-query on a non-reference, a DynamoDB point read — all clean.
+  - A fire asks for a **declaration**, it does not claim the ownership is wrong;
+    `model.handWrittenCascade: false` switches it off and
+    `model.extraHandWrittenPatterns` adds a project's own dialect (an invalid
+    regex is dropped, never fatal).
+  - `test-model-gate.mjs` grew from 73 to **92 checks**, and the assertion that
+    recorded this as a *documented gap* ("a hand-rolled document-store cascade is
+    not caught — invariant tests carry it") is now inverted to assert it **is**
+    caught. The production shape that started this — `deleteMany({ question_id:
+    { $in: ids } })` over a child collection — is the fixture.
+
 ## [0.13.1] - 2026-10-16
 
 ### Fixed
