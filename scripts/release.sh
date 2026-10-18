@@ -69,6 +69,64 @@ git push --follow-tags
 git push origin "$NEW_VERSION"
 npm publish
 
+# Gate: the publish actually landed. `npm publish` exits 0 when npm ACCEPTS the
+# upload; npm can then hold the version in its staging queue for minutes, during
+# which the packument may not list it and the tarball is not installable. Without
+# this poll the script printed "✅ Released" for a version nobody could install.
+echo "── gate: publish landed ─────────────────────────────────────"
+PKG_NAME=$(node -p "require('./package.json').name")
+node - "$PKG_NAME" "${NEW_VERSION#v}" <<'EOF' || exit 1
+const [name, version] = process.argv.slice(2);
+const tarball = `https://registry.npmjs.org/${encodeURIComponent(name)}/-/${name}-${version}.tgz`;
+const url = `https://registry.npmjs.org/${encodeURIComponent(name)}?t=${Date.now()}`;
+// npm routinely holds a fresh publish in staging for several minutes; a narrow
+// window calls real releases INCOMPLETE and trains people to ignore the gate.
+const DEADLINE = Date.now() + 480_000;
+const landed = async () => {
+  try {
+    const res = await fetch(url, { headers: { "Cache-Control": "no-cache" } });
+    if (!res.ok) return false;
+    const doc = await res.json();
+    if (!doc.versions?.[version]) return false;
+    // Listing the version is not enough — an install needs the bytes.
+    const t = await fetch(tarball, { method: "HEAD" });
+    return t.ok;
+  } catch {
+    return false;
+  }
+};
+(async () => {
+  while (Date.now() < DEADLINE) {
+    if (await landed()) {
+      console.log(`published: ${name}@${version} is installable from the registry`);
+      return;
+    }
+    await new Promise((r) => setTimeout(r, 5_000));
+  }
+  console.error(
+    `release INCOMPLETE: ${name}@${version} is not installable after 8 minutes.\n` +
+      `npm most likely holds it in its staging queue (security review), or rejected it.\n` +
+      `The git tag exists but nobody can install this version — check\n` +
+      `https://www.npmjs.com/package/${name} and the security-holds page, then\n` +
+      `re-publish (a still-staged version cannot be re-published: it 409s).`,
+  );
+  process.exit(1);
+})();
+EOF
+
+# Gate: the PUBLISHED artifact. Every gate above reads the working tree, which is how
+# a package ships a tarball missing a module its own entry point imports with a green
+# suite (pi-aia-browser 0.2.1). This installs the version from the registry into a
+# throwaway prefix, imports the installed extension and requires the skill and the
+# declared obligations to be present in the installed copy.
+if [ "${BMX_SKIP_PUBLISHED_VERIFY:-}" != "1" ]; then
+  echo "── gate: published artifact verified ─────────────────────"
+  node scripts/verify-published.mjs "${NEW_VERSION#v}" || {
+    echo "release INCOMPLETE: ${NEW_VERSION} is on the registry but the installed artifact does not load" >&2
+    exit 1
+  }
+fi
+
 echo ""
 echo "✅ Released $OLD_VERSION → $NEW_VERSION"
 echo "   Tag:   $NEW_VERSION"

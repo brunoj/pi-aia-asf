@@ -34,7 +34,8 @@
     "build": "echo 'nothing to build — pi loads .ts via jiti at runtime'",
     "check": "./scripts/typecheck.sh",
     "test": "./test/run-all.sh",
-    "release": "./scripts/release.sh"
+    "release": "./scripts/release.sh",
+    "verify:published": "node scripts/verify-published.mjs"
   },
   "pi": {
     "extensions": [

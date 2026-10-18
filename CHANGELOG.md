@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.5] - 2026-10-18
+
+### Added
+
+- **`test/test-packaging.mjs` — the artifact gate.** Checks the **packed** file set
+  rather than the working tree: `index.ts`, the `skills/aia-asf` skill, its normative
+  reference files, the `lib/` modules and the declared `obligations.d/` all really ship;
+  every entry `files` allowlists is present in the tarball; `pi.extensions` and
+  `pi.skills` point at entries that ship; and no relative import inside the artifact
+  points outside it. Nothing could previously see a broken `files` allowlist —
+  typecheck reads source files, the suite imports from disk, and `npm publish` only
+  reports that the upload was accepted. An ASF release whose skill did not ship is an
+  empty deliverable that installs without error.
+- **`scripts/verify-published.mjs` — post-publish verification of the published bytes.**
+  Installs the just-published version **from the registry** into a throwaway prefix
+  (with the peer deps the pi host provides), imports the installed extension, requires
+  its default export to be the activate function, and requires the skill and
+  `obligations.d/` to be present in the installed copy. Reachable as
+  `npm run verify:published`; `BMX_SKIP_PUBLISHED_VERIFY=1` skips it in the release.
+- **`scripts/release.sh` now gates instead of announcing.** It used to print
+  "✅ Released" on the strength of `npm publish`'s exit code alone. It now polls the
+  registry until the version is listed **and its tarball is fetchable**, then runs the
+  published-artifact verification, and exits non-zero if either fails.
+
+### Notes
+
+- The import resolver in the artifact gate follows the ESM declaration convention, so a
+  `.d.mts` file naming its sibling as `./x.d.mjs` is not reported as a missing module
+  (`lib/gates/` ships `.mts` + `.d.mts` pairs).
+
 ## [0.13.4] - 2026-10-16
 
 ### Fixed
