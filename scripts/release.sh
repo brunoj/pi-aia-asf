@@ -81,7 +81,8 @@ const tarball = `https://registry.npmjs.org/${encodeURIComponent(name)}/-/${name
 const url = `https://registry.npmjs.org/${encodeURIComponent(name)}?t=${Date.now()}`;
 // npm routinely holds a fresh publish in staging for several minutes; a narrow
 // window calls real releases INCOMPLETE and trains people to ignore the gate.
-const DEADLINE = Date.now() + 480_000;
+const DEADLINE = Date.now() + 1_200_000;
+const START = Date.now();
 const landed = async () => {
   try {
     const res = await fetch(url, { headers: { "Cache-Control": "no-cache" } });
@@ -96,15 +97,19 @@ const landed = async () => {
   }
 };
 (async () => {
+  let attempt = 0;
   while (Date.now() < DEADLINE) {
+    attempt++;
     if (await landed()) {
       console.log(`published: ${name}@${version} is installable from the registry`);
       return;
     }
+    // Say something while waiting: a silent 20 minutes looks like a hung script.
+    if (attempt % 6 === 0) console.log(`  waiting for npm to serve ${name}@${version} — ${Math.round((Date.now() - START) / 1000)}s`);
     await new Promise((r) => setTimeout(r, 5_000));
   }
   console.error(
-    `release INCOMPLETE: ${name}@${version} is not installable after 8 minutes.\n` +
+    `release INCOMPLETE: ${name}@${version} is not installable after 20 minutes.\n` +
       `npm most likely holds it in its staging queue (security review), or rejected it.\n` +
       `The git tag exists but nobody can install this version — check\n` +
       `https://www.npmjs.com/package/${name} and the security-holds page, then\n` +
