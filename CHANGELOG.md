@@ -7,6 +7,66 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Zero-context reviewer pass** (Phase 4 and Phase 7, large work): six read-only reviewer
+  personas in `skills/aia-asf/agents/` (`design-critic`, `codebase-fitness`, `zoom-out`,
+  `comprehension`, `implementation-readiness`, `structural`) plus a `synthesizer`, each
+  invoked separately, each answering in a fixed finding format (`Blocker | Major | Nit`,
+  scope, rationale, recommendation), critique-first and cite-or-abstain. Reviewers are
+  given the artifact and the acceptance criteria only — never the conversation that
+  produced it.
+- `lib/review.mjs` — the review guards as code rather than as prose: citation verification
+  (a report whose cited file or line range does not resolve is recorded `not run`, **never**
+  "zero findings"), the per-reviewer status table, the finding schema with dedup and
+  severity ordering, and A/B duplication permitted only at the blocker boundary. The
+  citation guard exists because a read-only subagent was observed reporting a confident
+  reading of a file that was never asked for, and exiting 0.
+- `lib/parallel-estimate.mjs` — the serial/parallel decision computed from file ownership,
+  interface ownership, dependency cycles, serial cost and a bounded schedule. Parallel
+  requires no conflicts, at least 3 fully independent packages and a speed-up of 1.3×; a
+  job under 30 serial minutes is refused outright, and a refusal is a recorded decision
+  rather than an omission. Also carries the P47 switch (`readParallelSwitch`: default OFF,
+  `ASF_PARALLEL=1` for one run that does not persist) and the join contract: one lane, the
+  full suite after the rebase, no merge conflict resolved by a model, no thread resolving
+  its own ticket.
+- `lib/gates/drift.mjs` — task-scoped drift: the claims this task's own artifacts make
+  about files and symbols are resolved against the code. `no-claims` and `no-artifacts`
+  are reported as examined-nothing, never as clean, and only a stale claim blocks.
+- `scripts/audit-docs.mjs` — ASF audits its own normative content: relative links, anchors,
+  index/directory agreement, routing ("Read when" or an index row) and frontmatter.
+- `lib/skill-budget.mjs` + `test/test-skill-budget.mjs` — an always-read byte ceiling with a
+  rule-preservation check: procedure, tables and examples may move out of the always-read
+  files; a rule statement may not, and a split that drops one fails the suite.
+- `references/06m-antipatterns.md` (the complete forbidden list, with a short always-read
+  floor left in `SKILL.md`) and `references/06b-appendix.md` (the Rule 9 browser procedure
+  and Rule 15 enforcement-class detail).
+- `references/05-plan.md` — a work-package table (files owned, interfaces needed and
+  provided, depends on, estimated minutes) and a required parallel verdict with its reason,
+  recorded even when the answer is serial.
+- Rebuilt `test/test-antipatterns.mjs`, `test/test-parallel-switch.mjs` and
+  `test/test-operator-surface.mjs` — these had been in the working tree, were never
+  committed, and are gone; they are rewritten against the modules they guard. Added
+  `test/test-review-guards.mjs`, `test/test-docs-integrity.mjs`,
+  `test/test-skill-budget.mjs`, and task-scoped drift coverage in
+  `test/test-improvements.mjs`. Every new guard ships with a control that must fail.
+
+### Changed
+
+- The always-read set is 74,777 bytes across `SKILL.md` and the three mandatory references,
+  down from 88,515 (−15.5%), with the per-file ceilings and their reasons recorded in
+  `lib/skill-budget.mjs` rather than as a bare number. `SKILL.md` itself went 36,931 →
+  25,689 bytes; the reduction is duplicated procedure and the forbidden list, not rules.
+- Phase 5 presents `PLAN.md` as an artifact (path plus decision summary) instead of pasting
+  the plan into chat; Phase 4 now states a reviewer budget (6 reviewers, 2 re-audits, 3
+  concurrent, stop and report at 6× the serial token estimate) so thoroughness is bounded
+  without being thin.
+
+### Fixed
+
+- `references/06k-performance.md` linked to a research document that is not in the package —
+  a dangling link that no test could see until the doc audit was added.
+
 ## [0.13.5] - 2026-10-18
 
 ### Added
