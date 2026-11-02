@@ -20,6 +20,7 @@ export async function run({ extDir }) {
   const tq = fs.readFileSync(path.join(base, 'references', '06b-testing-qa.md'), 'utf8');
   const impl = fs.readFileSync(path.join(base, 'references', '06-implementation.md'), 'utf8');
   const skill = fs.readFileSync(path.join(base, 'SKILL.md'), 'utf8');
+  const anti = fs.readFileSync(path.join(base, 'references', '06m-antipatterns.md'), 'utf8');
 
   console.log('=== 1. Rule 19 exists and states the certainty-gated design ===');
   chk('Rule 19 heading present', tq.includes('## Rule 19 — Test selection for the inner loop'));
@@ -65,8 +66,8 @@ export async function run({ extDir }) {
     const n = (tq.match(/^## Rule \d+ —/gm) || []).length; // tq = 06b text
     chk(`index rule count matches 06b headings (${n})`, skill.includes(`${n} rules + DoD`));
   }
-  chk('anti-pattern: subset without impact statement', skill.includes('without a stated impact statement'));
-  chk('anti-pattern: subset satisfying the DoD checkbox', skill.includes('satisfying the Rule 10 full-suite checkbox'));
+  chk('anti-pattern: subset without impact statement', anti.includes('without a stated impact statement'));
+  chk('anti-pattern: subset satisfying the DoD checkbox', anti.includes('satisfying the Rule 10 full-suite checkbox'));
 
   console.log(`\n  PASS: ${pass}  FAIL: ${fail}`);
   return fail === 0;

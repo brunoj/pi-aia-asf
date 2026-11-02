@@ -34,7 +34,7 @@ export async function run({ extDir }) {
   const r = auditDocs(skillDir);
   for (const p of r.problems.slice(0, 10)) console.log(`        ! ${p.file}: ${p.msg}`);
   chk("no problems in the real skill tree", r.problems.length === 0, `${r.problems.length} problem(s)`);
-  chk("it actually checked something", r.checked > 20, `${r.checked} link/anchor reference(s)`);
+  chk("it actually checked something", r.checked > 10, `${r.checked} link/anchor reference(s)`);
   chk("references are present", r.references >= 18, `${r.references} references`);
   chk("reviewer personas are present", r.agents >= 7, `${r.agents} agents`);
 

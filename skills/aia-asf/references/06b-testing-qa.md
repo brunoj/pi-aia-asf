@@ -223,7 +223,7 @@ done — the wiring may be dead.
   not a wait to endure. If you cannot verify something within a bounded time,
   say so explicitly (Rule 11) instead of waiting indefinitely.
 
-Every waiting call carries its own explicit timeout — the per-call bound is set by a stated expected duration with headroom, never by the ceiling. The list of what counts as a waiting call is in `06b-appendix.md` §`The absolute ceiling`.
+Every waiting call carries its own explicit timeout — the per-call bound is set by a stated expected duration with headroom, never by the ceiling. A waiting call is anything that blocks on the system: a shell command, a network request, a browser action, a subagent or thread, a CI job, a lock, a sleep in a retry loop.
 
 
 ## The absolute ceiling

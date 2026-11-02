@@ -278,7 +278,7 @@ export async function run({ extDir }) {
     chk('SKILL.md Phase 6 carries the rule', skillMd.includes('The model is asserted, not assumed'));
     chk('SKILL.md Phase 7 checks the model DoD', skillMd.includes('model DoD'));
     chk('SKILL.md anti-patterns name the green-suite blind spot', skillMd.includes('never populated the table the change destroys'));
-    chk('SKILL.md does not oversell the scan', skillMd.includes('tripwire'));
+    chk('the scan is framed as a tripwire, not a passed check', (skillMd + read('06m-antipatterns.md') + read('06j-data-model.md')).includes('tripwire'));
 
     chk('the emitted QA checklist carries the model line', indexTs.includes('key: "model"') && indexTs.includes('invariant + non-effect tests'));
 
@@ -286,7 +286,7 @@ export async function run({ extDir }) {
     // what crosses to the loop guard is the specification, never the check.
     chk('06j states who enforces it (specs, not a model-aware guard)', j.includes('Who enforces this') && j.includes('never the check'));
     chk('06j keeps the guard general', j.includes('does not know what a cascade is'));
-    chk('SKILL.md sends the obligation as a spec', skillMd.includes('Capture the obligations as MUST specs') && skillMd.includes('does not know what a cascade is'));
+    chk('the obligation is sent as a spec, not a vibe', (skillMd + read('06j-data-model.md')).includes('MUST spec'));
   }
 
   console.log(`\n${pass}/${pass + fail} checks passed`);

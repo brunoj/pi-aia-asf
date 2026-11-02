@@ -43,5 +43,5 @@ export async function run({ extDir }) {
   chk("the estimator imports no plugin", !/pi-intercom|subagent/i.test(lib), "stays install-safe without one");
   chk("SKILL.md states the default is OFF", /Parallel threads \(config switch, default OFF\)/.test(skill));
   chk("06d routes the decision through the estimator", deleg.includes("lib/parallel-estimate.mjs"));
-  chk("06d states the default", deleg.includes("`parallel.enabled` is **off by default**"));
+  chk("06d states the default", /`parallel\.enabled` is off by default/.test(deleg));
 }

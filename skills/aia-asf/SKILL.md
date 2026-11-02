@@ -188,6 +188,10 @@ writing the plan.
 
 Keep the plan **implementation-ready**: any competent engineer (or agent) can execute the task list without re-deriving decisions.
 
+**Parallel threads (config switch, default OFF)** — spawn only when the estimator in
+`06d-delegation.md` says the work is genuinely independent; the default is single-agent,
+and a decision *not* to parallelise is recorded in the plan rather than left implicit.
+
 **Gate 5 — MANDATORY user approval (large only)**: present the plan and ask explicitly:
 > "Plan ready. Do you approve starting implementation? (yes / changes needed)"
 
@@ -201,10 +205,8 @@ Keep the plan **implementation-ready**: any competent engineer (or agent) can ex
 > routing: `references/06b-testing-qa.md` (the QA standard: test the shipped artifact,
 > assert the observable end state, probe for silent failures, read the actual error,
 > verify clean-room, regression-test every fix) · `references/06c-code-quality.md`
-> (small modules, SSOT, no hardcoding, testable outside the host — **Documents are code
-> too** per Rule 9: when a document outgrows editability, split it and keep the parent
-> as index) · `references/06i-completeness.md`: **Read `references/06i-completeness.md`
-> before implementing** and again before claiming done — ship the real thing or say what
+> (small modules, SSOT, no hardcoding, testable outside the host — **Documents are code too** (06c Rule 9): when a document outgrows editability, split it and keep the parent
+> as index) · **Read `references/06i-completeness.md` before implementing** and again before claiming done — ship the real thing or say what
 > is not real · `references/06d-delegation.md` (before delegating).
 >
 > **Read on demand (only if they apply):** `06f-stability.md` external calls · `06g-test-design.md` non-trivial
@@ -219,7 +221,7 @@ the gate condition; the standard lives in the reference named on each line:
 2. **Codebase isolation** — only this project's files, unless the user explicitly says otherwise; if a change would touch another repo, stop and ask.
 3. **No scope creep** — a new discovery that changes specs gets captured, asked about, and the plan updated *before* implementing.
 4. **Descriptive commits** — `type: what and why`. No vague messages, no placeholders.
-5. **Browser testing is mandatory for every interface the change TOUCHES, in the build** — the trigger is *can this change reach a rendered surface*, not whether the project has a UI; exercise it through `pi-aia-browser` before committing that change, and report page + action + assertion, or `n/a` with a reason; if the browser tool is unavailable, **say so rather than letting it read as passed** (06b Rule 9).
+5. **Browser testing is mandatory for every interface the change TOUCHES, in the build** — the trigger is *can this change reach a rendered surface*, not whether the project has a UI — **uncertain whether it reaches a surface? Then it is touched**, the cheap direction to be wrong being the safe one; exercise it through `pi-aia-browser` before committing that change, and report page + action + assertion, or `n/a` with a reason; if the browser tool is unavailable, **say so rather than letting it read as passed** (06b Rule 9).
 6. **Bounded waits — ALWAYS (06b Rule 15)** — every call that waits on the system gets an explicit hard timeout sized to a stated expected duration; absolute ceiling 30 min (1800s), waivable only for a **single run** stated beforehand with a reason, and the waiver **does not persist** — it resets immediately after that run; hitting the ceiling is a bug signal to diagnose, not patience. A 50,000-second hang is a failure to investigate.
 7. **Let pi-vigilant do its job** — when it asks for `update_spec_status` with evidence, provide it.
 8. **CHANGELOG discipline** — every user-visible change gets an entry saying what changed; no placeholder text.
@@ -240,9 +242,10 @@ reference named on it:
   nothing is reported as examined-nothing, and a gap stays a gap instead of a tick.
 - **Modularity DoD** (06c) — no duplicated shared logic, no hardcoded config, every
   module tested standalone with the calls it gets in the host, architecture writeup
-  exists, existing functionality still green. **Documents too (06c Rule 9)**: no document
-  so large that editing it is fragile — if one you worked on started causing edit
-  failures or truncation, it was split by topic with the parent kept as index.
+  exists, existing functionality still green, **every delivered feature consumed by a
+  real surface (UI or API) — nothing shipped dead**. **Documents too (06c Rule 9)**: no
+  document so large that editing it is fragile — if one you worked on started causing
+  edit failures or truncation, it was split by topic with the parent kept as index.
 - **stability DoD** (06f) — external calls have timeouts and bounded retries, idempotent only.
 - **security DoD** (06h) — no secrets in the repo, no unvalidated input reaching a
   shell/query/path, no unbounded resource use on user input; every agent-like tool
@@ -250,13 +253,12 @@ reference named on it:
 - **Completeness DoD** (06i) — no stub, placeholder or fabricated data on a
   user-reachable path unless declared; every part of the ask reachable from where the
   user enters it, with the exercising command named; nothing quietly moved to later.
-- **Performance DoD** (06k) — every numeric claim carries its measurement contract
-  (percentile, load, samples, environment, lab-or-field); a bare `p95 < 2s` is
-  **reported as an incomplete claim, not accepted**; the CI-cheap tier ran per commit,
-  the scheduled tier before release, and a run that did not happen is listed as not run.
-- **Model DoD** (06j) — when the change writes to a store: written ownership
-  declaration per relationship, invariant and non-effect tests green, `/asf health'
-  model level passing or its findings accepted with a reason.
+- **Performance DoD** (06k) — every numeric claim carries its measurement contract or is
+  **reported as an incomplete claim, not accepted**; the CI-cheap tier ran per commit, the
+  scheduled tier before release, and a run that did not happen is listed as not run.
+- **Model DoD** (06j) — when the change writes to a store: the ownership declaration and
+  invariant/non-effect tests are green, and `/asf health`' model level passes or its
+  findings are accepted with a reason.
 - **Traceability (M1, large work)** — `/asf verify` validates the spec-to-code matrix:
   every `met` spec carries outcome → codePath → testFile + assertion, the file exists,
   the assertion appears in it. FAIL rows block delivery. Ingested specs from external

@@ -14,7 +14,7 @@
 Sources are marked **T1** (fetched and read), **T2** (measured locally, in this
 repo), **T3** (reasoned, not verified). See
 [02-research.md](02-research.md) and
-[docs/research/performance-gates.md](../../../docs/research/performance-gates.md).
+the measurement research behind Rules 21-22, kept with the research artifacts and not shipped in the package.
 
 ---
 

@@ -20,9 +20,12 @@ const chk = (name, cond, detail) => {
 export async function run({ extDir }) {
   const base = path.join(extDir, 'skills', 'aia-asf');
   const read = (f) => fs.readFileSync(path.join(base, 'references', f), 'utf8');
-  const tq = read('06b-testing-qa.md');
+  // The rule statement lives in 06b; its procedure moved to the appendix (the 06c Rule 9
+  // split). They are one standard, so the suite reads them as one corpus.
+  const tq = read('06b-testing-qa.md') + '\n' + read('06b-appendix.md');
   const impl = read('06-implementation.md');
   const skill = fs.readFileSync(path.join(base, 'SKILL.md'), 'utf8');
+  const anti = fs.readFileSync(path.join(base, 'references', '06m-antipatterns.md'), 'utf8');
   const index = fs.readFileSync(path.join(extDir, 'index.ts'), 'utf8');
 
   console.log('=== 1. Rule 9 trigger is change-level, not deliverable-level ===');
@@ -80,12 +83,12 @@ export async function run({ extDir }) {
 
   console.log('=== 8. SKILL.md Phase 6 rule 5 + anti-patterns ===');
   chk('rule 5 trigger is touched, in the build',
-    skill.includes('MANDATORY for every interface the change TOUCHES, in the build (06b Rule 9)'));
+    /mandatory for every interface the change TOUCHES, in the build/i.test(skill));
   chk('rule 5 poses reachability question', skill.includes('can this change reach a rendered surface'));
-  chk('rule 5 carries the uncertainty default', skill.includes('Uncertain whether it reaches a surface? Then it is touched'));
-  chk('anti-pattern: deliverable-level framing', skill.includes('Treating browser testing as about "projects that have a UI"'));
-  chk('anti-pattern: deferring to final verification', skill.includes('Deferring browser verification of a touched interface to final verification'));
-  chk('anti-pattern: "only a backend change"', skill.includes('"It\'s only a backend change" with no render path named'));
+  chk('rule 5 carries the uncertainty default', /uncertain whether it reaches a surface\? then it is touched/i.test(skill));
+  chk('anti-pattern: deliverable-level framing', anti.includes('Treating browser testing as about "projects that have a UI"'));
+  chk('anti-pattern: deferring to final verification', anti.includes('Deferring browser verification of a touched interface to final verification'));
+  chk('anti-pattern: "only a backend change"', anti.includes('"It\'s only a backend change" with no render path named'));
   chk('anti-pattern: bare "browser tested"', skill.includes('Reporting "browser tested" without the page, action and assertion'));
 
   console.log('=== 9. /asf verify checklist has teeth (index.ts QA_CHECKLIST) ===');

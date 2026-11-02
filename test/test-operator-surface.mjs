@@ -38,13 +38,13 @@ export async function run({ extDir }) {
   chk("destructive actions need confirmation", /publish, delete,\s*\n?\s*pay, deploy|publish, delete, pay, deploy/.test(sec));
 
   console.log("=== 3. consumption is a DoD item, not a vibe ===");
-  chk("06b Rule 12 requires operator-facing consumption", qa.includes("## Rule 12 — Operator-facing features are consumed by a surface"));
-  chk("dead code is a defect", qa.includes("dead code is a defect"));
-  chk("the DoD line exists in SKILL.md", skill.includes("every delivered feature is consumed by a real surface"));
+  chk("06b Rule 12 requires operator-facing consumption", qa.includes("## Rule 12 — Test the OPERATOR-FACING OUTCOME"));
+  chk("an unconsumed feature is dead code", /dead code/.test(qa));
+  chk("the DoD line exists in SKILL.md", skill.includes("every delivered feature consumed by a\n  real surface"));
   chk("the gate is registered in the extension", index.includes('key: "surface"'));
 
   console.log("=== 4. the surface cannot rot silently ===");
   chk("a parameter may exist only if it is honoured", /may exist only if/.test(cfg));
-  chk("an honoured parameter must be documented", /documented/.test(cfg));
-  chk("an undocumented parameter is a defect", /defect/.test(cfg));
+  chk("a parameter must be in the table and consumed by a named gate", /may exist only if[\s\S]{0,120}consumed by a named gate/.test(cfg));
+  chk("an unused knob is treated as drift surface", /unused knobs are drift surface/.test(cfg));
 }

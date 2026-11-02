@@ -137,6 +137,7 @@ File partition:   <the ONLY files you may touch — nothing else>
 Interfaces needed:   <what you may call, with signatures>
 Interfaces provided: <what you expose, exactly — others code against this>
 Output format:   <the shape of the returned result, verbatim>
+Done when:       <the checks that must pass before you report — its own tests, not the full suite>
 Boundaries:   read-only unless stated; no new dependencies; no scope creep;
         report blockers instead of guessing around them
 ```
@@ -147,6 +148,11 @@ of 4 edits, silently, all exiting 0. If you cannot name the partition, you do no
 independent work.
 
 ### Serial or parallel — decide with numbers, not enthusiasm
+
+**`parallel.enabled` is off by default (P47)** — single-agent is the default, and staying
+off is the safe reading: a wrong "yes" costs both time and tokens. The switch is config,
+not a dependency (ASF works with no orchestration plugin installed), and `ASF_PARALLEL=1`
+enables exactly one run and does not persist.
 
 Parallelism buys wall-clock and costs tokens (multi-agent runs are measured in multiples
 of a single-agent run, and coding parallelises worse than research). Before fanning out,

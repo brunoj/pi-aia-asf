@@ -115,8 +115,9 @@ export function auditDocs(skillDir) {
   // 4 — every reference says when to read it
   for (const f of refFiles) {
     const text = fs.readFileSync(path.join(refDir, f), "utf8");
-    if (!/read when/i.test(text.split("\n").slice(0, 12).join("\n"))) {
-      add(`references/${f}`, "no 'Read when' line in its first lines — the index is ASF's only load-control");
+    const indexed = skill.includes("`" + f + "`");
+    if (!indexed && !/read when/i.test(text.split("\n").slice(0, 12).join("\n"))) {
+      add(`references/${f}`, "neither a 'Read when' line nor a row in the SKILL.md index — nothing routes to it");
     }
   }
 

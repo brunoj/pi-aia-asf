@@ -207,13 +207,13 @@ export async function run({ extDir }) {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'asf-drift-'));
   fs.writeFileSync(path.join(tmp, 'ledger.ts'), 'export const RETRY_BUDGET = 7;\nexport function settle() {}\n');
   try {
-    const d1 = checkDrift({ artifacts: [{ path: 'PLAN.md', content: 'Owns `ledger.ts`. Adds `RETRY_BUDGET` and `settle`.' }], repoRoot: tmp, fs });
+    const d1 = checkDrift({ artifacts: [{ path: 'PLAN.md', text: 'Owns `ledger.ts`. Adds `RETRY_BUDGET` and `settle`.' }], repoRoot: tmp, fs });
     chk('drift is clean when every claim resolves', d1.status === 'clean', `${d1.status} (${d1.checked} claims)`);
-    const d2 = checkDrift({ artifacts: [{ path: 'PLAN.md', content: 'Owns `ledger.ts` and `ghost.ts`. Adds `NOT_THERE`.' }], repoRoot: tmp, fs });
-    chk('a claimed file that is not there is drift', d2.status === 'drift' && d2.missing.some((c) => c.token === 'ghost.ts'), d2.missing.map((c) => c.token).join(','));
-    chk('a claimed symbol that is not there is drift', d2.missing.some((c) => c.token === 'NOT_THERE'));
-    chk('a claim that does resolve is not reported', !d2.missing.some((c) => c.token === 'ledger.ts'));
-    const d3 = checkDrift({ artifacts: [{ path: 'PLAN.md', content: 'Nothing checkable in this prose.' }], repoRoot: tmp, fs });
+    const d2 = checkDrift({ artifacts: [{ path: 'PLAN.md', text: 'Owns `ledger.ts` and `ghost.ts`. Adds `NOT_THERE`.' }], repoRoot: tmp, fs });
+    chk('a claimed file that is not there is drift', d2.status === 'drift' && d2.unresolved.some((c) => c.value === 'ghost.ts'), d2.unresolved.map((c) => c.value).join(','));
+    chk('a claimed symbol that is not there is drift', d2.unresolved.some((c) => c.value === 'NOT_THERE'));
+    chk('a claim that does resolve is not reported', !d2.unresolved.some((c) => c.value === 'ledger.ts'));
+    const d3 = checkDrift({ artifacts: [{ path: 'PLAN.md', text: 'Nothing checkable in this prose.' }], repoRoot: tmp, fs });
     chk('an artifact with no claims is examined-nothing, not clean', d3.status === 'no-claims', d3.status);
     chk('missing artifacts are reported, not skipped', checkDrift({ artifacts: [{ path: 'PLAN.md' }], repoRoot: tmp, fs }).status === 'no-artifacts');
     chk('drift never blocks on its own read failure', typeof d3.blocking === 'boolean');
