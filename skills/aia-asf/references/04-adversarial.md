@@ -77,6 +77,76 @@ never populated the table in question.
 - Accepted risk → write it into the PLAN.md risks section with rationale
 - Scope change → **ask the user before proceeding**
 
+## Zero-context review — the part that actually finds things
+
+The questions above, asked by the agent that wrote the plan, are a checklist. Familiarity
+is what hides blind spots: the author knows what it meant, so it never hits the sentence
+that could be read two ways. So for LARGE work the checklist is **also** run by agents
+that were never in the conversation.
+
+**The artifact is the review surface.** The plan/spec lives in a file; reviewers get the
+path plus the source the artifact references — never the chat transcript. A reviewer that
+is handed the conversation is not a fresh reviewer, and the pass is void.
+
+**Lenses** (one persona each in `../agents/`, all read-only, all bound by the shared
+mandates — cite or abstain, critique first, no chitchat):
+
+| Lens | Audits |
+|---|---|
+| `asf-design-critic` | architecture, scalability, data model, security posture, unmitigated risk |
+| `asf-codebase-fitness` | layering, SSOT, ownership, migration — correct in the abstract vs correct *here* |
+| `asf-zoom-out` | right problem, unasked questions, silent scope, reversibility |
+| `asf-comprehension` | could a competent engineer execute this without asking a question |
+| `asf-implementation-readiness` | interfaces, ordering, test hooks, rollback |
+| `asf-structural` | traceability, gate integrity, honest n/a, verifiable DoD |
+
+`asf-synthesizer` orchestrates: spawn, verify, retry once, deduplicate, triage, write the
+report artifact, report per-reviewer status.
+
+**How they are spawned, in order of preference:**
+
+1. the `subagent` extension (parallel mode), if loaded;
+2. `pi -p "<brief>" --no-extensions --no-skills -t read,grep,find,ls` per lens;
+3. neither available → **stop and record the review as `not run`**. Say it out loud. A
+   review run in the author's own context is not this review, and must never be reported
+   as if it were.
+
+**Budget** (`.asf-review.json` at the project root, or these defaults):
+
+```json
+{ "maxReviewers": 6, "abForBlockers": true, "maxReaudits": 2, "maxConcurrent": 3, "tokenCeilingMultiple": 6 }
+```
+
+Budget is deliberately generous — the job must not be interrupted for want of tokens.
+What stays tight is *termination*, not effort: `maxReaudits` bounds the loop, and
+`maxConcurrent` is bounded by the machine (reviewers compete with the test suites). At the
+ceiling the pass stops and reports what it found, listed as partial — never continues
+quietly.
+
+**A/B duplication** (`abForBlockers`) runs two independent instances of one lens to lift
+recall, and only at the **blocker boundary**: a re-review after blockers were addressed.
+Outside that boundary a request for A/B is refused — recall is the expensive property and
+it is bought where a missed blocker is expensive.
+
+**Cite or be `not run` (the rule that makes the rest trustworthy).** Before a report is
+accepted, every cited `file:lines` must resolve — the file exists and the range is inside
+it. A report whose citations do not resolve is recorded `not run`, **never** as "zero
+findings". This is not hypothetical: a read-only subagent asked about a file that did not
+exist returned a confident reading of a *different* file and exited 0. Exit code and
+confidence are both cheap; a resolvable citation is not.
+
+**Findings** carry severity (`Blocker | Major | Nit`), scope (`file:lines`), the finding
+and a recommendation. The synthesizer deduplicates across lenses and normalises file
+references. Severity meanings are fixed across lenses so findings can be merged.
+
+**Critique first.** Reviewers lead with what is wrong, missing or risky. "Default to
+stress-testing: never agree by default" — agreement is a result of the audit, not a
+starting position, and unearned praise in a review report is noise that displaces signal.
+
+**Convergence.** Each stage allows `maxReaudits` re-audits. At the cap, report the open
+items to the author, record them, and move on — an unbounded review loop is a cost bug,
+not diligence.
+
 ## Adversarial gate
 
 Summarize: findings found, specs added/changed, risks accepted → user confirmation.

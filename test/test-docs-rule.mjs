@@ -12,6 +12,7 @@ export async function run({ extDir }) {
   const base = path.join(extDir, 'skills', 'aia-asf');
   const cq = fs.readFileSync(path.join(base, 'references', '06c-code-quality.md'), 'utf8');
   const skill = fs.readFileSync(path.join(base, 'SKILL.md'), 'utf8');
+  const anti = fs.readFileSync(path.join(base, 'references', '06m-antipatterns.md'), 'utf8');
 
   console.log('=== 1. 06c Rule 9 exists and is complete ===');
   chk('Rule 9 heading present', cq.includes('## Rule 9 — Documents are code'));
@@ -34,7 +35,7 @@ export async function run({ extDir }) {
   console.log('=== 3. SKILL.md wiring ===');
   chk('Phase 6 note mentions Rule 9', skill.includes('Documents are code too') && skill.includes('Rule 9'));
   chk('Phase 7 DoD mentions doc check', skill.includes('Documents too (06c Rule 9)'));
-  chk('anti-pattern added', skill.includes('Letting a document grow until edits start breaking'));
+  chk('forbidden list: document growth (06m)', anti.includes('Letting a document grow until edits start breaking'));
   chk('index says 9 rules', skill.includes('(9 rules'));
 
   console.log(`\n  PASS: ${pass}  FAIL: ${fail}`);

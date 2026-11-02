@@ -57,6 +57,35 @@ goes in the final message in plain words — never discovered by the user throug
   completion. Resolve every finding or explain it — and a clean scan is *not* proof of
   completeness: deferral and wiring remain your check, not the scanner's.
 
+## Your own artifacts are part of the deliverable (task-scoped drift)
+
+The plan and the spec tree are artifacts too, and they make checkable claims: a PLAN.md
+that names `lib/gates/ledger.mjs` or `deriveSuiteRun()` is asserting those exist. When the
+code has moved and the artifact has not, the delivery report describes something that is
+not there — which is the same defect as a stub, just further from the user's eye.
+
+Before claiming done, run the drift check against **this task's own artifacts**:
+
+```bash
+node --input-type=module -e "
+import {checkDrift, renderDrift} from './lib/gates/drift.mjs';
+import fs from 'node:fs';
+const arts = ['PLAN.md'].filter(f => fs.existsSync(f)).map(path => ({path, text: fs.readFileSync(path,'utf8')}));
+console.log(renderDrift(checkDrift({artifacts: arts, repoRoot: process.cwd(), fs})));
+"
+```
+
+Three things this deliberately does **not** do:
+
+- It does not scan the whole repo's documentation. Repo-wide docs drift presumes the
+  documentation exists and is maintained, and products legitimately evolve — a check that
+  produces permanent noise gets switched off, which is worse than never having it.
+- It does not treat "0 unresolved" as a pass on its own. `status: "no-claims"` means the
+  artifact named no files or symbols at all, and that is reported as examined-nothing,
+  never as clean (06b Rule 10: `scanned: 0` is never a pass).
+- It does not replace the traceability matrix. Drift says the artifact still describes
+  the code; the matrix says the spec was actually delivered.
+
 ## Definition of Done — completeness
 
 - [ ] No stub, unimplemented path, placeholder or fabricated data remains on a
@@ -65,3 +94,6 @@ goes in the final message in plain words — never discovered by the user throug
       report names the command / request / action that exercised each part.
 - [ ] Nothing asked for was quietly moved to "later" without the user being told.
 - [ ] No claim in the deliverable or the report is presented as verified when it was not.
+- [ ] The task's own artifacts (PLAN.md, spec tree, design doc) still resolve against the
+      code — the drift check ran and its status (`clean` / `drift` / `no-claims`) is in
+      the delivery report. `no-claims` is not a tick.

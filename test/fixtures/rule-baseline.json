@@ -1,0 +1,123 @@
+{
+  "rules": [
+    {
+      "n": 1,
+      "title": "Test the ARTIFACT you ship, not the source you wrote"
+    },
+    {
+      "n": 2,
+      "title": "Assert the OBSERVABLE END STATE, not intermediate artifacts"
+    },
+    {
+      "n": 3,
+      "title": "Probe for SILENT failures"
+    },
+    {
+      "n": 4,
+      "title": "Read the ACTUAL error before changing anything"
+    },
+    {
+      "n": 5,
+      "title": "Clean-room verification (defeat caches and local state)"
+    },
+    {
+      "n": 6,
+      "title": "Every fixed bug gets a REGRESSION test"
+    },
+    {
+      "n": 7,
+      "title": "Test triggers AND non-triggers"
+    },
+    {
+      "n": 8,
+      "title": "Test state machines for deadlock and bad transitions"
+    },
+    {
+      "n": 9,
+      "title": "Browser-test every interface you TOUCH, during the build"
+    },
+    {
+      "n": 10,
+      "title": "Definition of done (all must hold)"
+    },
+    {
+      "n": 11,
+      "title": "Report honestly"
+    },
+    {
+      "n": 12,
+      "title": "Test the OPERATOR-FACING OUTCOME, not the machinery"
+    },
+    {
+      "n": 13,
+      "title": "Nothing is delivered until CONSUMED BY A SURFACE"
+    },
+    {
+      "n": 14,
+      "title": "Every feature spec ships an E2E behavioral test through the REAL entry point"
+    },
+    {
+      "n": 15,
+      "title": "Bound every long-running operation: state the expected duration, then enforce it"
+    },
+    {
+      "n": 16,
+      "title": "Determinism: a flaky test is a defect"
+    },
+    {
+      "n": 17,
+      "title": "Delivery report (P14): the fields that make it verifiable"
+    },
+    {
+      "n": 18,
+      "title": "Escaped-defect feedback loop (P21)"
+    },
+    {
+      "n": 19,
+      "title": "Test selection for the inner loop (P25; the DoD gate never moves)"
+    },
+    {
+      "n": 20,
+      "title": "The model is asserted, not assumed (P27)"
+    },
+    {
+      "n": 21,
+      "title": "A numeric performance claim carries its measurement contract (P31)"
+    },
+    {
+      "n": 22,
+      "title": "Performance work is placed, not scheduled (P34)"
+    },
+    {
+      "n": 23,
+      "title": "Every gate ships with a negative control, an autonomous exit, and a budget (P27)"
+    }
+  ],
+  "markers": [
+    "P01",
+    "P02",
+    "P03",
+    "P04",
+    "P05",
+    "P06",
+    "P07",
+    "P08",
+    "P09",
+    "P13",
+    "P14",
+    "P17",
+    "P18",
+    "P19",
+    "P20",
+    "P21",
+    "P22",
+    "P25",
+    "P27",
+    "P28",
+    "P31",
+    "P34",
+    "P35",
+    "P42",
+    "P45"
+  ]
+}

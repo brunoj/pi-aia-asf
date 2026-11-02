@@ -138,7 +138,21 @@ Challenge the plan like a hostile reviewer before committing to it. For each spe
 
 For each finding: either capture a new spec, refine an existing one (supersede), or record the decision to accept the risk. **Ask the user about anything that changes scope.**
 
-**Gate 4** (large only): summarize adversarial findings + resolutions, get user confirmation.
+**Then have it reviewed by agents that were not in this conversation** (large work).
+The checklist above, asked by the agent that wrote the plan, is a checklist — familiarity
+is what hides blind spots. Spawn the six lenses from `agents/` against the **artifact
+file** plus the source it references (never the transcript), merge with `asf-synthesizer`,
+and treat a reviewer whose citations do not resolve as `not run` rather than clean. Full
+mechanics, budget and the A/B rule: `references/04-adversarial.md`.
+
+**Gate 4** (large only): the findings and resolutions go in a file
+(`review-report.md`); chat carries the path, the Blocker/Major/Nit counts and the
+reviewer status table — not the report body. Get the user's confirmation on what remains.
+
+**Artifacts, not walls of text (all gates).** Plans, spec trees and review reports are
+written to files and named by path; the chat shows the path and the counts. A large
+document pasted into chat is paid on every turn afterwards, and it cannot be handed to a
+fresh-context reviewer anyway — only a file can.
 
 ---
 
@@ -146,7 +160,10 @@ For each finding: either capture a new spec, refine an existing one (supersede),
 
 > **Small work: SKIP this phase entirely.** No PLAN.md, no approval — go straight to Phase 6 (implementation).
 
-Write `PLAN.md` in the project root (repo root, or cwd if no repo). Structure:
+Write `PLAN.md` in the project root (repo root, or cwd if no repo). **Present it as an
+artifact**: write the file, tell the user the path and the open decisions; do not paste the
+plan into chat for approval — the reviewer lenses of Phase 4 read that same file, and a
+copy in the transcript is paid for twice. Structure:
 
 ```markdown
 # <Project> — Plan
@@ -180,199 +197,104 @@ Keep the plan **implementation-ready**: any competent engineer (or agent) can ex
 
 ## Phase 6 — Implementation (test-first, disciplined)
 
-> **Read `references/06b-testing-qa.md` before writing tests.** It is the mandatory QA
-> standard, distilled from real shipped-broken failures. Non-negotiable highlights:
-> **test the shipped artifact, not just the source** (inspect `npm pack` output);
-> **assert the observable end state**, not intermediate files; **probe for silent
-> failures** (a malformed manifest/frontmatter is skipped without any error);
-> **read the actual error before editing**; **verify clean-room** (caches serve stale
-> builds); **add a regression test for every bug fixed**.
+> **Mandatory reads before writing code** — each is the standard, this list is only the
+> routing: `references/06b-testing-qa.md` (the QA standard: test the shipped artifact,
+> assert the observable end state, probe for silent failures, read the actual error,
+> verify clean-room, regression-test every fix) · `references/06c-code-quality.md`
+> (small modules, SSOT, no hardcoding, testable outside the host — **Documents are code
+> too** per Rule 9: when a document outgrows editability, split it and keep the parent
+> as index) · `references/06i-completeness.md`: **Read `references/06i-completeness.md`
+> before implementing** and again before claiming done — ship the real thing or say what
+> is not real · `references/06d-delegation.md` (before delegating).
+>
+> **Read on demand (only if they apply):** `06f-stability.md` external calls · `06g-test-design.md` non-trivial
+> tests · `06h-security.md` untrusted input, secrets, agent-like tool surfaces ·
+> `06k-performance.md` the spec contains a number, or the change adds a query, loop,
+> job, cache or endpoint.
 
-> **Read `references/06c-code-quality.md` before structuring code.** It is the mandatory
-> modularity & maintainability standard: small well-readable modules plugged in where
-> needed; **one implementation for shared functionality** (single escalation path,
-> SSOT); no hardcoding (config-driven); **testable outside the host then integrated
-> verbatim** (same modules in tests and production); refactor what is too complex to
-> understand; layered with clear boundaries and an architecture writeup; full I/O debug
-> logging with replay; nothing breaks existing functionality. **Documents are code too
-> (Rule 9): when a document outgrows editability (failing edits, truncation, multi-topic
-> bloat), split it by topic and keep the parent as an index — never let it grow until
-> editing breaks.**
+Execute the task list milestone by milestone. Discipline rules — the wording here is
+the gate condition; the standard lives in the reference named on each line:
 
-> **Read `references/06i-completeness.md` before implementing, and again before claiming
-> done.** Ship the real thing or say out loud what is not real: no `// TODO` /
-> not-implemented paths on a user-reachable code path, no fake or seed data the user will
-> read as their own, no invented facts presented as checked, no silently deferred scope,
-> no built-but-never-wired module. A stub is legitimate only when the user asked for one
-> — and then it is declared, never silent.
-
-> **Read `references/06d-delegation.md` before delegating.** Work may be delegated two ways:
-> **intercom** (message another live pi session that owns relevant context — always `list`
-> first, say what you want back, and treat their findings as evidence, not proof; **optional** —
-> only when the user has installed `pi-intercom`, ASF works without it), and
-> **subagents** (spawn an isolated `pi -p` process when the OUTCOME matters more than the
-> trace — scoped codebase research, independent parallel fixes, fresh-perspective review).
-> Two verified hard limits: **never run parallel subagents against the same file** — tested,
-> 4 concurrent writers left only 1 of 4 edits, silently, all exiting 0 — and **exit code 0
-> does not mean success**, so always validate the returned output against what you asked for.
-
-> **Read on demand (only if they apply):** `references/06f-stability.md` if the
-> deliverable makes external calls; `references/06g-test-design.md` for the
-> test plan or non-trivial tests; `references/06h-security.md` if the
-> deliverable handles untrusted input, secrets, or agent-like tool surfaces;
-> `references/06k-performance.md` if the spec contains a number, or the change
-> adds a query, a loop over a collection, a background job, a cache, or a
-> user-facing endpoint.
-
-Execute the task list milestone by milestone. Discipline rules:
-
-1. **Test-first**: write/update tests before or with implementation; run them; only commit green.
-   Every bug fixed gets a **regression test** that fails on the old code. For conditional
-   behavior (skills, gates, auto-activation) test **triggers AND non-triggers**.
-2. **Codebase isolation**: work strictly inside the project's own codebase. Do NOT edit files in other repos, global config, or unrelated directories — **unless the user explicitly instructs otherwise**. If a change would touch another codebase, stop and ask.
-3. **No scope creep**: if something new is discovered that changes specs, capture it, ask the user, and update the plan before implementing.
-4. **Descriptive commits**: `git commit -m "type: specific description of what and why"` (e.g. `fix: verify specs before rotation`). No vague messages, no placeholders.
-5. **Browser testing — MANDATORY for every interface the change TOUCHES, in the build (06b Rule 9)**: the trigger is **can this change reach a rendered surface**, not whether the project "has a UI" — a page, route, component, form, markup, styling, copy, formatting, client-side state, or an API that a UI consumes all count. Exercise it through `pi-aia-browser` (`browser_init`, `browser_navigate`, `browser_click`, `browser_type`, `browser_screenshot`, `browser_dom`, …) **before committing that change**, not at final verification — not just curl/API checks. Verify: loads, key user journeys, responsive behavior, console errors. **Uncertain whether it reaches a surface? Then it is touched** — "only a backend change" is not an argument, naming the render path it cannot affect is. **Silent async paths included**: ingest through the real flow and wait for the enrichment to land (06b Rule 9). Report the page opened, the action taken and what was asserted, or `n/a` with a reason; if the browser tool is unavailable, say so rather than letting it read as passed.
-6. **Bounded waits — ALWAYS (06b Rule 15)**: **every** tool call or command that waits on the system gets an explicit, reasonable **hard timeout** (`timeout N …` or the tool's `timeout` parameter) — never run unbounded. State the expected duration first and size the bound to it with headroom (a 30s suite gets ~120s, not 3000s). This matters most **during testing**, where harnesses, servers, daemons and browsers hang on ports, locks and prompts. **Absolute ceiling: no single wait may exceed 30 min (1800s).** The ceiling is a backstop, never a substitute for the real per-call bound. When it is hit: kill the wait and diagnose what it is blocking on — that is a bug signal, not patience. The ceiling may be **waived only for a single run**, stated explicitly beforehand with a reason and a finite larger bound; the waiver **does not persist** and resets immediately after that run. A 50,000-second hang is a failure to investigate.
-7. **Let pi-vigilant do its job**: it will auto-continue after premature stops and verify specs at settle. When it asks for `update_spec_status` with evidence, do it.
-8. **CHANGELOG discipline**: every user-visible change gets a CHANGELOG entry describing exactly what changed (no placeholder text).
-9. **Challenge approved designs (M4)**: if a spec's literal reading creates product tension (e.g. feedback clusters under "Plan" when "Plan = plans"), stop and resolve it with the user before implementing — never implement blindly and call it delivered.
-10. **Trace before claiming delivered (M5)**: the delivery log is a claim; the code is the evidence. Before marking anything ✅, trace the actual code path, confirm the output is consumed by a surface, and confirm the operator-facing outcome test passes.
-11. **No stubs, no fake data, no invented facts (`references/06i-completeness.md`)**: the deliverable is the real implementation. Finish it, or state the discrepancy plainly to the user — what is missing, why, what remains. Never let the user discover the gap by using the product.
-12. **The model is asserted, not assumed — for any change that WRITES to a store (06b Rule 20 / `references/06j-data-model.md`)**: the trigger is what the change writes, not where the diff lives — "only a backend change" is the case that needs it most. Declare ownership for every relationship touched (composition / instance / ledger, owner, survives-parent), and test the **non-effect**: seed the referencing rows with production-shaped data and assert they survive, and assert the tables the change does not name are unchanged (06g §3). Run `/asf health` and resolve or accept its findings. **Uncertain whether the model is touched? Then it is touched.** A green suite is not evidence here — the table a cascade empties is usually never populated by the suite that stayed green. **Capture the obligations as MUST specs (`capture_spec`)** so the loop guard verifies them at settle as it verifies any specification from any source — the guard checks completion, it does not know what a cascade is and must not have to.
+1. **Test-first** — tests before or with the code, run them, commit only green; every fixed bug gets a regression test that fails on the old code; conditional behaviour tests triggers **and non-triggers** (06b Rules 6, 7).
+2. **Codebase isolation** — only this project's files, unless the user explicitly says otherwise; if a change would touch another repo, stop and ask.
+3. **No scope creep** — a new discovery that changes specs gets captured, asked about, and the plan updated *before* implementing.
+4. **Descriptive commits** — `type: what and why`. No vague messages, no placeholders.
+5. **Browser testing is mandatory for every interface the change TOUCHES, in the build** — the trigger is *can this change reach a rendered surface*, not whether the project has a UI; exercise it through `pi-aia-browser` before committing that change, and report page + action + assertion, or `n/a` with a reason; if the browser tool is unavailable, **say so rather than letting it read as passed** (06b Rule 9).
+6. **Bounded waits — ALWAYS (06b Rule 15)** — every call that waits on the system gets an explicit hard timeout sized to a stated expected duration; absolute ceiling 30 min (1800s), waivable only for a **single run** stated beforehand with a reason, and the waiver **does not persist** — it resets immediately after that run; hitting the ceiling is a bug signal to diagnose, not patience. A 50,000-second hang is a failure to investigate.
+7. **Let pi-vigilant do its job** — when it asks for `update_spec_status` with evidence, provide it.
+8. **CHANGELOG discipline** — every user-visible change gets an entry saying what changed; no placeholder text.
+9. **Challenge approved designs (M4)** — a literal reading that creates product tension is resolved with the user *before* implementing, never implemented blindly and called delivered.
+10. **Trace before claiming delivered (M5)** — the delivery log is a claim, the code is the evidence: trace the code path, confirm a surface consumes its output, confirm the operator-facing test passes.
+11. **No stubs, no fake data, no invented facts** — finish it or state the discrepancy plainly (06i).
+12. **The model is asserted, not assumed** for any change that WRITES to a store — the trigger is what the change writes, not where the diff lives; declare ownership per relationship and test the **non-effect** (seed the referencing rows, assert the tables the change does not name are unchanged). A green suite is not evidence here. Capture the obligations as MUST specs so the completion guard verifies them (06b Rule 20, 06j, 06g §3).
 
 ---
 
 ## Phase 7 — Verification & delivery (gate)
 
-Run the **Definition of Done checklist** in `references/06b-testing-qa.md` (Rule 10). Every box must hold.
+Every DoD below must hold; each line is the gate condition, the checklist lives in the
+reference named on it:
 
-Also check the **modularity DoD** from `references/06c-code-quality.md` (Phase 7 section): no duplicated shared logic, no hardcoded config values, every module tested standalone with the same calls it gets in the host, architecture writeup exists, existing functionality still green. **Documents too (06c Rule 9)**: no document so large that editing it is fragile — if a doc you worked on started causing edit failures/truncation, it was refactored (split by topic, parent kept as index, cross-references updated).
+- **QA DoD** (06b Rule 10) — all boxes, including the evidence and gate lines from
+  `/asf gates` (P42/P45). **`scanned: 0` is never a pass**: a check that examined
+  nothing is reported as examined-nothing, and a gap stays a gap instead of a tick.
+- **Modularity DoD** (06c) — no duplicated shared logic, no hardcoded config, every
+  module tested standalone with the calls it gets in the host, architecture writeup
+  exists, existing functionality still green. **Documents too (06c Rule 9)**: no document
+  so large that editing it is fragile — if one you worked on started causing edit
+  failures or truncation, it was split by topic with the parent kept as index.
+- **stability DoD** (06f) — external calls have timeouts and bounded retries, idempotent only.
+- **security DoD** (06h) — no secrets in the repo, no unvalidated input reaching a
+  shell/query/path, no unbounded resource use on user input; every agent-like tool
+  least-privilege with an abuse-case test.
+- **Completeness DoD** (06i) — no stub, placeholder or fabricated data on a
+  user-reachable path unless declared; every part of the ask reachable from where the
+  user enters it, with the exercising command named; nothing quietly moved to later.
+- **Performance DoD** (06k) — every numeric claim carries its measurement contract
+  (percentile, load, samples, environment, lab-or-field); a bare `p95 < 2s` is
+  **reported as an incomplete claim, not accepted**; the CI-cheap tier ran per commit,
+  the scheduled tier before release, and a run that did not happen is listed as not run.
+- **Model DoD** (06j) — when the change writes to a store: written ownership
+  declaration per relationship, invariant and non-effect tests green, `/asf health'
+  model level passing or its findings accepted with a reason.
+- **Traceability (M1, large work)** — `/asf verify` validates the spec-to-code matrix:
+  every `met` spec carries outcome → codePath → testFile + assertion, the file exists,
+  the assertion appears in it. FAIL rows block delivery. Ingested specs from external
+  planning docs are verified the same way — a ✅ in someone else's doc is a claim.
+- **Independent reviewer gate (large work, P19)** — run the zero-context review of Phase 4
+  against the finished change, not just the plan; triage autonomously and escalate only
+  genuine conflicts. A reviewer whose report does not resolve is `not run`
+  (`references/06d-delegation.md` Part 3).
+- **Code Health Gate (large work, Gate 8)** — `/asf health` (06e); on by default;
+  **fix the cause, not the threshold** (06e Rule 2). Small work shows it, never blocks.
 
-Also check the **stability DoD** (`references/06f-stability.md`): if the deliverable makes external calls, it has timeouts and bounded retries (idempotent only). And the **security DoD** (`references/06h-security.md`): no secrets in the repo, no untrusted input reaches a shell/query/path unvalidated, no unbounded resource use on user-controlled input; for agent-like tool surfaces, every tool is least-privilege with an abuse-case test.
-
-Also check the **completeness DoD** (`references/06i-completeness.md`): no stub, placeholder, unimplemented path or fabricated data left on a user-reachable path (or declared to the user with the reason); every part of the ask reachable from where the user enters it, with the exercising command/request/action named in the delivery report; nothing asked for quietly moved to "later"; no claim presented as verified when it was not. `pi-vigilant` scans the changed files for these markers at completion — resolve every finding or explain it; a clean scan is not proof of completeness.
-
-Also check the **performance DoD** (`references/06k-performance.md`): every
-numeric claim in the spec carries its **measurement contract** (percentile, load,
-sample count, environment, lab-or-field — for throughput an arrival model and
-duration; for a regression, the statistical comparison, interleaving, raw samples
-and the observed CV). A bare number such as `p95 < 2s` is **reported as an
-incomplete claim, not accepted as a spec**. The CI-cheap tier (query-count
-tripwire, query-plan scan, one bounded scenario) ran per commit; the scheduled
-tier (scalability, stress, soak, resource ceiling) ran before release — and a run
-that did not happen is listed as not run, never omitted. The **abuse-case load
-run** against the most expensive endpoint untrusted input can reach runs **once**
-and is cited in both the security DoD and the performance DoD.
-
-Also check the **evidence and gate lines** of the DoD (06b Rule 10, P42/P45):
-`/asf gates` shows what the harness observed (suite runs, health verdict, browser
-verification or structured n/a) and what each gate charged. **`scanned: 0` is
-never a pass** — a check that examined nothing is reported as examined-nothing,
-and a gap stays visible as a gap rather than becoming a tick.
-
-Also check the **model DoD** (`references/06j-data-model.md`) when the change
-writes to a store: every relationship touched has a written ownership
-declaration, the invariant and non-effect tests (06g §3) exist and are green,
-and `/asf health`'s model level passes or its findings are accepted with a
-reason. State the scan result honestly — `scanned: 0` means it looked at
-nothing, and that is said out loud, never reported as a pass.
-
-**Large work:** run `/asf verify` — it mechanically validates the **spec-to-code traceability matrix** (M1): every `met` spec must carry `trace` (outcome → codePath → testFile + assertion), testFile must exist, assertion must appear in it. FAIL rows block delivery. **Verify ingested specs from external planning docs too** — the doc's ✅ markers are claims, not evidence.
-
-**Independent reviewer gate (large work, P19):** before delivery, run the
-independent review (fresh-context hostile reviewer, blockers vs suggestions;
-see `references/06d-delegation.md` Part 3). Triage autonomously — fix safe
-blockers, apply safe suggestions, escalate to the user **only** on genuine
-conflicts (conflicting requirements, product-level tradeoffs, scope
-conflicts). Record the review + triage in the delivery report.
-
-**Code Health Gate (large work, Gate 8):** run `/asf health` — it measures convolution objectively at function / module / architecture level (see `references/06e-code-health.md`) and fails the gate when thresholds are crossed. The gate is **on by default** with conservative thresholds; configure via `.asf-code-health.json` at the project root. **Fix the cause, not the threshold** (06e Rule 2). Small work shows the report but never blocks.
-
-1. Run the full test suite (all of it, not a subset); fix failures; re-run until green.
-2. **Verify the artifact a user would actually get**: inspect the packaged file list
-   (`npm pack` → `tar tzf`), install/load it clean-room in a fresh dir with caches
-   cleared, confirm the installed version is the one just built, and confirm the
-   **observable end state** (the tool/skill/page actually appears and works) — not just
-   that files are in place. Any web surface must be exercised through `pi-aia-browser`.
-3. Run `get_task_specs` and verify **every spec** with `update_spec_status` + concrete evidence (test output, build result, code inspection). Unverifiable → `partial` + ask the user. Never self-certify.
-4. **Report honestly**: never claim a check you didn't run; state explicitly anything
-   skipped or inconclusive, and distinguish "tests pass" from "works for the user".
-5. If the project is a library/package that the user publishes (npm, GitHub release): **check the release policy** — read `.asf-release.json` at the project root if present (see `references/07-release.md`). It defines **when** (user-stated conditional rules: "when X is true, publish automatically; when Y is true, do this…") and **how** (instructions the ASF drives with judgment — credentials, git sync, publish steps). If the policy authorizes automatic publishing for the current state, drive the release per `how`; otherwise **offer** to run the release and get explicit approval (the default stance: publishing is the user's decision). **Always test on publish / in production, if applicable** — verify the shipped artifact from the registry / smoke-test prod, never assume it works. Optionally offer to set up a CI/CD pipeline for publishing.
-6. Present a completion summary: what was built, specs met, tests passing, how to use it.
+1. Run the **full** test suite, not a subset; fix and re-run until green.
+2. **Verify the artifact a user would actually get** — inspect the packaged file list (`npm pack` → `tar tzf`), load it clean-room with caches cleared, confirm the installed version is the one just built, and confirm the observable end state. Any web surface goes through `pi-aia-browser`.
+3. `get_task_specs`, then verify **every spec** with `update_spec_status` + concrete evidence. Unverifiable → `partial` + ask. Never self-certify.
+4. **Report honestly** — never claim a check you did not run; say what was skipped or inconclusive; distinguish "tests pass" from "works for the user".
+5. **Release** — **check the release policy**: read `.asf-release.json` if present (07-release.md); if it authorizes publishing for the current state, drive the release per `how`, otherwise offer it and get explicit approval. **Always test on publish / in production if applicable** — verify the shipped artifact from the registry, never assume.
+6. Present the completion summary: what was built, specs met, tests passing, how to use it.
 
 ---
 
-## Anti-patterns
+## Anti-patterns — the floor
 
+These are the ones that have shipped real defects. The complete list (45 entries) is in
+`references/06m-antipatterns.md` — read it before implementing and before claiming
+done; a pattern is never dropped here, only detailed there.
 - ❌ Starting implementation without Gate 5 approval
-- ❌ Planning on assumptions — always ask
-- ❌ Skipping research for new projects
-- ❌ Editing other codebases without explicit permission
-- ❌ Verifying a UI only via API/curl — browser testing is mandatory
-- ❌ Treating browser testing as about "projects that have a UI" — the trigger is whether **this change** can reach a rendered surface (06b Rule 9)
-- ❌ Deferring browser verification of a touched interface to final verification — open it in the build, before committing that change (06b Rule 9)
-- ❌ "It's only a backend change" with no render path named — if uncertain whether it reaches a surface, browser-test it (06b Rule 9)
-- ❌ Reporting "browser tested" without the page, action and assertion — that is an assertion, not evidence; and a missing browser tool must be said out loud, never read as passed (06b Rule 9)
-- ❌ A green suite that never populated the table the change destroys — asserting only the intended effect is not evidence about the model (06j, 06g §3)
-- ❌ `CASCADE` / delete-and-reinsert chosen because the store defaulted to it or the file above does it — a default and a precedent are both non-decisions (06j M1, M4)
-- ❌ Reporting a clean model scan as a passed check when the level scanned nothing, or trusting the scan where the store exposes no constraints to inspect — the scan is a tripwire; the invariant tests are the gate (06j §5)
-- ❌ Treating the model gate as about "projects that have a database schema" — the trigger is whether **this change writes to a store**, in any store (06b Rule 20)
-- ❌ Accepting `p95 < 2s` as a specification — a number without its load, sample count, environment and lab-or-field is an incomplete claim, and it is **reported**, not approved (06b Rule 21, 06k §2)
-- ❌ A ±% threshold as a regression verdict — a naive 15% gate missed a real 10% regression in 40 of 40 local trials; significance plus effect size caught all 40 (06k §4)
-- ❌ Reporting "no regression" from a benchmark run on a busy machine — there is no verdict there; the harness says `skipped: machine busy` and so must you (06k §4)
-- ❌ Closed-loop load presented as capacity — coordinated omission hides the overload region, which is the only region a capacity decision cares about (06k §2)
-- ❌ Putting the deep load scenarios in the per-commit path — they get switched off within a week and take the coverage that earned its place with them (06b Rule 22, 06k §3)
-- ❌ Reducing a performance target to the measured value and calling the spec met — that is deleting the specification, not meeting it (06k §6)
-- ❌ The agent signing its own `asf-perf-accept` or `asf-security-accept` — the party that missed the target cannot waive it (06k §6)
-- ❌ Shipping a gate with only a fire fixture — a gate that silently stops checking anything reports green forever unless a near-miss proves it can tell the difference (06b Rule 23)
-- ❌ Relaxing a failing near-miss test to make the suite pass — that is a bug in the gate, not a test to update (06b Rule 23)
-- ❌ Letting a project calibrate `bench.significance`, the interleaving rule, or raw-sample retention — those are what make a comparison valid, not tuning knobs (06b Rule 23, `/asf config`)
-- ❌ Vague commits or CHANGELOG placeholders
-- ❌ Declaring done while specs are still `open`
-- ❌ Publishing anything beyond the configured release policy — no `.asf-release.json` means the default: always get the user's explicit go-ahead
-- ❌ Publishing without testing the shipped artifact on publish / in production (if applicable)
-- ❌ Shipping a package without inspecting the packaged file list (`npm pack`)
-- ❌ Treating "no error" as "it worked" — malformed config is skipped **silently**
-- ❌ Verifying against a cached/stale install, or with an old duplicate still present
-- ❌ Guessing at a fix before reading the actual error message
-- ❌ Fixing a bug without adding a regression test
+- ❌ Verifying a UI only via API/curl — browser testing is mandatory (06b Rule 9)
+- ❌ Reporting "browser tested" without the page, action and assertion; a missing browser tool must be said out loud, never read as passed (06b Rule 9)
+- ❌ A green suite that never populated the table the change destroys (06j, 06g §3)
+- ❌ Reporting a clean model scan as a passed check when the scan looked at nothing (06j §5)
+- ❌ Shipping a gate with only a fire fixture — a near-miss must prove it can tell the difference (06b Rule 23)
+- ❌ Relaxing a failing near-miss test to make the suite pass — that is a bug in the gate (06b Rule 23)
+- ❌ Accepting a reviewer report whose cited files and lines do not resolve — that is fabricated compliance, record it as `not run` (06d)
 - ❌ Claiming something was verified when it was assumed
-- ❌ Asking a barrage of intake questions for small work — small runs automatically
-- ❌ Writing PLAN.md / demanding approval for small work — that's the large-work gate only
-- ❌ Waiting for sign-off when the work is small; when in doubt, default to small and start
-- ❌ One giant file / god-object that "does everything" — small well-readable modules, plugged in
-- ❌ Copy-pasting shared logic instead of importing the one authoritative module (SSOT)
-- ❌ A "test copy" of a module that differs from the production version — same modules everywhere
-- ❌ Hardcoding values (model names, thresholds, URLs) that config should drive
-- ❌ Escalation/fallback logic re-implemented per caller instead of one shared escalation path
-- ❌ Shipping a module that cannot run/test standalone outside the host
-- ❌ Refactoring without the architecture writeup (see `references/06c-code-quality.md`)
-- ❌ Letting a document grow until edits start breaking instead of splitting it (06c Rule 9)
-- ❌ Running parallel subagents that touch the same file — edits are silently lost (see `references/06d-delegation.md`)
-- ❌ Trusting a subagent's exit code or self-report instead of verifying the actual code/test result
-- ❌ Re-deriving context another live session already has instead of asking it over intercom
-- ❌ Breaking existing functionality during a refactor — refactoring preserves behavior
-- ❌ Marking a spec delivered from the delivery log instead of tracing the code — the log is a claim
-- ❌ Shipping machinery no surface consumes — delivered = visible in the product (UI or API)
-- ❌ A `// TODO`, `not implemented`, empty handler or `coming soon` on a user-reachable path — that is an absent feature wearing a name
-- ❌ Fake, seed, demo or lorem-ipsum data on a path the user reads as their own
-- ❌ An invented API signature, config key, endpoint, version or limit stated as fact — verify it or mark it unverified
-- ❌ Quietly deferring part of the ask ("v1 does X") instead of finishing it or telling the user
-- ❌ Presenting a stub as complete because the tests written against it pass
-- ❌ Leaving a deliberate stub unexplained — if the user asked for a scaffold, say so in the report
-- ❌ Trusting unit tests as proof of wiring — assert the operator-facing outcome end-to-end
-- ❌ Trusting an external plan's ✅ (IMPROVEMENT-PLAN / delivery log) — ingest its items as specs and verify them
-- ❌ Implementing a spec literally when it creates product tension — challenge it and resolve with the user
-- ❌ Shallow pass-through modules that add no abstraction; a new layer that hides nothing (06c P05)
-- ❌ Refactoring untested code without a characterization baseline (06c P13)
-- ❌ Fixing a smell instance by instance instead of the design (06c P09)
-- ❌ Drift: scope creep, approach drift, gate drift — stop, revert, self-correct (06-implementation P20)
-- ❌ Shipping a delivery summary without the report fields: spec status + evidence, test results, skipped checks, not-tested register (06b Rule 17)
-- ❌ Letting an escaped defect teach nothing — ask which gate should have caught it and close the gap (06b Rule 18)
-- ❌ Self-modifying the ASF's own rules during a task run — standards change only via the review process (P22)
-- ❌ Running a subset of tests inside the loop without a stated impact statement, or when uncertain whether the blast radius is larger — default is full (06b Rule 19)
-- ❌ Treating a subset run as satisfying the Rule 10 full-suite checkbox — the commit/DoD gate is always a real full run (06b Rule 19)
+- ❌ Treating "no error" as "it worked" — malformed config is skipped **silently**
+- ❌ Publishing without testing the shipped artifact on publish / in production (if applicable)
+- ❌ Declaring done while specs are still `open`
+- ❌ Running parallel subagents that touch the same file — edits are silently lost (06d)
 
 ## Reference index (read on demand — never load all)
 
@@ -388,6 +310,8 @@ reads at most 06b + 06c; large work reads the ones its phase calls for.
 | `05-plan.md` | PLAN.md template + ADRs + quality scenarios + ATAM-lite + views + ownership table | Phase 5 (large) |
 | `06-implementation.md` | coding discipline, M4/M5, drift self-correction (P20) | Phase 6 |
 | `06b-testing-qa.md` | **mandatory** testing & QA standard (23 rules + DoD, incl. the measurement contract, performance placement and the gate rules) | before writing tests (always) |
+| `06b-appendix.md` | the long-form procedures behind 06b Rules 9, 15, 19 (browser verification, bounded waits, inner-loop selection, enforcement classes) | applying those rules, not reading them |
+| `06m-antipatterns.md` | the complete forbidden list (45 entries) behind the floor in SKILL.md | before implementing and before claiming done |
 | `06c-code-quality.md` | **mandatory** modularity standard (9 rules, deep modules, smells) | before structuring code |
 | `06d-delegation.md` | intercom & subagents + independent reviewer gate (P19) | before delegating; Phase 7 review (large) |
 | `06e-code-health.md` | Code Health Gate (+ depth, supply-chain, secrets, model metrics) | Gate 8 (large) |

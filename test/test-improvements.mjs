@@ -3,7 +3,9 @@
 // headers, SKILL.md index lists every reference, and each proposal landed in
 // its designated file (SSOT — no duplication).
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
+import { checkDrift } from '../lib/gates/drift.mjs';
 
 let pass = 0, fail = 0;
 const chk = (name, cond, detail) => {
@@ -15,9 +17,12 @@ export async function run({ extDir }) {
   const base = path.join(extDir, 'skills', 'aia-asf');
   const read = (f) => fs.readFileSync(path.join(base, 'references', f), 'utf8');
   const skill = fs.readFileSync(path.join(base, 'SKILL.md'), 'utf8');
+  // The complete forbidden list moved to its own reference (SKILL.md keeps the floor).
+  const anti = fs.readFileSync(path.join(base, 'references', '06m-antipatterns.md'), 'utf8');
   const refs = ['01-intake.md','02-research.md','04-adversarial.md','05-plan.md',
-    '06-implementation.md','06b-testing-qa.md','06c-code-quality.md','06d-delegation.md',
+    '06-implementation.md','06b-testing-qa.md','06b-appendix.md','06c-code-quality.md','06d-delegation.md',
     '06e-code-health.md','06f-stability.md','06g-test-design.md','06h-security.md',
+    '06m-antipatterns.md',
     '06i-completeness.md','07-release.md'];
 
   console.log('=== 1. New references exist with read-when/skip-when headers ===');
@@ -120,9 +125,9 @@ export async function run({ extDir }) {
   chk('Phase 6 read-on-demand note', skill.includes('Read on demand (only if they apply)'));
   chk('Phase 7 stability DoD', skill.includes('stability DoD'));
   chk('Phase 7 security DoD', skill.includes('security DoD'));
-  chk('anti-pattern P05 shallow', skill.includes('Shallow pass-through modules'));
-  chk('anti-pattern P20 drift', skill.includes('Drift: scope creep'));
-  chk('anti-pattern P22 self-modify', skill.includes('Self-modifying the ASF\'s own rules'));
+  chk('forbidden list P05 shallow (06m)', anti.includes('Shallow pass-through modules'));
+  chk('forbidden list P20 drift (06m)', anti.includes('Drift: scope creep'));
+  chk('forbidden list P22 self-modify (06m)', anti.includes("Self-modifying the ASF's own rules"));
 
   console.log('=== 11. No dangling pointers (every reference file is reachable) ===');
   const listed = refs.filter((f) => skill.includes(`\`${f}\``));
@@ -156,7 +161,7 @@ export async function run({ extDir }) {
   chk('test on publish hygiene rule', rel2.includes('Test on publish / in production, if applicable — always'));
   chk('SKILL.md step 3 reads policy', skill.includes('check the release policy') && skill.includes('.asf-release.json'));
   chk('SKILL.md test-on-publish', skill.includes('Always test on publish / in production'));
-  chk('SKILL.md anti-pattern policy', skill.includes('beyond the configured release policy'));
+  chk('forbidden list release policy (06m)', anti.includes('beyond the configured release policy'));
   chk('SKILL.md anti-pattern test-on-publish', skill.includes('without testing the shipped artifact on publish'));
   const asfPolicy = path.join(extDir, '.asf-release.json');
   chk('ASF own .asf-release.json exists', fs.existsSync(asfPolicy));
@@ -191,12 +196,30 @@ export async function run({ extDir }) {
   chk('SKILL.md mandatory read for 06i', skill.includes('Read `references/06i-completeness.md` before implementing'));
   chk('SKILL.md discipline rule 11', skill.includes('11. **No stubs, no fake data, no invented facts'));
   chk('SKILL.md Phase 7 completeness DoD', skill.includes('completeness DoD'));
-  chk('SKILL.md anti-pattern stub path', skill.includes('that is an absent feature wearing a name'));
-  chk('SKILL.md anti-pattern fake data', skill.includes('lorem-ipsum data on a path the user reads as their own'));
-  chk('SKILL.md anti-pattern invented facts', skill.includes('stated as fact — verify it or mark it unverified'));
-  chk('SKILL.md anti-pattern quiet deferral', skill.includes('Quietly deferring part of the ask'));
-  chk('SKILL.md anti-pattern green-tests-lie', skill.includes('because the tests written against it pass'));
+  chk('forbidden list stub path (06m)', anti.includes('that is an absent feature wearing a name'));
+  chk('forbidden list fake data (06m)', anti.includes('lorem-ipsum data on a path the user reads as their own'));
+  chk('forbidden list invented facts (06m)', anti.includes('stated as fact — verify it or mark it unverified'));
+  chk('forbidden list quiet deferral (06m)', anti.includes('Quietly deferring part of the ask'));
+  chk('forbidden list green-tests-lie (06m)', anti.includes('because the tests written against it pass'));
   chk('SKILL.md index row for 06i', skill.includes('| `06i-completeness.md` | **mandatory**'));
+
+  console.log('=== 7. task-scoped drift (W2.1) ===');
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'asf-drift-'));
+  fs.writeFileSync(path.join(tmp, 'ledger.ts'), 'export const RETRY_BUDGET = 7;\nexport function settle() {}\n');
+  try {
+    const d1 = checkDrift({ artifacts: [{ path: 'PLAN.md', content: 'Owns `ledger.ts`. Adds `RETRY_BUDGET` and `settle`.' }], repoRoot: tmp, fs });
+    chk('drift is clean when every claim resolves', d1.status === 'clean', `${d1.status} (${d1.checked} claims)`);
+    const d2 = checkDrift({ artifacts: [{ path: 'PLAN.md', content: 'Owns `ledger.ts` and `ghost.ts`. Adds `NOT_THERE`.' }], repoRoot: tmp, fs });
+    chk('a claimed file that is not there is drift', d2.status === 'drift' && d2.missing.some((c) => c.token === 'ghost.ts'), d2.missing.map((c) => c.token).join(','));
+    chk('a claimed symbol that is not there is drift', d2.missing.some((c) => c.token === 'NOT_THERE'));
+    chk('a claim that does resolve is not reported', !d2.missing.some((c) => c.token === 'ledger.ts'));
+    const d3 = checkDrift({ artifacts: [{ path: 'PLAN.md', content: 'Nothing checkable in this prose.' }], repoRoot: tmp, fs });
+    chk('an artifact with no claims is examined-nothing, not clean', d3.status === 'no-claims', d3.status);
+    chk('missing artifacts are reported, not skipped', checkDrift({ artifacts: [{ path: 'PLAN.md' }], repoRoot: tmp, fs }).status === 'no-artifacts');
+    chk('drift never blocks on its own read failure', typeof d3.blocking === 'boolean');
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
 
   console.log(`\n  PASS: ${pass}  FAIL: ${fail}`);
   process.exit(fail > 0 ? 1 : 0);

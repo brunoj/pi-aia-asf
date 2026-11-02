@@ -108,6 +108,26 @@ For every spec, the operator-facing outcome, the code path that delivers it, and
 | spc-… | e.g. "ingested report has an agent_title on the card" | ingest → analyze() → persist → render | tests/e2e-ingest.test.ts (`agent_title`) |
 | … | | | |
 
+## Work packages & dependencies (only when parallelism is on the table)
+
+Fill this **before** deciding whether to parallelise — the decision is made from these
+columns by `lib/parallel-estimate.mjs`, not from a vibe. If you cannot name a file
+partition for a package, it is not a package.
+
+| # | Package | Files it owns | Interfaces needed | Interfaces provided | Depends on | Est. min |
+|---|---|---|---|---|---|---|
+| P1 | | | | | — | |
+| P2 | | | | | — | |
+
+Then record the verdict and the reason, including when it is **serial**:
+
+```markdown
+Parallel verdict: serial — critical path 45m vs serial 52m (1.15x < 1.3x floor)
+```
+
+Rules: an interface two packages both touch without one declaring it is a conflict; the
+join is one lane at a time with the full suite after the rebase (`06d-delegation.md`).
+
 ## Milestones
 | # | Milestone | Exit criteria |
 |---|-----------|---------------|

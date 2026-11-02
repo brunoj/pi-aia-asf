@@ -126,6 +126,59 @@ Run several in the background and `wait` for them to parallelize.
 7. **Cap the fan-out.** A handful of parallel agents, not dozens; each costs a full context window.
 8. **One level deep.** No nesting.
 
+### The worker brief — every delegated task gets one
+
+A vague brief makes workers duplicate each other and invent what they were not told. Six
+lines, filled in, before anything is spawned:
+
+```markdown
+Objective:   <the one thing that must be true when you finish>
+File partition:   <the ONLY files you may touch — nothing else>
+Interfaces needed:   <what you may call, with signatures>
+Interfaces provided: <what you expose, exactly — others code against this>
+Output format:   <the shape of the returned result, verbatim>
+Boundaries:   read-only unless stated; no new dependencies; no scope creep;
+        report blockers instead of guessing around them
+```
+
+**The file partition is not a courtesy.** Two workers that might touch the same file are
+by definition dependent and must not run in parallel — tested, 4 concurrent writers left 1
+of 4 edits, silently, all exiting 0. If you cannot name the partition, you do not have
+independent work.
+
+### Serial or parallel — decide with numbers, not enthusiasm
+
+Parallelism buys wall-clock and costs tokens (multi-agent runs are measured in multiples
+of a single-agent run, and coding parallelises worse than research). Before fanning out,
+decompose the work in the plan's work-package table (`05-plan.md`) and run the estimator:
+
+```bash
+node lib/parallel-estimate.mjs   # or import { estimateParallelism } from 'lib/parallel-estimate.mjs'
+```
+
+It returns `verdict: "parallel" | "serial"`, the serial cost, the critical path, the
+speed-up the concurrency cap actually yields, the conflicts, and **the reasons either
+way**. Parallel requires all three of: no file conflict, no unowned shared interface, at
+least 3 fully independent packages, and a speed-up of at least 1.3×. Otherwise it says
+serial and tells you why — and a refusal is recorded in the plan rather than silently
+omitted, so "we didn't parallelise" is a decision someone can read.
+
+**Shared interfaces count as conflicts.** Disjoint files are not independence: A changes
+a signature, B calls the old one, the merge is clean and the build is broken. A package
+must declare what it provides and what it needs; an interface neither owns is a dependency.
+
+### The join is one lane, and the suite runs after the rebase
+
+```bash
+node -e "import('./lib/parallel-estimate.mjs').then(m=>console.log(m.planJoin({branches:['bmx/a','bmx/b']})))"
+```
+
+Per branch, in order, **one at a time**: rebase onto the updated main → run the **full**
+suite in the rebased state → fast-forward only if every check passed. Forbidden: an LLM
+resolving a merge conflict (it drops peer changes or leaves markers in), merging without
+the full suite in the rebased state, two joins in flight. Conflicts are for a human who
+can see both intents.
+
 ### Interaction with ASF gates
 
 Delegation changes **who does the work**, never **what must be proven**:
@@ -220,3 +273,13 @@ results. Nothing else — no narrative, no context, no "here's what I did".
    (06b Rule 17): what was found, what was fixed, what was escalated.
 5. **Small work: none.** The reviewer gate is large-work only; small work
    relies on the standard gates (06b DoD).
+6. **A reviewer that did not run is `not run`** — timeout, crash or empty output
+   gets one retry, then `not run`, in the status table. It is never counted as a
+   reviewer that found nothing, because "no findings" and "nobody looked" are
+   different results and the delivery report must tell them apart.
+7. **Citations must resolve before a report is accepted** — every `file:lines` a
+   reviewer cites is checked for existence and range. A report that cites what it
+   did not read is `not run`, not a pass (04-adversarial: cite or abstain).
+8. **A/B duplication only at the blocker boundary** (`review.abForBlockers`) —
+   two instances of one lens when blockers were addressed and the cost of a missed
+   blocker is real. Anywhere else it is refused.

@@ -119,60 +119,10 @@ two-sided. Half a test suite hides half the bugs.
 
 ## Rule 9 — Browser-test every interface you TOUCH, during the build
 
-API/curl checks do not replicate what a human sees. Via `pi-aia-browser`:
+The trigger is **can this change reach a rendered surface** — page, route, component, form, markup, styling, copy, formatting, client-side state, or an API a UI consumes — not whether the project "has a UI". Exercise it through `pi-aia-browser` **before committing that change**, not at final verification. Uncertain whether it reaches a surface? Then it is touched. Report the page opened, the action taken and what was asserted, or `n/a` with a reason; if the browser tool is unavailable, **say so rather than letting it read as passed**.
 
-1. `browser_init`, `browser_navigate` to the running app
-2. Walk each key user journey with real clicks/typing
-3. Assert rendered DOM content (`browser_dom`), not just HTTP 200
-4. Check console errors via `browser_js`
-5. `browser_screenshot` for the record; check mobile + desktop viewports
+The full procedure — the trigger table, the silent-async paths, the screenshot/assertion record and the n/a wording — is in `06b-appendix.md` §`Browser testing procedure`.
 
-A 200 response with a blank or broken page is a **failure**.
-
-**The trigger is what the change TOUCHES, not whether the project "has a UI".**
-A deliverable-level trigger lets a small edit slide: "I only changed a helper"
-is exactly the change that reaches a rendered surface unnoticed. So the
-question is never *does this project have a UI* — it is **can this change reach
-one**. Anything below counts as touched, and must be exercised through the
-browser:
-
-- a page, route, component, widget, form, or template
-- anything that changes what is rendered: markup, styling, copy, formatting,
-  date/number/currency rendering, truncation, empty and error states
-- client-side state, routing, data fetching the view depends on
-- an API, serializer or query **that a UI consumes** (server-side changes are
-  not exempt just because the diff is in `src/server/`)
-- auth/permission paths that gate what a user sees, and uploads/downloads
-  a user triggers from a page
-
-**When uncertain, browser-test it — same inversion as Rule 19.** If you cannot
-argue that the change provably cannot reach a rendered surface, treat it as
-touched. "It's only a backend change" is not an argument; naming the render
-path it cannot affect is. The cheap direction to be wrong in must be the safe
-one, so uncertainty costs a browser run, never a skipped one.
-
-**This happens in the Phase 6 build loop, per change — not at final
-verification.** Open the touched interface in the browser *before committing
-that change*, while the context is warm and the defect is one edit wide.
-Deferring it to Phase 7 means the gate is the first time anyone has looked, by
-which point the cause is buried in the whole change. If the loop run was a
-Rule 19 subset, the browser/E2E suite for a touched surface is **never
-excludable** — selection may drop unrelated suites, never the one that looks at
-what you just changed.
-
-**Evidence, not assertion.** A browser run is reported with what was actually
-done: the page/URL opened, the action taken, and what was asserted — or
-explicitly `n/a: no rendered surface touched, because <reason>`. "Browser
-tested" with no page and no action named is not evidence (Rule 11). If
-`pi-aia-browser` is unavailable, **say so** and name what you did instead;
-never let a missing tool read as a passed check.
-
-**Silent async paths are the priority.** Fire-and-forget enrichment (an async
-budgeted analysis that fills in a card title after render) fails silently — the
-page renders, nobody notices the enrichment never landed. For any async/silent
-surface: ingest through the real flow, then **wait for the enrichment to appear**
-and assert it (e.g. ingest a report, wait for `agent_title` on the card). If it
-never arrives, the wiring is dead — that is a failed test.
 
 ## Rule 10 — Definition of done (all must hold)
 
@@ -201,20 +151,8 @@ never arrives, the wiring is dead — that is a failed test.
 
 ### Enforcement classes — which of these lines someone actually checks (P35)
 
-Every item above carries a class, and the class is shown in the rendered report
-so nobody can present a self-attested item as a verified one:
+Every DoD item carries an enforcement class, and the class is shown in the rendered report so nobody can present a self-attested item as a verified one. The classes and their rendering rules are in `06b-appendix.md` §`Enforcement classes`.
 
-| Class | Meaning | Who enforces it |
-|---|---|---|
-| **H** | **hard** — cannot be declared done without satisfying it | a `tool_call` blocker refuses the action (06b Rule 23) |
-| **M** | **mechanical verdict** — produced only if the check is run | a gate; `scanned: 0` means it did not run, and that is not a pass |
-| **S** | **self-attested** — an expectation, never a blocker | you, and the reviewer sees that it was you |
-
-The rendered checklist and delivery report come from
-`lib/gates/report.mjs`, which assembles them from the ledger, the gate verdicts
-and the authority state. **A gap stays visible as a gap.** The honest
-alternative to a green tick that means nothing is a line that says it was not
-verified.
 
 ## Rule 11 — Report honestly
 
@@ -285,20 +223,11 @@ done — the wiring may be dead.
   not a wait to endure. If you cannot verify something within a bounded time,
   say so explicitly (Rule 11) instead of waiting indefinitely.
 
-### Every waiting call carries its own explicit timeout
+Every waiting call carries its own explicit timeout — the per-call bound is set by a stated expected duration with headroom, never by the ceiling. The list of what counts as a waiting call is in `06b-appendix.md` §`The absolute ceiling`.
 
-This applies to **every tool call or command that waits on the system** — not
-just the obviously slow ones. Testing is where this bites hardest: a test
-harness, dev server, daemon, browser launch, or watcher can block forever on a
-port, a lock, a prompt, or a process that never exits.
 
-- Shell: `timeout <seconds> <command>` — always.
-- Tool calls: pass the tool's explicit `timeout` parameter — always.
-- Pick the bound from the **stated expected duration**, with headroom. A test
-  suite you expect to take 30s gets ~120s, not 3000s.
-- "I'll just run it and see" is the failure mode this rule exists to prevent.
+## The absolute ceiling
 
-### The absolute ceiling — 30 minutes, no exceptions unless explicitly waived
 
 > **Real failure (user report):** tool calls waited forever for the system to
 > react and the whole process kept hanging — especially during testing.
@@ -439,6 +368,8 @@ that commits after every green run already runs full before every commit, so
 Rule 19 only ever saves the intermediate runs inside a single change — it
 never reduces what runs before anything is committed.
 
+---
+
 ## Rule 20 — The model is asserted, not assumed (P27)
 
 **The trigger is what the change WRITES, not where the diff lives.** Any change
@@ -475,35 +406,22 @@ show, not a pass you claim.
 
 ## Rule 21 — A numeric performance claim carries its measurement contract (P31)
 
-**A number without its contract is not a specification. Report it as incomplete;
-do not accept it, and do not quietly drop it.**
-
-| Claim type | Required, all of it |
-|---|---|
-| Latency | percentile · load · sample count · environment · lab or field |
-| Throughput | arrival model (closed-loop or open-loop) · duration · environment · sample count |
-| Regression | statistical comparison · interleaved randomized measurement · retained raw samples · observed CV · sample count · environment |
-
-Latency and throughput claims additionally carry **the target they are judged
-against**. ASF ships no default for it (`perf.target` is the one parameter with
-no general default): with no declared target the output is
-`no-default: needs a declared target`, never a silent pass and never a number
-ASF invented — deciding a consumer's SLA is a product decision, not a default.
-
-Full text, rationale and the arrival-model trap:
-[06k-performance.md](06k-performance.md) §2. The DoD line *"performance targets
-from the spec are met"* is unfalsifiable without this — which is why it has
-never once been checked.
+A bare number (`p95 < 2s`) is an **incomplete claim, reported as such — not accepted as a
+spec**. Every numeric claim states percentile, load, sample count, environment and
+lab-or-field; throughput adds an arrival model and duration; a regression adds the
+statistical comparison, interleaving, raw samples and observed CV.
 
 ## Rule 22 — Performance work is placed, not scheduled (P34)
 
-The question is not *whether* to benchmark but **which check earns its cost
-where**. CI-cheap per commit (query-count tripwire, query-plan scan, one
-bounded scenario) inside `perf.cheapBudgetSeconds`; the expensive scenarios
-(scalability, stress, soak, resource ceiling) scheduled inside
-`perf.scheduledBudgetSeconds`. A deep suite in the per-commit path gets switched
-off within a week, and the coverage that *would* have earned its place goes with
-it. See [06k-performance.md](06k-performance.md) §3.
+Cost-tier decides placement: the CI-cheap tier runs per commit, the scheduled tier
+(scalability, stress, soak, resource ceiling) runs before release, and **a run that did
+not happen is listed as not run, never omitted**.
+
+The full rules — the contract tables, the significance and interleaving requirements,
+and why a ±% threshold is not a verdict — are in `06k-performance.md` §`The measurement contract`
+and `06k-performance.md` §`Placement and the two tiers`.
+
+---
 
 ## Rule 23 — Every gate ships with a negative control, an autonomous exit, and a budget (P27)
 

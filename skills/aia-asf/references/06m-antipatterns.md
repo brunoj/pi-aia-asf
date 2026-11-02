@@ -1,0 +1,74 @@
+> **Read when:** before implementing and before claiming done — the complete list of what ASF forbids.
+> **Skip when:** you are only classifying the work.
+
+## Anti-patterns
+
+- ❌ Starting implementation without Gate 5 approval
+- ❌ Planning on assumptions — always ask
+- ❌ Skipping research for new projects
+- ❌ Editing other codebases without explicit permission
+- ❌ Verifying a UI only via API/curl — browser testing is mandatory
+- ❌ Treating browser testing as about "projects that have a UI" — the trigger is whether **this change** can reach a rendered surface (06b Rule 9)
+- ❌ Deferring browser verification of a touched interface to final verification — open it in the build, before committing that change (06b Rule 9)
+- ❌ "It's only a backend change" with no render path named — if uncertain whether it reaches a surface, browser-test it (06b Rule 9)
+- ❌ Reporting "browser tested" without the page, action and assertion — that is an assertion, not evidence; and a missing browser tool must be said out loud, never read as passed (06b Rule 9)
+- ❌ A green suite that never populated the table the change destroys — asserting only the intended effect is not evidence about the model (06j, 06g §3)
+- ❌ `CASCADE` / delete-and-reinsert chosen because the store defaulted to it or the file above does it — a default and a precedent are both non-decisions (06j M1, M4)
+- ❌ Reporting a clean model scan as a passed check when the level scanned nothing, or trusting the scan where the store exposes no constraints to inspect — the scan is a tripwire; the invariant tests are the gate (06j §5)
+- ❌ Treating the model gate as about "projects that have a database schema" — the trigger is whether **this change writes to a store**, in any store (06b Rule 20)
+- ❌ Accepting `p95 < 2s` as a specification — a number without its load, sample count, environment and lab-or-field is an incomplete claim, and it is **reported**, not approved (06b Rule 21, 06k §2)
+- ❌ A ±% threshold as a regression verdict — a naive 15% gate missed a real 10% regression in 40 of 40 local trials; significance plus effect size caught all 40 (06k §4)
+- ❌ Reporting "no regression" from a benchmark run on a busy machine — there is no verdict there; the harness says `skipped: machine busy` and so must you (06k §4)
+- ❌ Closed-loop load presented as capacity — coordinated omission hides the overload region, which is the only region a capacity decision cares about (06k §2)
+- ❌ Putting the deep load scenarios in the per-commit path — they get switched off within a week and take the coverage that earned its place with them (06b Rule 22, 06k §3)
+- ❌ Reducing a performance target to the measured value and calling the spec met — that is deleting the specification, not meeting it (06k §6)
+- ❌ The agent signing its own `asf-perf-accept` or `asf-security-accept` — the party that missed the target cannot waive it (06k §6)
+- ❌ Shipping a gate with only a fire fixture — a gate that silently stops checking anything reports green forever unless a near-miss proves it can tell the difference (06b Rule 23)
+- ❌ Relaxing a failing near-miss test to make the suite pass — that is a bug in the gate, not a test to update (06b Rule 23)
+- ❌ Letting a project calibrate `bench.significance`, the interleaving rule, or raw-sample retention — those are what make a comparison valid, not tuning knobs (06b Rule 23, `/asf config`)
+- ❌ Vague commits or CHANGELOG placeholders
+- ❌ Declaring done while specs are still `open`
+- ❌ Publishing anything beyond the configured release policy — no `.asf-release.json` means the default: always get the user's explicit go-ahead
+- ❌ Publishing without testing the shipped artifact on publish / in production (if applicable)
+- ❌ Shipping a package without inspecting the packaged file list (`npm pack`)
+- ❌ Treating "no error" as "it worked" — malformed config is skipped **silently**
+- ❌ Verifying against a cached/stale install, or with an old duplicate still present
+- ❌ Guessing at a fix before reading the actual error message
+- ❌ Fixing a bug without adding a regression test
+- ❌ Claiming something was verified when it was assumed
+- ❌ Asking a barrage of intake questions for small work — small runs automatically
+- ❌ Writing PLAN.md / demanding approval for small work — that's the large-work gate only
+- ❌ Waiting for sign-off when the work is small; when in doubt, default to small and start
+- ❌ One giant file / god-object that "does everything" — small well-readable modules, plugged in
+- ❌ Copy-pasting shared logic instead of importing the one authoritative module (SSOT)
+- ❌ A "test copy" of a module that differs from the production version — same modules everywhere
+- ❌ Hardcoding values (model names, thresholds, URLs) that config should drive
+- ❌ Escalation/fallback logic re-implemented per caller instead of one shared escalation path
+- ❌ Shipping a module that cannot run/test standalone outside the host
+- ❌ Refactoring without the architecture writeup (see `references/06c-code-quality.md`)
+- ❌ Letting a document grow until edits start breaking instead of splitting it (06c Rule 9)
+- ❌ Running parallel subagents that touch the same file — edits are silently lost (see `references/06d-delegation.md`)
+- ❌ Trusting a subagent's exit code or self-report instead of verifying the actual code/test result
+- ❌ Re-deriving context another live session already has instead of asking it over intercom
+- ❌ Breaking existing functionality during a refactor — refactoring preserves behavior
+- ❌ Marking a spec delivered from the delivery log instead of tracing the code — the log is a claim
+- ❌ Shipping machinery no surface consumes — delivered = visible in the product (UI or API)
+- ❌ A `// TODO`, `not implemented`, empty handler or `coming soon` on a user-reachable path — that is an absent feature wearing a name
+- ❌ Fake, seed, demo or lorem-ipsum data on a path the user reads as their own
+- ❌ An invented API signature, config key, endpoint, version or limit stated as fact — verify it or mark it unverified
+- ❌ Quietly deferring part of the ask ("v1 does X") instead of finishing it or telling the user
+- ❌ Presenting a stub as complete because the tests written against it pass
+- ❌ Leaving a deliberate stub unexplained — if the user asked for a scaffold, say so in the report
+- ❌ Trusting unit tests as proof of wiring — assert the operator-facing outcome end-to-end
+- ❌ Trusting an external plan's ✅ (IMPROVEMENT-PLAN / delivery log) — ingest its items as specs and verify them
+- ❌ Implementing a spec literally when it creates product tension — challenge it and resolve with the user
+- ❌ Shallow pass-through modules that add no abstraction; a new layer that hides nothing (06c P05)
+- ❌ Refactoring untested code without a characterization baseline (06c P13)
+- ❌ Fixing a smell instance by instance instead of the design (06c P09)
+- ❌ Drift: scope creep, approach drift, gate drift — stop, revert, self-correct (06-implementation P20)
+- ❌ Shipping a delivery summary without the report fields: spec status + evidence, test results, skipped checks, not-tested register (06b Rule 17)
+- ❌ Letting an escaped defect teach nothing — ask which gate should have caught it and close the gap (06b Rule 18)
+- ❌ Self-modifying the ASF's own rules during a task run — standards change only via the review process (P22)
+- ❌ Running a subset of tests inside the loop without a stated impact statement, or when uncertain whether the blast radius is larger — default is full (06b Rule 19)
+- ❌ Treating a subset run as satisfying the Rule 10 full-suite checkbox — the commit/DoD gate is always a real full run (06b Rule 19)
+

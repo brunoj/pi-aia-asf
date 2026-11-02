@@ -279,3 +279,37 @@ checking anything fails the suite instead of reporting green.
 - **A 10-minute "soak".** Soak means hours; that is the whole point.
 - **Reducing the target to the measured value and calling it met.**
 - **A performance checklist maintained alongside ASVS.** One list, §7.
+
+
+## The measurement contract
+
+**A number without its contract is not a specification. Report it as incomplete;
+do not accept it, and do not quietly drop it.**
+
+| Claim type | Required, all of it |
+|---|---|
+| Latency | percentile · load · sample count · environment · lab or field |
+| Throughput | arrival model (closed-loop or open-loop) · duration · environment · sample count |
+| Regression | statistical comparison · interleaved randomized measurement · retained raw samples · observed CV · sample count · environment |
+
+Latency and throughput claims additionally carry **the target they are judged
+against**. ASF ships no default for it (`perf.target` is the one parameter with
+no general default): with no declared target the output is
+`no-default: needs a declared target`, never a silent pass and never a number
+ASF invented — deciding a consumer's SLA is a product decision, not a default.
+
+Full text, rationale and the arrival-model trap:
+[06k-performance.md](06k-performance.md) §2. The DoD line *"performance targets
+from the spec are met"* is unfalsifiable without this — which is why it has
+never once been checked.
+
+
+## Placement and the two tiers
+
+The question is not *whether* to benchmark but **which check earns its cost
+where**. CI-cheap per commit (query-count tripwire, query-plan scan, one
+bounded scenario) inside `perf.cheapBudgetSeconds`; the expensive scenarios
+(scalability, stress, soak, resource ceiling) scheduled inside
+`perf.scheduledBudgetSeconds`. A deep suite in the per-commit path gets switched
+off within a week, and the coverage that *would* have earned its place goes with
+it. See [06k-performance.md](06k-performance.md) §3.
