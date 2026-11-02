@@ -1,6 +1,7 @@
 # pi-aia-asf — Plan: zero-context review, guard trustworthiness, and token budget
 
-Status: **DRAFT** (awaiting Gate 5 approval)
+Status: **Delivered in 0.14.0** (2026-11-02) — full suite green (23 suites), published
+artifact verified from the registry
 Date: 2026-11-02
 Target release: **0.14.0** (minor — changes normative behaviour)
 
@@ -296,3 +297,42 @@ No new runtime dependencies. Nothing is vendored from EGM verbatim without attri
    exercised on this box before the plan was approved.
 3. **Repo-wide drift dropped.** Drift is checked only against the current task's own
    artifacts, inside `/asf verify`.
+
+---
+
+## Delivery — 0.14.0 (2026-11-02)
+
+**Verified**
+
+- Full suite green: `npm test` → 23 suites, `ALL SUITES PASSED`, exit 0.
+- Typecheck: `npm run check` → tsc 5.9.3, OK.
+- Packed artifact: `npm pack` carries the seven personas, `lib/review.mjs`,
+  `lib/parallel-estimate.mjs`, `lib/gates/drift.mjs`, `lib/skill-budget.mjs`,
+  `references/06m-antipatterns.md`, `references/06b-appendix.md`.
+- Published artifact verified from the registry by the release gate: 11/11 — the registry
+  serves 0.14.0, it installs into a fresh prefix, the skill and obligations are installed,
+  and the **installed** extension imports cleanly with the expected default export.
+- Every new guard has a control that must fail: a growing always-read file is reported; a
+  deleted rule heading is reported as lost; a report citing a file that is not there is
+  rejected and recorded `not run`; a broken link, an orphan reference and a dead anchor are
+  each reported; a claimed file or symbol that is absent is drift.
+- Always-read load: 74,777 bytes (was 88,515, −15.5%). `SKILL.md` 36,931 → 25,689.
+
+**Not run**
+
+- The live reviewer spawn through the `subagent` extension: the extension is installed
+  (symlinked from pi's examples) but `pi` has not been restarted since, so no reviewer has
+  been dispatched end-to-end in this release. The `pi -p` fallback path was exercised by
+  hand before the plan was written (including the fabricated-compliance case that produced
+  W1.6). The guards around the report are tested; the transport is not.
+- A/B duplication in a real blocker re-review — implemented in `lib/review.mjs` and unit
+  tested, never yet used on a live plan.
+
+**Lost and rebuilt**
+
+`test/test-antipatterns.mjs`, `test/test-parallel-switch.mjs` and
+`test/test-operator-surface.mjs` were present in the working tree earlier in the day and
+are gone; they were never committed and are not in git history or in any published package,
+so they are unrecoverable. They are rewritten against the modules they guard. The lesson is
+recorded here rather than in a rule: uncommitted tests are tests that do not exist, which is
+exactly why this release was committed on a branch before the suite was green.
