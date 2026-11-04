@@ -9,9 +9,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.14.1] - 2026-11-04
 
-### Added
+### Fixed
 
-- (describe changes for 0.14.1)
+- **The completion gate's continuation now actually runs** (pi 1.5.0). pi 1.5.0 validates
+  boundary continuations instead of trusting them: it commits the entries an extension
+  returns, rebuilds the context, and only continues when `canContinue` holds. The gate
+  returned a bare `{ continue: true }`, which at settle time means an assistant-terminated
+  context with nothing queued, so pi refused it —
+  `agent_before_settle requested continuation without runnable model context` — the agent
+  was never told what was missing, and the gate's one bounded continuation logged an error
+  and did nothing. It now returns a `custom_message` entry (pi projects it to role `user`,
+  which is what makes the next provider request runnable) carrying the missing list.
+- **The gate only judges ASF runs.** `currentScale()` had no "no ASF run" state, so every
+  session that loaded ASF was held to the delivery evidence bar. While the continuation was
+  inert this was invisible; once it resumed runs, a plain `pi -p` in a scratch directory
+  went from 3s to 181s and was told to close its missing evidence. The gate now reads the
+  project's ASF state and stays silent unless a run is active.
+
+### Changed
+
+- The pi peers are pinned to 1.5.0, the version that actually loads the extension.
+- `jiti` is declared as a devDependency; the test harness imported it without ever
+  declaring it, so a clean `npm install` broke the suite.
+- The typecheck gate no longer reuses a cached peer at the wrong version. It printed
+  `host types 1.2.0` against a manifest declaring 1.5.0 and still reported OK — the failure
+  its own header exists to prevent.
+- `scripts/verify-published.mjs` polls for the tarball instead of taking one HEAD request,
+  which 404s transiently while a fresh release sits in npm's staging queue.
 
 ## [0.14.0] - 2026-11-02
 
