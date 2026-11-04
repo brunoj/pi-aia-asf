@@ -827,8 +827,18 @@ export default function register(pi: ExtensionAPI): void {
   // as final and notification-only, while `agent_before_settle` is the final
   // actionable boundary. And nothing here awaits a resumed run: the loop guard
   // documents a production hang caused by exactly that.
-  pi.on("agent_before_settle", () => {
+  pi.on("agent_before_settle", async () => {
     try {
+      // The completion gate belongs to an ASF run. Without this check it judged
+      // every session that happened to load ASF — a plain question in a scratch
+      // directory was held to the same evidence bar as a delivered feature.
+      // While pi refused a contentless continuation the gate was inert and
+      // nobody noticed; once the continuation actually resumed the run, the
+      // gate began interrupting work that never asked for ASF. An ASF run is
+      // active when /asf has set a phase for this project and it has not ended.
+      const state = await loadState(projectName());
+      if (!state.current || state.current.phase === "none") return undefined;
+
       const decision = decideSettlement(ledger, {
         scale: currentScale(),
         webTouched,
@@ -845,7 +855,31 @@ export default function register(pi: ExtensionAPI): void {
         continuationsRequested++;
         // One bounded continuation naming exactly what is missing. No UI prompt:
         // this sends the agent back to work, it does not ask anyone anything.
-        return { continue: true };
+        //
+        // The continuation MUST carry content. pi commits `entries` and only
+        // then re-checks whether the context can run another provider request;
+        // at settle time the context ends with the assistant's own message, so
+        // a bare `{ continue: true }` is refused with
+        // "agent_before_settle requested continuation without runnable model
+        // context" and the agent is never told what was missing. A
+        // `custom_message` entry projects to a user-role message, which is what
+        // makes the next request runnable — and it is the only thing that can
+        // deliver the missing list to the model.
+        const list = decision.missing.map((item: string) => `- ${item}`).join("\n");
+        return {
+          entries: [
+            {
+              type: "custom_message",
+              customType: "asf-completion-gate",
+              content:
+                `ASF completion gate: this run cannot settle yet. Missing:\n${list}\n\n` +
+                `Close these now, then let the run settle. Bounded: continuation ${continuationsRequested} of ${MAX_CONTINUATIONS}.`,
+              display: true,
+              details: { missing: decision.missing, continuation: continuationsRequested },
+            },
+          ],
+          continue: true,
+        };
       }
       return undefined;
     } catch {
