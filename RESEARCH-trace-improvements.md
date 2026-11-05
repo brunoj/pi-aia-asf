@@ -83,10 +83,14 @@ being punished by rules it has never seen.
 
 ### F4 — compaction erases the rules and the work
 
-270 compactions in window (1,130 corpus-wide; worst single session 562). In 47
-runs the agent re-read the identical file within 15 calls *after* a compaction —
-including `SKILL.md` itself. 3 identical-call loops straddle a compaction, and
-pi-vigilant's LoopGuardian resets on compaction and on model change.
+270 compactions in window (1,130 corpus-wide; worst single session 562). After a
+compaction the agent re-issues an identical call within the next 15 in **86 runs /
+135 calls** — composition: `read` 84, `bmx_list_tickets` 19, `bash` 12,
+`bmx_get_ticket` 8, `browser_*` 7, `get_task_specs` 1, `get_feedback_checkpoints` 1.
+**Zero** of them were ASF skill files — the earlier "including `SKILL.md` itself"
+line came from a looser unwindowed metric and is withdrawn. 3 identical-call loops
+straddle a compaction, and pi-vigilant's LoopGuardian resets on compaction and on
+model change.
 
 ### F5 — the human is 0.4% of the user-role context
 
@@ -106,8 +110,18 @@ my explicit instruction of how this should work"*.
 | human turns ever challenging verification | **1** in the whole corpus |
 | test-file writes vs source-file writes | 949 vs 1,258 |
 | `browser_*` calls in window | 731 |
-| mutating runs with **zero** validation | **74 / 217 (34%)** |
+| mutating runs with **zero** validation | **74 / 217 (34%)** — see the correction below |
 | edits before first validation | median 1, p90 11, max 53 |
+
+**Corrected on the population ASF will own** (`p6-remeasure.mjs`): of **170** runs
+in window, **121** mutated source or ships-config inside a git work tree, and
+**61 of those (50%) contained no validation at all — 1,400 unvalidated mutating
+calls**. Docs-only mutating runs were just **3**, so the original 34% was *not*
+inflated by them; the population is almost entirely real code work. Worst runs:
+183 mutations with no validation (conversense), then 95 / 84 / 83 / 73 / 71 in
+ASF's own repo. Counterweight that must be quoted with it: only **1 of 117 pushes**
+lacked a suite run anywhere in its session — so this is long blind editing
+stretches, not unverified shipping.
 
 Big work verifies. The leak is the *small, frequent* edit that never gets a
 test — 34% of mutating runs.
@@ -175,9 +189,17 @@ restate.
 Compaction is a context event ASF can observe. On compaction: re-inject the P1
 card, and re-arm obligations whose evidence lived in the summarised range.
 
-*Tested:* 47 runs re-read an identical file immediately post-compaction
-(including `SKILL.md`), 3 loops straddle a compaction where the loop guardian
-reset. The trigger fires 270 times in 18 days — it is not a corner case.
+*Tested:* 86 runs / 135 identical calls re-issued immediately post-compaction, 3
+loops straddle a compaction where the loop guardian reset. The trigger fires 270
+times in 18 days — it is not a corner case.
+*Withdrawn from this proposal after checking:* (i) "re-reads include `SKILL.md`
+itself" — measured **0** ASF-skill re-reads; (ii) "re-arm obligations" —
+pi-vigilant persists obligations to disk (`lib/obligations.ts:346` reads them back),
+so they already survive compaction and need no ASF help.
+*Caveat that cannot be closed from traces:* a post-compaction re-read is only
+*waste* if the agent had the content and forgot it did; from JSONL the two are
+indistinguishable, so 135 calls is an upper bound on the saving, not an estimate
+of it.
 *Falsified if:* re-anchoring proves to be redundant because pi-vigilant's
 summary already carries the run state (it currently does not — the summaries in
 the corpus contain no phase/DoD information).
@@ -258,3 +280,114 @@ outcome measurement — the first live `/asf` run is the real test. Classifiers
 (machine-vs-human, friction) are regex-based and were validated by reading
 samples, not by annotated ground truth. Session JSONL carries usage only for
 some sessions, so cost is not compared here.
+
+---
+
+## 8. Decisions
+
+### P1 — decided 2026-11-05, with a scope increase from the PO
+
+Accepted as proposed (D1 `custom_message`, ≤1.5 KB, once per `session_start`
+and once per `session_compact`; D2 offer line in a git repo with no state, and
+never auto-open state on a non-software session; D3 the `/asf verify` trace
+check runs automatically at settle for an active run, scoped to specs met in
+this run; D4 card gets its own ceiling in `lib/skill-budget.mjs`).
+
+The PO then raised it above what I proposed:
+
+> When developing software, ASF should be active as the process and the agent
+> should both be prompted to use ASF for guidance and verification AND it
+> should be enforced.
+
+So P1 is no longer "a card when a run exists". A run that only appears after a
+human types `/asf …` would have appeared **0 times in the 18 measured days**
+(§2 F1), which makes opt-in activation the defect, not the baseline. ASF must
+**activate on software work**, prompt for guidance *and* verification, and
+enforce. Two facts found while designing this, both from disk:
+
+- ASF is used as a **toolbox, not a process**: 232 specs exist across 11
+  projects (betamaxx 62, conversense 48, reddawn 45) while ASF's own state dir
+  holds nothing but a test probe.
+- A **correct gate that cannot fire**: `validateTrace()` (`index.ts:154`) is
+  reached only through `/asf verify`, invoked 0 times. On disk, **59 of 103
+  `met` specs have no trace** — 16/16 in betamaxx and 21/21 in pocketmag, where
+  nobody drove `/asf verify`, against 10/11 and 7/7 where it was used.
+
+Knobs decided: `small` keeps a **floor** (validation-ran + met-spec traces) while
+plan/adversarial/browser stay reserved for `large`; continuation is **unbounded**
+with **no identical steer ever issued twice** (de-duplication replaces
+`MAX_CONTINUATIONS`); the three irreversibility refusals stay, and
+`test-subset-without-impact` becomes **auto-comply**. Written up as
+`PLAN-asf-active-process.md`, awaiting approval to implement.
+
+The PO also fixed the stop policy: **no stops** — gates steer, the loop runs
+unmolested, and a run parks only for absolutely-required user input (plan
+approval, irreversible action with no safe path, an unobtainable
+credential/permission, or a deliverable-shaping either/or). No cost-based stop
+either; overruns are recorded, only the PO halts a run.
+
+### P4 — decided 2026-11-05, reduced to a nice-to-have
+
+Card re-injection on `session_compact` is already covered by P1. Two sub-claims
+were withdrawn after checking (see F4): the `SKILL.md` re-read claim (measured 0)
+and "re-arm obligations" (pi-vigilant already persists them to disk). What
+survives is a **working-set anchor** — after a compaction the card lists the ~10
+paths this run touched, plus the claimed ticket id. ~200 bytes inside a card we
+inject anyway; benefit is an upper bound (135 calls / 18 days), not an estimate,
+and the next trace study decides whether it was worth it.
+
+### P3 — decided 2026-11-05, PO delegated the call
+
+Three-step ladder for the three irreversibility refusals: refuse + remedy →
+refuse + inject the rule text as `custom_message` → **park** as absolutely-required
+input on the third identical fire. Justified by the measured 53% repeat rate on
+those gates (9 of 17 blocks), worst case `secret-in-tracked-file` at 3 of 4.
+
+### P6 — upgraded from nice-to-have to **should** after re-measurement
+
+The published 34% was measured on all mutating runs. On the population
+`PLAN-asf-active-process.md` will actually activate ASF for, it is **50% (61 of
+121 runs, 1,400 unvalidated mutating calls)**, and docs-only runs were only 3 —
+so excluding them did not soften the number, it sharpened it.
+
+This is not absorbed by P1's settle floor: requiring validation *by settle* still
+allows 183 blind edits first. So the mid-run nudge stays, as a **steer only** —
+after **K = 11** (the measured p90) unvalidated source mutations in the current
+run, one bounded line naming the touched files and their discoverable test
+counterparts. Never a block, per the stop policy.
+
+*Falsified if:* the blind stretches turn out to be deliberate (exploration before
+a test is writable) — the traces cannot tell, and the 1 of 117 pushes figure is
+the strongest argument that they partly are. The nudge is cheap precisely for
+that reason.
+
+### P5 — decided 2026-11-05, made injector-agnostic
+
+ASF counts turns by `pi.on("input")` → `event.source` (`interactive` typed,
+`rpc` API, `extension` via `sendUserMessage`) — **no per-injector patterns, no
+product-specific regexes**, on the PO's instruction that Betamaxx is a separate
+project and ASF must not be biased toward it. After **N = 25** machine-authored
+turns since the last human turn, and at most once per 30 minutes, a run that is
+active re-anchors its brief (objective + open specs).
+
+Deliberate limitation: `input` reports only the *kind* of source, not which
+extension sent it, so telemetry records aggregate injected bytes and does **not**
+attribute them per injector. Attribution would require sniffing the text — which
+is exactly the bias the PO ruled out. No Betamaxx ticket is raised; the measured
+aggregate (≈19 MB of injected context over 18 days) stands as a general note that
+extensions injecting context should keep it short.
+
+Honesty retained: the volume is measured, the harm is **n=1** (one human turn in
+1.5 GB complaining about drift), which is why the re-anchor is rare, bounded, and
+only ever fires on an active run. The 99.6% figure itself is regex-classified —
+session JSONL stores no provenance field — while the runtime mechanism is exact.
+
+### P2 — decided 2026-11-05, as option (a)
+
+Measured: **97,278 `gate-verdict` entries with 13 distinct contents** — each of
+the 13 sessions wrote a byte-identical verdict at every settle (conversense
+37,237, betamaxx 24,833, `distinct: 1`). Decided: write a verdict only when its
+content changes (97,278 → 13), and one `passive` heartbeat per session with no
+active run. `gate-block` and `suite-run` are events, not state, and stay as they
+are — they are how this whole study was measured. The status board is unaffected
+(it derives from claim state and `bmx_set_status`).
