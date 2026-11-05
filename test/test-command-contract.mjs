@@ -12,6 +12,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import { projectKey } from "../lib/project.mjs";
 
 let pass = 0, fail = 0;
 const chk = (name, cond, detail = "") => {
@@ -101,6 +102,7 @@ export async function run({ commands, extDir, api, invokeCommand }) {
     process.chdir(prevCwd);
     fs.rmSync(tmp, { recursive: true, force: true });
     fs.rmSync(path.join(STATE_ROOT, path.basename(tmp)), { recursive: true, force: true });
+    fs.rmSync(path.join(STATE_ROOT, projectKey(tmp)), { recursive: true, force: true });
   }
 
   console.log(`\n${pass}/${pass + fail} checks passed`);

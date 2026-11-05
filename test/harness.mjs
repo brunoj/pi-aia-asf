@@ -63,5 +63,11 @@ await factory(api);
 // Run the test file with access to the captured registrations
 const test = await import(path.resolve(testFile));
 if (typeof test.run === 'function') {
-  await test.run({ tools, commands, events, api, extDir, invokeCommand });
+  // A suite that reports failure by RETURNING false must fail the run. Before
+  // this, such a suite printed its FAILs and the runner still counted it green.
+  const ok = await test.run({ tools, commands, events, api, extDir, invokeCommand });
+  if (ok === false) {
+    console.log(`SUITE REPORTED FAILURE: ${path.basename(testFile)}`);
+    process.exit(1);
+  }
 }

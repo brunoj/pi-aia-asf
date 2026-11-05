@@ -15,16 +15,19 @@ import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-c
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { dirname } from "node:path";
+import { dirname, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 import { homedir } from "node:os";
 import { cpus, loadavg } from "node:os";
 import { execFileSync } from "node:child_process";
 
 import { createLedger, deriveSuiteRun, renderLedger } from "./lib/gates/ledger.mjs";
-import { evaluateBlockers, BLOCKERS } from "./lib/gates/blockers.mjs";
+import { evaluateBlockers, BLOCKERS, RULE_TEXT, refusalStage, __resetRefusals } from "./lib/gates/blockers.mjs";
 import { createAuthority, renderAuthority } from "./lib/gates/authority.mjs";
-import { decideSettlement, renderCompletionGate, MAX_CONTINUATIONS } from "./lib/gates/settle.mjs";
+import { decideSettlement, renderCompletionGate, MAX_STEERS, MAX_IDENTICAL_STEERS, steerFingerprint } from "./lib/gates/settle.mjs";
+import { projectKey as resolveProjectKey, __clearProjectCache } from "./lib/project.mjs";
+import { classifyToolCall, activationDecision, isSourcePath, bashWritesSource } from "./lib/activation.mjs";
+import { renderRunCard, cardSummary, CARD_CEILING_BYTES } from "./lib/run-card.mjs";
 import { cli as configCli, screenModel, assertParametersAreConsumed, readProjectConfig } from "./lib/gates/config.mjs";
 import { loadDeclarations, renderRules, assertSignalsExist } from "./lib/gates/declarations.mjs";
 import { renderDeliveryReport, renderChecklist } from "./lib/gates/report.mjs";
@@ -52,6 +55,29 @@ interface AsfState {
   planApproved?: boolean;
   startedAt?: string;
   updatedAt: string;
+  /** P1: identity and provenance of the run. */
+  runId?: string;
+  /** True when the software-work detector opened this run, not a human. */
+  auto?: boolean;
+  /** What opened it: a command, or the shape of the work seen. */
+  trigger?: string;
+  /** One line: what this run is for. Goes on the card. */
+  objective?: string;
+  /** Claimed ticket, when this run is Betamaxx work. */
+  ticketId?: string;
+  /** P4 working-set anchor: paths this run has changed. */
+  filesTouched?: string[];
+  /** True once this run changed source — the completion floor then needs a test. */
+  sourceMutated?: boolean;
+  /** Steers issued, and the exact gaps already raised (never raised twice). */
+  steers?: number;
+  seenSteers?: string[];
+  /** The run the PO silenced with `/asf passive`. */
+  passiveRunId?: string;
+  /** Epoch ms of the last source mutation in this run. */
+  lastMutationAt?: number;
+  /** Set when the run needs input ASF genuinely cannot supply. */
+  parked?: { reason: string; question: string; at: string };
 }
 
 /** Definition-of-done checks (references/06b-testing-qa.md, Rule 10). */
@@ -99,31 +125,93 @@ interface ProjectStateFile {
 const SKILLS_DIR = join(homedir(), ".pi", "agent", "skills");
 const STATE_DIR = join(SKILLS_DIR, "aia-asf", "projects");
 
+/**
+ * The state key for the current project.
+ *
+ * This used to be `cwd.split("/").pop()`, which broke enforcement twice over:
+ * `cd`-ing into a subdirectory mid-session lost the run (so the gates went quiet
+ * while work continued), and two checkouts sharing a basename shared a state
+ * file (so one project's green suite satisfied another's push gate). It is now
+ * the git work-tree root, falling back to the absolute cwd.
+ */
 function projectName(): string {
-  try {
-    return process.cwd().split(/[\\/]/).pop() || "default";
-  } catch {
-    return "default";
-  }
+  return resolveProjectKey();
 }
 
 function stateFileFor(project: string): string {
   return join(STATE_DIR, project, "state.json");
 }
 
-async function loadState(project: string): Promise<ProjectStateFile> {
-  const file = stateFileFor(project);
-  if (!existsSync(file)) {
-    return { current: null, history: [] };
-  }
+/**
+ * The key pi-vigilant uses for spec-memory and feedback (cwd basename). Specs are
+ * a shared contract between the two extensions, so ASF reads them where
+ * vigilant writes them; only ASF's OWN run state moved to the root-based key.
+ */
+function sharedSpecKey(): string {
   try {
-    return JSON.parse(await readFile(file, "utf-8")) as ProjectStateFile;
+    return basename(process.cwd()) || "default";
   } catch {
-    return { current: null, history: [] };
+    return "default";
   }
 }
 
+async function loadState(project: string): Promise<ProjectStateFile> {
+  const file = stateFileFor(project);
+  if (!existsSync(file)) {
+    // One-time migration: a run opened under the old basename key is adopted,
+    // not orphaned — an upgrade must never silently end an active run.
+    const legacy = stateFileFor(sharedSpecKey());
+    if (legacy !== file && existsSync(legacy)) {
+      try {
+        const data = JSON.parse(await readFile(legacy, "utf-8")) as ProjectStateFile;
+        if (data && data.current) {
+          await saveState(project, data);
+          await writeFile(legacy, JSON.stringify({ current: null, history: data.history || [], movedTo: project }, null, 2), "utf-8");
+          return data;
+        }
+      } catch {
+        /* unreadable legacy state is not adopted */
+      }
+    }
+    return restoreFromMirror(project, { current: null, history: [] }, "missing");
+  }
+  try {
+    const data = JSON.parse(await readFile(file, "utf-8")) as ProjectStateFile;
+    if (!data || typeof data !== "object") return restoreFromMirror(project, { current: null, history: [] }, "corrupt");
+    if (!data.history) data.history = [];
+    if (!data.current) return restoreFromMirror(project, data, "cleared");
+    return data;
+  } catch {
+    return restoreFromMirror(project, { current: null, history: [] }, "corrupt");
+  }
+}
+
+async function restoreFromMirror(project: string, data: ProjectStateFile, how: string): Promise<ProjectStateFile> {
+  const mirrored = runMirror.get(project);
+  if (!mirrored) return data;
+  data.current = JSON.parse(JSON.stringify(mirrored));
+  try {
+    await saveState(project, data);
+  } catch {
+    /* the in-memory copy still enforces for this session */
+  }
+  appendEvidence({ kind: "run-restored", runId: mirrored.runId, how, project });
+  queueSteer(`ASF: the run state for this project was ${how} on disk outside ASF; the active run was restored. End a run with /asf abort, not by deleting its state.`);
+  return data;
+}
+
+/**
+ * In-process mirror of the active run, per project. Deleting or emptying
+ * state.json used to end enforcement silently — the next load simply found no
+ * run. Every legitimate end of a run goes through saveState (abort, close,
+ * auto-close), which updates the mirror; a run that disappears from disk while
+ * the mirror still holds it is restored and the disappearance is recorded.
+ */
+const runMirror = new Map<string, AsfState>();
+
 async function saveState(project: string, data: ProjectStateFile): Promise<void> {
+  if (data.current) runMirror.set(project, JSON.parse(JSON.stringify(data.current)));
+  else runMirror.delete(project);
   const file = stateFileFor(project);
   await mkdir(join(STATE_DIR, project), { recursive: true });
   await writeFile(file, JSON.stringify(data, null, 2), "utf-8");
@@ -272,15 +360,125 @@ let piRef: ExtensionAPI | null = null;
 /** suite-run attempts awaiting their result, keyed by toolCallId. */
 const pendingSuiteRuns = new Map<string, Record<string, unknown>>();
 /** Completed suite runs — the fact the push gate checks for. */
-const suiteRuns: Array<{ scope: string; exitCode: number; command: string; durationMs: number; testCount: number | string }> = [];
+const suiteRuns: Array<{ scope: string; exitCode: number; command: string; durationMs: number; testCount: number | string; at?: number }> = [];
 /** Memoised dirty-tree answer, refreshed at most once per tool call. */
 let dirtyCache: { at: number; dirty: boolean } | null = null;
 
-/** Bounded: beyond the cap the gate reports the gap instead of nagging forever. */
-let continuationsRequested = 0;
 let lastSettleDecision: { missing: string[]; exhausted?: boolean } | null = null;
 let webTouched = false;
 let impactStated = false;
+
+// ─── P1/P4/P5/P6 runtime state ─────────────────────────────────────────────────
+
+/** A card waiting to be delivered at the next actionable boundary. */
+let pendingCard: { text: string; reason: string } | null = null;
+/** P5: machine-authored turns since the last human one, and the last re-anchor. */
+let machineTurnsSinceHuman = 0;
+let lastReanchorAt = 0;
+export const REANCHOR_AFTER_MACHINE_TURNS = 25;
+export const REANCHOR_MIN_INTERVAL_MS = 30 * 60 * 1000;
+/** P6: source mutations since the last test run in this run. */
+let blindMutations = 0;
+let blindNudged = false;
+export const BLIND_EDIT_NUDGE_AFTER = 11;
+/** Steers ASF wants to deliver (blocker steers, ladder rule text, nudges). */
+const pendingSteers: string[] = [];
+/** Never deliver the same steer text twice in a session. */
+const deliveredSteers = new Set<string>();
+
+/**
+ * P2: persisted evidence is deduplicated by content. The traces held 97,278
+ * gate-verdict entries with 13 distinct contents — every session wrote the
+ * byte-identical verdict at every settle. After the first write it carries no
+ * information. Events (gate-block, suite-run, transitions) are never deduped:
+ * they are what a trace study measures.
+ */
+const EVENT_KINDS = new Set(["run-restored", "gate-block", "suite-run", "spec-transition", "browser-verify", "browser-na", "health-run", "perf-scenario", "run-open", "run-close", "park", "steer", "passive"]);
+const persistedVerdicts = new Set<string>();
+let passiveHeartbeatWritten = false;
+
+function verdictSignature(entry: Record<string, unknown>): string {
+  const { ts, at, timestamp, ...rest } = entry as Record<string, unknown> & { ts?: unknown; at?: unknown; timestamp?: unknown };
+  return JSON.stringify(rest, Object.keys(rest).sort());
+}
+
+/** Should this evidence entry be persisted to the session file? */
+export function shouldPersist(entry: Record<string, unknown>, seen: Set<string>): boolean {
+  const kind = String(entry.kind || "");
+  if (EVENT_KINDS.has(kind)) return true;
+  const sig = verdictSignature(entry);
+  if (seen.has(sig)) return false;
+  seen.add(sig);
+  return true;
+}
+
+function queueSteer(text: string) {
+  const key = text.replace(/\s+/g, " ").trim();
+  if (!key || deliveredSteers.has(key) || pendingSteers.includes(text)) return;
+  pendingSteers.push(text);
+}
+
+function newRunId(): string {
+  return `run-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+}
+
+function cardFor(state: AsfState | null, nextStep?: string, remedy?: string): string {
+  if (!state) return "";
+  const openDod = (lastSettleDecision?.missing || []).slice(0, 6);
+  const step =
+    nextStep ||
+    (state.sourceMutated && !suiteRuns.some((r) => r.exitCode === 0 && (r.at ?? 0) >= (state.lastMutationAt ?? 0))
+      ? "run the tests for what you changed, then the full suite"
+      : state.phase === "implementation"
+        ? "implement test-first; keep the suite green"
+        : `advance the ${state.phase} phase`);
+  return renderRunCard({
+    phase: state.phase,
+    scale: state.scale,
+    workType: state.workType,
+    objective: state.objective,
+    openDod,
+    nextStep: step,
+    remedy,
+    filesTouched: state.filesTouched,
+    ticketId: state.ticketId,
+    auto: state.auto,
+    steers: state.steers,
+  }).text;
+}
+
+/**
+ * Open an ASF run because software work was seen (P1). `small` is the floor that
+ * auto-opened runs get — validation and evidence, not the plan/approval gates,
+ * which stay reserved for runs a human scales to `large`.
+ */
+async function openAutoRun(trigger: string, path: string | null): Promise<AsfState> {
+  const project = projectName();
+  const file = await loadState(project);
+  const now = new Date().toISOString();
+  const state: AsfState = {
+    phase: "implementation",
+    scale: "small",
+    startedAt: now,
+    updatedAt: now,
+    runId: newRunId(),
+    auto: true,
+    trigger,
+    filesTouched: path ? [path] : [],
+    sourceMutated: true,
+    lastMutationAt: Date.now(),
+    steers: 0,
+    seenSteers: [],
+  };
+  file.current = state;
+  await saveState(project, file);
+  __resetRefusals();
+  blindMutations = 0;
+  blindNudged = false;
+  appendEvidence({ kind: "run-open", runId: state.runId, auto: true, trigger, project });
+  pendingCard = { text: cardFor(state), reason: "activation" };
+  return state;
+}
 
 /** Where this extension is installed — the declaration file ships beside it. */
 function extensionDir(): string {
@@ -319,6 +517,7 @@ function recordVerdict(gate: string, v: { fired?: boolean; scanned?: number }) {
 function appendEvidence(entry: Record<string, unknown>) {
   const res = ledger.append(entry);
   if (res.ok) {
+    if (!shouldPersist(res.entry as Record<string, unknown>, persistedVerdicts)) return res;
     try {
       // Durable and excluded from model context: evidence costs no prompt budget.
       (piRef as unknown as { appendEntry?: (t: string, d?: unknown) => void } | null)?.appendEntry?.("asf-evidence", res.entry);
@@ -358,7 +557,9 @@ function numberConfig(config: Record<string, unknown>, key: string, fallback: nu
 }
 
 /** Small work is held to the reduced DoD — the scale rule is the trigger here. */
-function currentScale(): "small" | "standard" | "major" {
+function currentScale(state?: AsfState | null): "small" | "standard" | "major" {
+  if (state?.scale === "small") return "small";
+  if (state?.scale === "large") return "major";
   return lastScaleWasSmall ? "small" : "standard";
 }
 let lastScaleWasSmall = false;
@@ -388,7 +589,13 @@ export default function register(pi: ExtensionAPI): void {
           phase: "classify",
           startedAt: now,
           updatedAt: now,
+          runId: newRunId(),
+          auto: false,
+          trigger: "command",
+          steers: 0,
+          seenSteers: [],
         };
+        __resetRefusals();
       }
       if (workType) state.current.workType = workType;
       if (scale) state.current.scale = scale;
@@ -429,9 +636,11 @@ export default function register(pi: ExtensionAPI): void {
         return (
           `ASF status (${project}):\n` +
           `  work type: ${state.current.workType || "unset"}\n` +
-          `  scale: ${state.current.scale || "unset"}${state.current.scale === "small" ? " (automatic — no gates)" : ""}\n` +
+          `  scale: ${state.current.scale || "unset"}${state.current.scale === "small" ? " (floor: a real test run and evidence; no plan/approval gates)" : ""}${state.current.auto ? " — opened automatically by software work" : ""}\n` +
           `  phase: ${state.current.phase}\n` +
           `  plan approved: ${state.current.planApproved ? "yes" : "no"}\n` +
+          (state.current.passiveRunId && state.current.passiveRunId === state.current.runId ? `  passive: this run only\n` : "") +
+          (state.current.parked ? `  PARKED: ${state.current.parked.question}\n` : "") +
           `  started: ${state.current.startedAt || "?"}\n` +
           `  history: ${state.history.length} completed session(s)`
         );
@@ -450,13 +659,13 @@ export default function register(pi: ExtensionAPI): void {
             scale === "large"
               ? " — mechanical traceability gate ACTIVE"
               : scale === "small"
-                ? " (automatic — no mechanical gate)"
+                ? " (floor only — no mechanical traceability gate)"
                 : ""
           }`,
         ];
 
         if (scale === "large") {
-          const specs = await loadSpecs(project);
+          const specs = await loadSpecs(sharedSpecKey());
           lines.push("\nSPEC-TO-CODE TRACEABILITY (M1 — large work):");
           if (!specs || specs.length === 0) {
             lines.push(
@@ -614,6 +823,25 @@ export default function register(pi: ExtensionAPI): void {
       }
       case "abort":
         return await setPhase(ctx, "none");
+      case "passive": {
+        // Silences THIS run only. The next run that software work opens is
+        // enforced again — a permanent per-session or per-project switch would be
+        // a bypass of "ASF at all times", so it does not exist.
+        const project = projectName();
+        const file = await loadState(project);
+        if (!file.current || file.current.phase === "none") return "No active ASF run — nothing to make passive. The next software work will open one.";
+        file.current.passiveRunId = file.current.runId || newRunId();
+        file.current.runId = file.current.passiveRunId;
+        file.current.updatedAt = new Date().toISOString();
+        await saveState(project, file);
+        appendEvidence({ kind: "passive", runId: file.current.runId, by: "command" });
+        return "ASF: this run is passive — the irreversibility gates still hold, steers and the completion floor are off until the run ends. The next run is enforced again.";
+      }
+      case "card": {
+        const file = await loadState(projectName());
+        if (!file.current || file.current.phase === "none") return "No active ASF run.";
+        return cardFor(file.current);
+      }
       default:
         return (
           "ASF commands:\n" +
@@ -621,7 +849,9 @@ export default function register(pi: ExtensionAPI): void {
           "  /asf feature    — add a feature to an existing project (large, gated)\n" +
           "  /asf bugfix     — major bugfix (large, gated)\n" +
           "  /asf refactor   — architectural refactor (large, gated)\n" +
-          "  /asf small      — small change, automatic (no gates)\n" +
+          "  /asf small      — small change: the floor (a real test run, evidence) without plan/approval gates\n" +
+          "  /asf passive    — silence steers for THIS run only (irreversibility gates still hold)\n" +
+          "  /asf card       — show the active run card\n" +
           "  /asf status     — show current phase\n" +
           "  /asf health     — run the code health gate (function/module/architecture)\n" +
           "  /asf verify     — run the definition-of-done QA gate\n" +
@@ -637,7 +867,7 @@ export default function register(pi: ExtensionAPI): void {
 
   pi.registerCommand("asf", {
     description:
-      "Agentic Software Factory — /asf new|feature|bugfix|refactor|small|status|verify|health|abort",
+      "Agentic Software Factory — /asf new|feature|bugfix|refactor|small|status|verify|health|passive|card|abort",
     handler: async (args: string, ctx: ExtensionCommandContext) => {
       const argv = args.trim() ? args.trim().split(/\s+/) : [];
       const out = await runAsf(argv, ctx);
@@ -691,10 +921,52 @@ export default function register(pi: ExtensionAPI): void {
   // to the model, which is agent-facing feedback; nothing calls a UI prompt to
   // seek approval. A blocker whose only exit is a human decision is misdesigned
   // and belongs in the report, not in the path.
-  pi.on("tool_call", (event) => {
+  pi.on("tool_call", async (event) => {
     try {
       const toolName = String((event as { toolName?: unknown }).toolName || "");
       const input = (event as { input?: Record<string, unknown> }).input || {};
+
+      // ── P1: software work opens (or feeds) an ASF run — at all times ───────
+      // Edit/write AND bash write constructs, on the FIRST source mutation.
+      // An observer failure here must not block the work, so it is fenced.
+      try {
+        const call = classifyToolCall(toolName, input);
+        if (call.mutates && call.source) {
+          const project = projectName();
+          const file = await loadState(project);
+          const decision = activationDecision({ call, activeRun: file.current, passiveRunId: file.current?.passiveRunId });
+          if (decision.activate) {
+            await openAutoRun(`${toolName}${call.via && call.via !== "tool" ? `:${call.via}` : ""}`, call.path);
+          } else if (file.current && file.current.phase !== "none") {
+            const cur = file.current;
+            cur.sourceMutated = true;
+            cur.lastMutationAt = Date.now();
+            if (call.path) {
+              const list = (cur.filesTouched || []).filter((p) => p !== call.path);
+              list.push(call.path);
+              cur.filesTouched = list.slice(-10);
+            }
+            cur.updatedAt = new Date().toISOString();
+            await saveState(project, file);
+          }
+          // P6: a long blind-editing stretch gets one steer, never a block.
+          if (decision.reason !== "passive") {
+            blindMutations++;
+            if (blindMutations >= BLIND_EDIT_NUDGE_AFTER && !blindNudged) {
+              blindNudged = true;
+              const recent = (file.current?.filesTouched || (call.path ? [call.path] : [])).slice(-4).join(", ");
+              queueSteer(
+                `ASF: ${blindMutations} source changes this run without a test run${recent ? ` (latest: ${recent})` : ""}. ` +
+                  `Run the tests that cover them now — a regression found here is cheaper than one found after the next ${BLIND_EDIT_NUDGE_AFTER}. ` +
+                  `This is guidance, not a stop.`,
+              );
+              appendEvidence({ kind: "steer", gate: "blind-edits", count: blindMutations });
+            }
+          }
+        }
+      } catch {
+        /* activation is an observer: it never breaks the call it watches */
+      }
 
       // Observe: a full test-suite run becomes evidence only because we saw it.
       const command = typeof input.command === "string" ? input.command : undefined;
@@ -743,6 +1015,28 @@ export default function register(pi: ExtensionAPI): void {
         appendEvidence({ kind: "gate-verdict", gate: v.gate, fired: !!v.fired, scanned: typeof v.scanned === "number" ? v.scanned : 0 });
       }
 
+      // Steer-mode gates never refuse: they queue guidance and let the call run.
+      for (const s of (res as { steers?: Array<{ gate: string; reason: string }> }).steers || []) {
+        appendEvidence({ kind: "steer", gate: s.gate, reason: String(s.reason || "").slice(0, 300) });
+        queueSteer(`ASF (${s.gate}): ${s.reason}`);
+      }
+
+      // P3 third rung: park for the PO rather than refuse a fourth time.
+      const park = (res as { park?: { reason: string; question: string; item?: string } }).park;
+      if (park) {
+        appendEvidence({ kind: "park", reason: park.reason, question: park.question });
+        try {
+          const project = projectName();
+          const file = await loadState(project);
+          if (file.current) {
+            file.current.parked = { reason: park.reason, question: park.question, at: new Date().toISOString() };
+            await saveState(project, file);
+          }
+        } catch {
+          /* the block below still holds */
+        }
+      }
+
       if (res.block) {
         const gate = res.rule || "unknown";
         const s = (gateStats[gate] ||= { verdicts: 0, fired: 0, confirmedFalse: 0, blocks: 0 });
@@ -771,7 +1065,15 @@ export default function register(pi: ExtensionAPI): void {
             /* reported where possible */
           }
         }
-        return { block: true, reason: res.reason };
+        // P3 second rung: the refusal carries the rule itself, not just the veto.
+        const ruleText = (res as { ruleText?: string | null }).ruleText;
+        const stage = (res as { refusalStage?: number }).refusalStage;
+        const reason = ruleText
+          ? `${res.reason}\n\nThis is the ${stage === 2 ? "second" : `${stage}th`} identical refusal — the rule, so it sticks: ${ruleText}`
+          : park
+            ? `${res.reason}\n\nParked for the PO: ${park.question} Continue with other work meanwhile; only this action waits.`
+            : res.reason;
+        return { block: true, reason };
       }
       return undefined;
     } catch {
@@ -806,7 +1108,11 @@ export default function register(pi: ExtensionAPI): void {
       );
       if (derived) {
         delete (derived as Record<string, unknown>)._startedAt;
+        // P6: any real test run ends the blind stretch.
+        blindMutations = 0;
+        blindNudged = false;
         suiteRuns.push({
+          at: startedAt,
           scope: derived.scope,
           exitCode: derived.exitCode,
           command: derived.command,
@@ -827,61 +1133,204 @@ export default function register(pi: ExtensionAPI): void {
   // as final and notification-only, while `agent_before_settle` is the final
   // actionable boundary. And nothing here awaits a resumed run: the loop guard
   // documents a production hang caused by exactly that.
-  pi.on("agent_before_settle", async () => {
+  pi.on("agent_before_settle", async (event) => {
     try {
-      // The completion gate belongs to an ASF run. Without this check it judged
-      // every session that happened to load ASF — a plain question in a scratch
-      // directory was held to the same evidence bar as a delivered feature.
-      // While pi refused a contentless continuation the gate was inert and
-      // nobody noticed; once the continuation actually resumed the run, the
-      // gate began interrupting work that never asked for ASF. An ASF run is
-      // active when /asf has set a phase for this project and it has not ended.
-      const state = await loadState(projectName());
-      if (!state.current || state.current.phase === "none") return undefined;
+      // Boundary entries REPLACE the proposal field, so earlier handlers' entries
+      // (other extensions) are carried forward, never dropped.
+      // Not a boundary event we understand: never request a continuation on a
+      // contract we cannot see (pi always passes an object here).
+      if (!event || typeof event !== "object") return undefined;
+      const ev = event as unknown as { entries?: Array<Record<string, unknown>> };
+      const prior: Array<Record<string, unknown>> = Array.isArray(ev?.entries) ? [...ev.entries] : [];
+      // The completion gate belongs to an ASF run — which, since P1, software
+      // work opens automatically. A plain question in a scratch directory has no
+      // run and is never judged.
+      const project = projectName();
+      const file = await loadState(project);
+      const state = file.current;
 
+      // Queued steers (P3 rule text, P6 nudge, steer-mode gates) go out first,
+      // once each. They never stop anything; they ride the settle boundary
+      // because it is the only point a custom_message reaches the model.
+      const steerEntries: Array<Record<string, unknown>> = [...prior];
+      const priorCount = prior.length;
+      if (pendingCard) {
+        steerEntries.push({ type: "custom_message", customType: "asf-run-card", content: pendingCard.text, display: true, details: { reason: pendingCard.reason } });
+        pendingCard = null;
+      }
+      while (pendingSteers.length) {
+        const text = pendingSteers.shift() as string;
+        const key = text.replace(/\s+/g, " ").trim();
+        if (deliveredSteers.has(key)) continue;
+        deliveredSteers.add(key);
+        steerEntries.push({ type: "custom_message", customType: "asf-steer", content: text, display: true });
+      }
+
+      if (!state || state.phase === "none" || (state.passiveRunId && state.passiveRunId === state.runId)) {
+        if (!state && !passiveHeartbeatWritten) {
+          passiveHeartbeatWritten = true;
+          appendEvidence({ kind: "passive", by: "no-run" });
+        }
+        return (steerEntries.length > priorCount ? { entries: steerEntries, continue: true } : undefined) as never;
+      }
+
+      // Only a passing test that STARTED after the last source change validates
+      // it. A green run from before the edit says nothing about the edit.
+      const since = typeof state.lastMutationAt === "number" ? state.lastMutationAt : 0;
+      const testRunRecorded = suiteRuns.some((r) => r.exitCode === 0 && (r.at ?? 0) >= since);
       const decision = decideSettlement(ledger, {
-        scale: currentScale(),
+        scale: currentScale(state),
         webTouched,
-        continuationsSoFar: continuationsRequested,
+        continuationsSoFar: state.steers || 0,
+        seenSteers: state.seenSteers || [],
+        sourceMutated: !!state.sourceMutated,
+        testRunRecorded,
       });
       lastSettleDecision = decision;
       appendEvidence({
         kind: "gate-verdict",
         gate: "completion",
         fired: decision.missing.length > 0,
-        scanned: ledger.entries.length,
+        missing: decision.missing,
       });
-      if (decision.block && continuationsRequested < MAX_CONTINUATIONS) {
-        continuationsRequested++;
-        // One bounded continuation naming exactly what is missing. No UI prompt:
-        // this sends the agent back to work, it does not ask anyone anything.
-        //
+
+      if (decision.park) {
+        state.parked = { reason: decision.park.reason, question: decision.park.question, at: new Date().toISOString() };
+        await saveState(project, file);
+        appendEvidence({ kind: "park", reason: decision.park.reason, question: decision.park.question });
+        steerEntries.push({
+          type: "custom_message",
+          customType: "asf-park",
+          content: `ASF: this needs input ASF cannot supply — ${decision.park.question}\nAsk the PO through the project's input channel (for ticket work: park the ticket), then continue with anything that does not depend on it.`,
+          display: true,
+          details: { park: decision.park },
+        });
+        return { entries: steerEntries, continue: true } as never;
+      }
+
+      if (decision.block) {
+        state.steers = decision.steer;
+        state.seenSteers = [...(state.seenSteers || []), decision.fingerprint || ""].slice(-50);
+        state.updatedAt = new Date().toISOString();
+        await saveState(project, file);
         // The continuation MUST carry content. pi commits `entries` and only
         // then re-checks whether the context can run another provider request;
         // at settle time the context ends with the assistant's own message, so
-        // a bare `{ continue: true }` is refused with
-        // "agent_before_settle requested continuation without runnable model
-        // context" and the agent is never told what was missing. A
-        // `custom_message` entry projects to a user-role message, which is what
-        // makes the next request runnable — and it is the only thing that can
-        // deliver the missing list to the model.
-        const list = decision.missing.map((item: string) => `- ${item}`).join("\n");
-        return {
-          entries: [
-            {
-              type: "custom_message",
-              customType: "asf-completion-gate",
-              content:
-                `ASF completion gate: this run cannot settle yet. Missing:\n${list}\n\n` +
-                `Close these now, then let the run settle. Bounded: continuation ${continuationsRequested} of ${MAX_CONTINUATIONS}.`,
-              display: true,
-              details: { missing: decision.missing, continuation: continuationsRequested },
-            },
-          ],
-          continue: true,
-        };
+        // a bare `{ continue: true }` is refused with "agent_before_settle
+        // requested continuation without runnable model context". A
+        // custom_message projects to a user-role message, which is what makes
+        // the next request runnable.
+        steerEntries.push({
+          type: "custom_message",
+          customType: "asf-completion-gate",
+          content: decision.continuation,
+          display: true,
+          details: { missing: decision.missing, steer: decision.steer },
+        });
+        return { entries: steerEntries, continue: true } as never;
       }
+
+      if (decision.missing.length === 0 && state.auto) {
+        // An auto-opened run whose floor is met closes itself: the next piece
+        // of software work opens a fresh one with a fresh card.
+        file.history.push({ workType: state.workType || "auto", phase: state.phase, startedAt: state.startedAt || state.updatedAt, endedAt: new Date().toISOString() });
+        appendEvidence({ kind: "run-close", runId: state.runId, auto: true });
+        file.current = null;
+        await saveState(project, file);
+      }
+      return (steerEntries.length > priorCount ? { entries: steerEntries, continue: true } : undefined) as never;
+    } catch {
       return undefined;
+    }
+  });
+
+  // ── turn_end: steers land mid-run, where they can still change the work ──
+  //
+  // A nudge delivered at settle arrives when the run is already ending. On a
+  // turn that executed tools another turn follows anyway, so an appended
+  // custom_message is in context for that next request; `continue` is left
+  // untouched — ASF never forces or stops a turn from here.
+  pi.on("turn_end", async (event) => {
+    try {
+      const e = event as unknown as { entries?: Array<Record<string, unknown>>; toolResults?: unknown[]; outcome?: string };
+      if (!Array.isArray(e.toolResults) || e.toolResults.length === 0) return undefined;
+      if (!pendingCard && pendingSteers.length === 0) return undefined;
+      const entries: Array<Record<string, unknown>> = Array.isArray(e.entries) ? [...e.entries] : [];
+      if (pendingCard) {
+        entries.push({ type: "custom_message", customType: "asf-run-card", content: pendingCard.text, display: true, details: { reason: pendingCard.reason } });
+        pendingCard = null;
+      }
+      while (pendingSteers.length) {
+        const text = pendingSteers.shift() as string;
+        const key = text.replace(/\s+/g, " ").trim();
+        if (deliveredSteers.has(key)) continue;
+        deliveredSteers.add(key);
+        entries.push({ type: "custom_message", customType: "asf-steer", content: text, display: true });
+      }
+      return { entries } as never;
+    } catch {
+      return undefined;
+    }
+  });
+
+  // ── session_start / session_compact: the card is where the rules live ──
+  //
+  // In 18 days the installed SKILL.md was read 0 times. The card is re-delivered
+  // whenever context was reset — a new session, a resumed one, or a compaction,
+  // which is exactly when the previous card stopped existing.
+  const rearmCard = async (reason: string) => {
+    try {
+      const file = await loadState(projectName());
+      if (file.current && file.current.phase !== "none") {
+        pendingCard = { text: cardFor(file.current), reason };
+      }
+    } catch {
+      /* a missing card is a gap, never a crash */
+    }
+  };
+  pi.on("session_start", async () => {
+    __clearProjectCache();
+    machineTurnsSinceHuman = 0;
+    await rearmCard("session_start");
+  });
+  pi.on("session_compact", async () => {
+    await rearmCard("session_compact");
+  });
+
+  // ── input: who is talking (P5) ────────────────────────────────────────────────
+  //
+  // Provenance from pi itself — `interactive`, `rpc` or `extension` — never from
+  // the text. ASF does not know or care which extension injected a turn.
+  pi.on("input", async (event) => {
+    try {
+      const source = String((event as { source?: unknown }).source || "interactive");
+      if (source === "extension") {
+        machineTurnsSinceHuman++;
+        if (machineTurnsSinceHuman >= REANCHOR_AFTER_MACHINE_TURNS && Date.now() - lastReanchorAt >= REANCHOR_MIN_INTERVAL_MS) {
+          const file = await loadState(projectName());
+          if (file.current && file.current.phase !== "none") {
+            lastReanchorAt = Date.now();
+            machineTurnsSinceHuman = 0;
+            pendingCard = { text: cardFor(file.current), reason: "reanchor" };
+            appendEvidence({ kind: "steer", gate: "reanchor", machineTurns: REANCHOR_AFTER_MACHINE_TURNS });
+          }
+        }
+      } else {
+        machineTurnsSinceHuman = 0;
+      }
+    } catch {
+      /* an observer never alters input */
+    }
+    return { action: "continue" } as never;
+  });
+
+  // ── before_agent_start: deliver a pending card with the run that needs it ──
+  pi.on("before_agent_start", async () => {
+    try {
+      if (!pendingCard) return undefined;
+      const card = pendingCard;
+      pendingCard = null;
+      return { message: { customType: "asf-run-card", content: card.text, display: true, details: { reason: card.reason } } };
     } catch {
       return undefined;
     }

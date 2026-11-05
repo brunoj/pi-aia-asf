@@ -24,7 +24,7 @@ import {
 } from "../lib/gates/blockers.mjs";
 import { createLedger, deriveSuiteRun, sessionFacts, renderLedger, validateEntry } from "../lib/gates/ledger.mjs";
 import { createAuthority, renderAuthority, PROMOTION_RULE } from "../lib/gates/authority.mjs";
-import { decideSettlement, renderCompletionGate, MAX_CONTINUATIONS } from "../lib/gates/settle.mjs";
+import { decideSettlement, renderCompletionGate, MAX_STEERS, steerFingerprint } from "../lib/gates/settle.mjs";
 import { loadDeclarations, assertSignalsExist, validateTrigger, renderRules } from "../lib/gates/declarations.mjs";
 import fs from "node:fs";
 import path from "node:path";
@@ -278,12 +278,29 @@ const l2 = createLedger();
 const d1 = decideSettlement(l2, { scale: "standard", webTouched: false, continuationsSoFar: 0 });
 check("an empty session cannot settle", d1.block === true);
 check("the continuation names exactly what is missing", typeof d1.continuation === "string" && d1.continuation.includes("Missing"));
-check("the continuation is bounded and says so", d1.continuation.includes(`of at most ${MAX_CONTINUATIONS}`));
+check("the continuation states its bound", d1.continuation.includes(`of at most ${MAX_STEERS}`));
 check("the completion gate never asks a human anything", !/please confirm|approve|Allow\?/i.test(d1.continuation));
+check("the steer carries a fingerprint of exactly its gaps", d1.fingerprint === steerFingerprint(d1.missing));
 
-const d2 = decideSettlement(l2, { scale: "standard", webTouched: false, continuationsSoFar: MAX_CONTINUATIONS });
-check("beyond the cap the gate reports instead of looping", d2.block === false && d2.exhausted === true);
+const d2 = decideSettlement(l2, { scale: "standard", webTouched: false, continuationsSoFar: 1, seenSteers: [d1.fingerprint] });
+check("an identical steer is never issued twice", d2.block === false && d2.exhausted === true);
 check("and the gaps stay visible as gaps", /not verified/.test(renderCompletionGate(d2)));
+// negative control: a DIFFERENT gap is still raised after a steer — the rule is no repeats, not a cap of one
+const l2b = createLedger();
+const d2b = decideSettlement(l2b, { scale: "standard", sourceMutated: true, continuationsSoFar: 1, seenSteers: [d1.fingerprint] });
+check("a new, different gap is still raised", d2b.block === true && d2b.fingerprint !== d1.fingerprint);
+const d2c = decideSettlement(l2b, { scale: "standard", sourceMutated: true, continuationsSoFar: MAX_STEERS });
+check("beyond MAX_STEERS the gate reports instead of asking (never stops work)", d2c.block === false && d2c.exhausted === true);
+
+section("completion floor: source changed => a passing test run");
+const fl = createLedger();
+const fa = decideSettlement(fl, { scale: "small", sourceMutated: true, testRunRecorded: false });
+check("small run with source changes and no test cannot settle", fa.block === true && fa.missing.some((m) => /no passing test run/.test(m)), fa.missing.join(" | "));
+const fb = decideSettlement(fl, { scale: "small", sourceMutated: true, testRunRecorded: true });
+check("small run with a passing test run settles (no health/full-suite ceremony)", fb.block === false && fb.missing.length === 0, fb.missing.join(" | "));
+const fc = decideSettlement(fl, { scale: "small", sourceMutated: false });
+check("small run without source changes is not held to the floor", fc.block === false);
+check("evidence gaps are never parked as human input", fa.park === undefined);
 
 const d3 = decideSettlement(full, { scale: "standard", webTouched: true, continuationsSoFar: 0 });
 check("a session with real evidence settles", d3.block === false && d3.missing.length === 0);

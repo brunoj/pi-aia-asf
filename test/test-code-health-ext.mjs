@@ -4,6 +4,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import { projectKey } from "../lib/project.mjs";
 
 let pass = 0, fail = 0;
 const chk = (name, cond, detail = "") => {
@@ -67,7 +68,7 @@ export async function run({ commands, extDir, invokeCommand }) {
     chk("god-file: violation named", out2.includes("maxLinesPerFunction") || out2.includes("complexity"));
 
     // ── 3. /asf verify (large) includes CODE HEALTH Gate 8 ──
-    const proj = path.basename(god);
+    const proj = projectKey(god);
     const stateDir = path.join(STATE_ROOT, proj);
     fs.mkdirSync(stateDir, { recursive: true });
     fs.writeFileSync(path.join(stateDir, "state.json"), JSON.stringify({

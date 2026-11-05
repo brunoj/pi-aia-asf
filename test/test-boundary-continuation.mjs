@@ -28,7 +28,8 @@
  * context that ends with an assistant message. A handler that regresses to a
  * bare continue fails here.
  */
-import { MAX_CONTINUATIONS } from "../lib/gates/settle.mjs";
+import { MAX_STEERS } from "../lib/gates/settle.mjs";
+import { projectKey, __clearProjectCache } from "../lib/project.mjs";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -40,17 +41,20 @@ const STATE_DIR = path.join(os.homedir(), ".pi", "agent", "skills", "aia-asf", "
  * runs inside a throwaway project directory rather than mutating the real one.
  */
 function makeProject(prefix) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "asf-boundary-"));
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "asf-boundary-")));
   const name = `${prefix}-${process.pid}`;
-  fs.mkdirSync(path.join(root, name), { recursive: true });
-  fs.mkdirSync(path.join(STATE_DIR, name), { recursive: true });
+  const dir = path.join(root, name);
+  fs.mkdirSync(dir, { recursive: true });
+  __clearProjectCache();
+  const key = projectKey(dir);
+  fs.mkdirSync(path.join(STATE_DIR, key), { recursive: true });
   return {
-    dir: path.join(root, name),
-    stateFile: path.join(STATE_DIR, name, "state.json"),
+    dir,
+    stateFile: path.join(STATE_DIR, key, "state.json"),
     cleanup() {
       try { process.chdir(originalCwd); } catch { /* already gone */ }
       fs.rmSync(root, { recursive: true, force: true });
-      fs.rmSync(path.join(STATE_DIR, name), { recursive: true, force: true });
+      fs.rmSync(path.join(STATE_DIR, key), { recursive: true, force: true });
     },
   };
 }
@@ -152,8 +156,8 @@ export async function run({ events }) {
     chk("the entry names what is missing, not just 'continue'",
       typeof msg?.content === "string" && msg.content.length > 0 && /\n- \S/.test(msg.content),
       `${continuationText(result).split("\n").length} lines`);
-    chk("the continuation is bounded and says so",
-      typeof msg?.content === "string" && msg.content.includes(`of ${MAX_CONTINUATIONS}`));
+    chk("the continuation states its bound and that it never repeats",
+      typeof msg?.content === "string" && msg.content.includes(`of at most ${MAX_STEERS}`) && /never comes back/.test(msg.content));
 
     // The regression assertion: pi's own rule, applied to the handler's result.
     chk("PI WOULD ACCEPT this continuation (the 1.5.0 contract)",
@@ -162,16 +166,21 @@ export async function run({ events }) {
       piSaysCanContinue({}, { continue: true }) === false);
   }
 
-  console.log("=== 5. the continuation is bounded ===");
-    // Beyond the cap the gate reports the gap and lets the run settle: a gate
-    // that loops forever is worse than a gate with a gap.
-    let last;
-    for (let i = 0; i < MAX_CONTINUATIONS + 2; i++) {
-      last = await handler({ type: "agent_before_settle", outcome: "completed", context: { canContinue: false } });
-    }
-    chk("after the cap the gate stops requesting continuations",
-      !last || last.continue !== true,
-      `last=${JSON.stringify(last)?.slice(0, 80)}`);
+  console.log("=== 5. an identical steer is never issued twice ===");
+    // The replacement for the old fixed cap: no stops, but no repeated
+    // identical asks either. The same gap twice is reported, not re-requested.
+    const again = await handler({ type: "agent_before_settle", outcome: "completed", context: { canContinue: false } });
+    chk("the identical gap is not raised a second time",
+      !again || again.continue !== true || !(again.entries || []).some((d) => d.customType === "asf-completion-gate"),
+      `again=${JSON.stringify(again)?.slice(0, 80)}`);
+    const st = JSON.parse(fs.readFileSync(proj.stateFile, "utf8"));
+    chk("the steer fingerprint is persisted in run state (survives a reload)", Array.isArray(st.current?.seenSteers) && st.current.seenSteers.length === 1);
+
+    console.log("=== 5b. prior boundary entries from other extensions are preserved ===");
+    writeState(proj.stateFile, "implementation");
+    const foreign = { type: "custom_message", customType: "someone-else", content: "theirs", display: false };
+    const r5 = await handler({ type: "agent_before_settle", outcome: "completed", entries: [foreign], context: { canContinue: false } });
+    chk("a foreign entry proposed earlier is still in the result", !r5 || (r5.entries || []).some((d) => d.customType === "someone-else"), JSON.stringify(r5)?.slice(0, 90));
 
     console.log("=== 6. a malformed event must not request a continuation ===");
     writeState(proj.stateFile, "implementation");

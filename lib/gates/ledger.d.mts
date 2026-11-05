@@ -33,6 +33,7 @@ export function deriveSuiteRun(
   durationMs: number,
   output?: string,
 ): SuiteRunEntry | null;
+export function isTestCommand(command: unknown): boolean;
 export function deriveHealthRun(command: unknown, verdict?: string, scanned?: number, level?: string): LedgerEntry | null;
 export function sessionFacts(
   ledger: Ledger,
