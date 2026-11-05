@@ -68,7 +68,7 @@ const gapReport = renderDeliveryReport({
 check("an empty ledger says nothing was observed", /no evidence recorded this session/.test(gapReport));
 check("a missing fact is named, not hidden", /full test suite was not run/.test(gapReport));
 check("and is explicitly marked not verified", /not verified/.test(gapReport));
-check("the completion gate reports rather than blocking forever", /continuation budget exhausted/.test(gapReport));
+check("the completion gate reports rather than blocking forever", /raised once, not re-requested — reported, not blocking/.test(gapReport));
 
 const zeroScan = createLedger();
 zeroScan.entries.push({ kind: "health-run", level: "standard", verdict: "pass", scanned: 0 });

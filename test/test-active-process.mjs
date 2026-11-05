@@ -74,6 +74,7 @@ export async function run({ events, invokeCommand }) {
   console.log("=== 2. hand-spawned workers without extensions are not invisible ===");
   chk("pi -p --no-extensions with default tools is counted as source mutation", delegatesUnguardedWrites('pi -p "fix the bug" --no-extensions') === true);
   chk("pi -p --no-extensions -t edit,write is counted", delegatesUnguardedWrites('pi -p "x" --no-extensions -t read,edit,write') === true);
+  chk("the classifier counts that worker as a source mutation of the parent run", classifyToolCall("bash", { command: 'pi -p "fix it" --no-extensions' }).source === true);
   chk("NEGATIVE: the documented read-only reviewer fallback is not a mutation", delegatesUnguardedWrites('pi -p "<brief>" --no-extensions --no-skills -t read,grep,find,ls') === false);
   chk("NEGATIVE: a worker WITH extensions is guarded by its own ASF", delegatesUnguardedWrites('pi -p "x"') === false);
 
