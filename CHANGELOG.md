@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.1] - 2026-11-06
+
 ### Fixed
 
 - **Specs are read under the same project key as run state.** 0.15.0 moved run state
