@@ -48,6 +48,7 @@ Determine the work type **and scale**. If it is not ASF work, **do not run the f
 
 - **Large work** runs the full gated flow: intake questions → research → specs → adversarial → PLAN.md → **explicit approval** → implementation → verification.
 - **Small work runs automatically**: no intake question barrage (at most ONE clarifying question, only if truly ambiguous), no research, no PLAN.md, no approval gate. State the intent in one or two sentences, capture specs, implement test-first, verify, deliver. Do not ask permission to start; do not stop for sign-off. If it turns out to be larger than expected mid-way, re-classify, say so, and switch to the full flow with approval.
+- **ASF is always on for software work**: the first source change opens a small run; a passing test must follow the last change (06i "Active process").
 - When in doubt about scale, **default to small and start working** — the user prefers action over questions. Re-classify upward if the work grows.
 
 If the user's request is ambiguous, **ask** before starting. State the classification explicitly:

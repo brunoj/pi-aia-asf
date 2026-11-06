@@ -292,6 +292,11 @@ check("a new, different gap is still raised", d2b.block === true && d2b.fingerpr
 const d2c = decideSettlement(l2b, { scale: "standard", sourceMutated: true, continuationsSoFar: MAX_STEERS });
 check("beyond MAX_STEERS the gate reports instead of asking (never stops work)", d2c.block === false && d2c.exhausted === true);
 
+section("A7: specs met this run need a trace");
+const tr = decideSettlement(createLedger(), { scale: "small", untracedMet: ["spc-1"] });
+check("a spec met this run without a trace holds the run", tr.block === true && tr.missing.some((m) => /spc-1/.test(m) && /trace/.test(m)), tr.missing.join(" | "));
+check("NEGATIVE: no untraced specs, no trace gap", decideSettlement(createLedger(), { scale: "small" }).missing.every((m) => !/trace/.test(m)));
+
 section("completion floor: source changed => a passing test run");
 const fl = createLedger();
 const fa = decideSettlement(fl, { scale: "small", sourceMutated: true, testRunRecorded: false });

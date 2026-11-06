@@ -19,9 +19,15 @@ It turns "let's build something" into a gated pipeline where nothing is implemen
 
 ## Activation
 
-The skill activates when the user's request is a **new software project, significant feature, major bugfix, or architectural refactor**. It does **not** activate for Q&A, one-liners, casual conversation, or non-software tasks. When in doubt, it asks.
+**ASF is always on when software is being changed.** The extension watches tool calls: the first change to a source file (an edit/write, a bash heredoc / `sed -i` / scripted write into source, or a `pi -p --no-extensions` worker with write tools) opens a `small` run automatically. Docs, assets and loose `/tmp` scratch never activate it, and nothing activates for Q&A or research.
 
-You can also force/start a session explicitly:
+An automatic run is held to a **floor**, not a ceremony: it cannot settle until a passing test run that started after the last source change is recorded (a lint or typecheck does not count), and any spec marked met during the run must carry `trace.outcome` + `trace.codePath`. Missing evidence is **steered**, never stopped: each gap is raised once, an identical steer never repeats, and an unclosable gap is reported as unverified. The run only parks for input ASF cannot obtain itself (plan approval, an irreversible step with no safe path, a credential, a deliverable-shaping choice).
+
+Three refusals always hold, including in passive mode: a secret written into a tracked file, a push/publish without a recorded full-suite green, and a destructive git command on a dirty tree. A repeated identical refusal escalates from refuse, to refuse with the rule text, to parking for the PO.
+
+Run state is stored per git work-tree root (or absolute path outside git), so `cd` into a subdirectory keeps the run. Deleting the state file does not end a run — it is restored and the deletion is recorded.
+
+Large work (new project, significant feature, major bugfix, architectural refactor) runs the full gated flow above. You can also start a session explicitly:
 
 ```
 /asf new          — start a new software project
@@ -31,7 +37,8 @@ You can also force/start a session explicitly:
 /asf status       — show current phase + state
 /asf health       — run the code health gate (function/module/architecture)
 /asf approve      — mark PLAN.md as approved (Gate 5)
-/asf abort        — end the session
+/asf abort        — end the session (the legitimate way to end a run)
+/asf passive      — silence steering for THIS run only (the three refusals stay)
 ```
 
 ## Dependencies (required)

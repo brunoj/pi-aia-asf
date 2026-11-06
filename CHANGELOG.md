@@ -7,6 +7,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **ASF is an active process for all software work.** The first source change in a
+  session opens a `small` run automatically. That includes edit/write tools, bash
+  writes into source (heredoc, `sed -i`, scripted `open(...,'w')`, redirect, `tee`,
+  `patch`, `cp`/`mv` into source) and hand-spawned `pi -p --no-extensions` workers
+  that have write tools. It works in non-git directories too. Docs, assets,
+  `node_modules` and loose `/tmp` scratch never activate it.
+- **Completion floor.** A run that changed source cannot settle until a passing test
+  run that started *after the last change* is recorded. A lint or typecheck does not
+  count, and neither does a green run from before the edit. A spec marked met during
+  the run must carry `trace.outcome` + `trace.codePath`; specs met in earlier runs
+  are not re-checked.
+- **Run card.** A compact card (≤1.5 KB, registered in the load budget) with the
+  phase, the open items and the single next step. It is shown when a run opens and
+  again at `session_start` and `session_compact`.
+- **`/asf passive`** silences steering for the current run only. The next source
+  change re-arms ASF.
+- **Refusal ladder.** The same refusal escalates: refuse → refuse with the rule
+  text → park for the PO. `/asf status` shows when a run is parked or passive.
+- A long stretch of untested source edits gets exactly one steer naming the files.
+  It never blocks.
+- `test/test-active-process.mjs`: an end-to-end suite that drives the real handlers,
+  with a negative control per guard.
+
+### Changed
+
+- **No stops.** The fixed continuation cap (`MAX_CONTINUATIONS = 2`) is replaced by
+  de-duplication: each gap is raised once, an identical steer is never issued again,
+  and after `MAX_STEERS` (12) gaps are reported as unverified instead of re-asked.
+  The run only parks for plan approval, an irreversible step with no safe path, an
+  unobtainable credential, or a deliverable-shaping choice.
+- `test-subset-without-impact` now steers instead of refusing (71 blocks in 18 days,
+  64 of them repeats). The secret, push-without-green and destructive-git refusals
+  are unchanged and still apply in passive mode.
+- **Run state is keyed by the git work-tree root** (absolute path outside git), not
+  the cwd basename. `cd` into a subdirectory no longer loses the run, and two
+  checkouts with the same folder name no longer share one. A run saved under the old
+  key is migrated once. Spec memory is still read under pi-vigilant's key.
+
+### Fixed
+
+- Deleting or corrupting `state.json` no longer silently ends enforcement. The
+  active run is restored from memory and the deletion is recorded. `/asf abort`
+  remains the way to end a run.
+- A malformed `agent_before_settle` event no longer requests a continuation.
+- The test harness ignored a suite's `false` return value, so a suite that reported
+  failures still counted as passed.
+
 ## [0.14.1] - 2026-11-04
 
 ### Fixed

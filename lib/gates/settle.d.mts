@@ -24,6 +24,7 @@ export function decideSettlement(
     sourceMutated?: boolean;
     testRunRecorded?: boolean;
     reportFields?: string[];
+    untracedMet?: string[];
   },
 ): SettleDecision;
 export function renderCompletionGate(decision: { missing: string[]; exhausted?: boolean; park?: ParkRequest }): string;

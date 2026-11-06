@@ -12,7 +12,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { checkBudget, verifyRulesPreserved, ruleBaseline, ALWAYS_READ, BUDGET_BYTES, CEILINGS, TOTAL_BUDGET_BYTES } from "../lib/skill-budget.mjs";
+import { checkBudget, verifyRulesPreserved, ruleBaseline, ALWAYS_READ, BUDGET_BYTES, CEILINGS, TOTAL_BUDGET_BYTES, RUN_CARD_BYTES } from "../lib/skill-budget.mjs";
+import { CARD_CEILING_BYTES } from "../lib/run-card.mjs";
 
 const chk = (name, cond, detail) => {
   console.log(`  ${cond ? "PASS" : "FAIL"}  ${name}${detail ? " — " + detail : ""}`);
@@ -79,4 +80,6 @@ export async function run({ extDir }) {
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }
+  console.log("=== 5. the run card ceiling is registered with the load budget ===");
+  chk("the renderer's ceiling equals the registered budget (it cannot creep alone)", CARD_CEILING_BYTES === RUN_CARD_BYTES, `${CARD_CEILING_BYTES} vs ${RUN_CARD_BYTES}`);
 }

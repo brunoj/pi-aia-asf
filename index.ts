@@ -1178,7 +1178,25 @@ export default function register(pi: ExtensionAPI): void {
       // it. A green run from before the edit says nothing about the edit.
       const since = typeof state.lastMutationAt === "number" ? state.lastMutationAt : 0;
       const testRunRecorded = suiteRuns.some((r) => r.exitCode === 0 && (r.at ?? 0) >= since);
+      // A7: specs met during THIS run (verifiedAt after the run started) need a
+      // complete trace. Automatic — no longer waiting for someone to type /asf verify.
+      let untracedMet: string[] = [];
+      try {
+        const runStart = Date.parse(state.startedAt || "") || 0;
+        const specs = (await loadSpecs(sharedSpecKey())) || [];
+        untracedMet = specs
+          .filter((sp) => sp.status === "met")
+          .filter((sp) => {
+            const at = Date.parse(String((sp as { verifiedAt?: string }).verifiedAt || ""));
+            return Number.isFinite(at) && at >= runStart;
+          })
+          .filter((sp) => !validateTrace(sp).ok)
+          .map((sp) => sp.id);
+      } catch {
+        /* spec memory unreadable: this item cannot be judged, the rest still is */
+      }
       const decision = decideSettlement(ledger, {
+        untracedMet,
         scale: currentScale(state),
         webTouched,
         continuationsSoFar: state.steers || 0,

@@ -86,6 +86,19 @@ Three things this deliberately does **not** do:
 - It does not replace the traceability matrix. Drift says the artifact still describes
   the code; the matrix says the spec was actually delivered.
 
+## Active process (enforced by the harness)
+
+- The first source change (edit/write, a bash write into source, or a
+  `--no-extensions` worker with write tools) opens a `small` run. Docs and `/tmp`
+  scratch do not.
+- **Floor:** a passing test run that started after the last change (a lint is not
+  a test); a spec met this run needs `trace.outcome` + `trace.codePath`.
+- A gap is steered once, never twice; unclosable gaps are reported **unverified**.
+  Park only for: plan approval, irreversible step, credential, deliverable choice.
+- Always refused, even under `/asf passive`: secret in a tracked file, push without
+  full-suite green, destructive git on a dirty tree.
+- `/asf passive` = this run only. `/asf abort` ends a run; deleting state does not.
+
 ## Definition of Done — completeness
 
 - [ ] No stub, unimplemented path, placeholder or fabricated data remains on a

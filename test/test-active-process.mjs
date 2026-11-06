@@ -133,6 +133,32 @@ export async function run({ events, invokeCommand }) {
     chk("an edit after the last green test is held to the floor again", (rs?.entries || []).some((e) => e.customType === "asf-completion-gate"), JSON.stringify(rs)?.slice(0, 90));
     await invokeCommand("asf", "abort");
 
+    console.log("=== 5c. A7: a spec met in THIS run without a trace holds the run ===");
+    {
+      const specDir = path.join(os.homedir(), ".pi", "agent", "skills", "spec-memory", "projects", path.basename(p.root));
+      fs.mkdirSync(specDir, { recursive: true });
+      try {
+        await toolCall("edit", { path: path.join(p.root, "src", "spec.ts") });
+        await toolCall("bash", { command: "bash test/run-all.sh" }, "t-spec");
+        await toolResult("t-spec", "ALL SUITES PASSED");
+        const old = new Date(Date.now() - 86400000).toISOString();
+        const now = new Date(Date.now() + 1000).toISOString();
+        fs.writeFileSync(path.join(specDir, "current-task.json"), JSON.stringify({ areas: { functionality: [
+          { id: "spc-old", status: "met", verifiedAt: old },
+          { id: "spc-new", status: "met", verifiedAt: now },
+          { id: "spc-ok", status: "met", verifiedAt: now, trace: { outcome: "x", codePath: "a -> b" } },
+        ] } }));
+        const rt = await settle();
+        const g = (rt?.entries || []).find((e) => e.customType === "asf-completion-gate")?.content || "";
+        chk("the untraced spec met this run is named", /spc-new/.test(g), g.slice(0, 120));
+        chk("NEGATIVE: a spec met in an earlier run is not re-litigated", !/spc-old/.test(g));
+        chk("NEGATIVE: a traced spec is not flagged", !/spc-ok/.test(g));
+      } finally {
+        fs.rmSync(specDir, { recursive: true, force: true });
+        await invokeCommand("asf", "abort");
+      }
+    }
+
     console.log("=== 6. /asf passive silences THIS run only ===");
     await toolCall("write", { path: path.join(p.root, "src", "b.ts"), content: "x" });
     chk("the next edit opens a fresh run", p.read()?.current?.phase === "implementation");
@@ -140,6 +166,14 @@ export async function run({ events, invokeCommand }) {
     await invokeCommand("asf", "passive");
     const rp = await settle();
     chk("a passive run is not steered at settle", !rp || !(rp.entries || []).some((e) => e.customType === "asf-completion-gate"));
+    // A full green was recorded above, so push is legitimately open here; the
+    // refusals that must survive passive are the secret and destructive ones.
+    execFileSync("git", ["init", "-q"], { cwd: p.root });
+    fs.writeFileSync(path.join(p.root, "dirty.txt"), "uncommitted work");
+    const secretOut = await toolCall("write", { path: path.join(p.root, "src", "k.ts"), content: 'const k = "AKIA' + 'ABCDEFGHIJKLMNOP";' });
+    chk("A8: passive keeps the secret refusal", secretOut?.block === true, JSON.stringify(secretOut)?.slice(0, 80));
+    const destr = await toolCall("bash", { command: ["git", "clean", "-fd"].join(" ") });
+    chk("A8: passive keeps the destructive-git refusal on a dirty tree", destr?.block === true, JSON.stringify(destr)?.slice(0, 80));
     await invokeCommand("asf", "abort");
     await toolCall("edit", { path: path.join(p.root, "src", "c.ts") });
     const after = p.read()?.current;

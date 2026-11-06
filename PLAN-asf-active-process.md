@@ -137,3 +137,24 @@ irreversibility refusals are part of the floor and are asserted by A9.
 - Unbounded continuation removes the only accidental brake on a confused agent.
   The de-duplication rule (A5) is the substitute, and it is the item most likely
   to be wrong in practice.
+
+## As built (0.15.0) — deviations from this plan, decided during implementation
+
+- **Activation on the FIRST source mutation, not the 2nd, and in non-git
+  directories too.** "At all times" cannot be met by a threshold: a one-edit
+  change is still a change. Non-git directories
+  are keyed by absolute path, so they get a run too. Docs/assets/`node_modules`/
+  loose `/tmp` scratch still never activate (A2).
+- **Bash writes count.** Heredocs, `sed -i`, scripted `open(...,'w')`, redirects,
+  `tee`, `patch`, and `pi -p --no-extensions` workers with write tools are source
+  mutations of the run (the bypass audit's loose count was 194 — an upper bound).
+- **Project key is the git root**, not the cwd basename (subdir `cd` lost the run;
+  shared basenames shared a run). Specs are still read under pi-vigilant's key.
+- **Validation means a passing test that started after the last change.**
+- **De-duplication has a reporting ceiling** (`MAX_STEERS = 12`): beyond it gaps
+  are reported, not asked — the work is never halted.
+- **State deletion is not a way to end a run** (in-process mirror + restore).
+- **Tests:** A1–A9 live in `test/test-active-process.mjs`, `test/test-gates.mjs`
+  and `test/test-boundary-continuation.mjs` rather than the per-item file names
+  above. The card ceiling is registered as `RUN_CARD_BYTES` in
+  `lib/skill-budget.mjs` and asserted equal to the renderer's.
