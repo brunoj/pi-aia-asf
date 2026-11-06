@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Specs are read under the same project key as run state.** 0.15.0 moved run state
+  to the git-root key but still read pi-vigilant's spec store by cwd basename. From
+  a subdirectory, the trace floor for specs met in the run therefore looked in the
+  wrong store and found nothing. pi-vigilant 0.9.0 writes the store under the root
+  key, and ASF reads it there. It falls back to the basename location, so an older
+  pi-vigilant does not leave ASF unable to see specs. Both suites pin the same
+  key vectors.
+
 ## [0.15.0] - 2026-11-06
 
 ### Added

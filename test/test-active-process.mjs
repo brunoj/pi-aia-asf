@@ -85,6 +85,16 @@ export async function run({ events, invokeCommand }) {
     __clearProjectCache();
     chk("a subdirectory of a repo resolves to the repo's key (cd no longer loses the run)",
       projectKey(path.join(sub.root, "packages", "api")) === projectKey(sub.root));
+    // Pinned byte-for-byte; pi-vigilant's test/test-project-key.mjs pins the SAME
+    // vectors, because ASF reads the spec store under this key.
+    const VECTORS = [
+      ["/home/brunoj/pi-aia-asf", "home-brunoj-pi-aia-asf"],
+      ["/home/brunoj", "home-brunoj"],
+      ["/tmp/a b/c", "tmp-a-b-c"],
+      ["/" + "x".repeat(100) + "/proj", "x".repeat(72) + "-b17978e1"],
+      ["", "default"],
+    ];
+    chk("the key matches the vectors shared with pi-vigilant", VECTORS.every(([i, w]) => sanitizeRoot(i) === w), VECTORS.map(([i]) => sanitizeRoot(i)).join(" "));
     chk("NEGATIVE: two different roots with the same basename get different keys",
       sanitizeRoot("/a/work/api") !== sanitizeRoot("/b/other/api"));
   } finally { sub.cleanup(); }
@@ -135,7 +145,8 @@ export async function run({ events, invokeCommand }) {
 
     console.log("=== 5c. A7: a spec met in THIS run without a trace holds the run ===");
     {
-      const specDir = path.join(os.homedir(), ".pi", "agent", "skills", "spec-memory", "projects", path.basename(p.root));
+      // pi-vigilant >= 0.9 writes the spec store under the same root key as ASF.
+      const specDir = path.join(os.homedir(), ".pi", "agent", "skills", "spec-memory", "projects", p.key);
       fs.mkdirSync(specDir, { recursive: true });
       try {
         await toolCall("edit", { path: path.join(p.root, "src", "spec.ts") });
@@ -153,6 +164,24 @@ export async function run({ events, invokeCommand }) {
         chk("the untraced spec met this run is named", /spc-new/.test(g), g.slice(0, 120));
         chk("NEGATIVE: a spec met in an earlier run is not re-litigated", !/spc-old/.test(g));
         chk("NEGATIVE: a traced spec is not flagged", !/spc-ok/.test(g));
+        // fallback: an older pi-vigilant wrote the store under the basename
+        const legacyDir = path.join(path.dirname(specDir), path.basename(p.root));
+        fs.renameSync(specDir, legacyDir);
+        try {
+          // a fresh run, so the gap has not been steered yet (no-repeat rule)
+          await invokeCommand("asf", "abort");
+          await toolCall("edit", { path: path.join(p.root, "src", "spec2.ts") });
+          await toolCall("bash", { command: "bash test/run-all.sh" }, "t-spec2");
+          await toolResult("t-spec2", "ALL SUITES PASSED");
+          const legacyFile = path.join(legacyDir, "current-task.json");
+          const nowIso = new Date(Date.now() + 1000).toISOString();
+          fs.writeFileSync(legacyFile, JSON.stringify({ areas: { functionality: [{ id: "spc-legacy", status: "met", verifiedAt: nowIso }] } }));
+          const rl = await settle();
+          const gl = (rl?.entries || []).find((e) => e.customType === "asf-completion-gate")?.content || "";
+          chk("specs under the legacy basename key are still read", /spc-legacy/.test(gl), gl.slice(0, 80));
+        } finally {
+          fs.renameSync(legacyDir, specDir);
+        }
       } finally {
         fs.rmSync(specDir, { recursive: true, force: true });
         await invokeCommand("asf", "abort");

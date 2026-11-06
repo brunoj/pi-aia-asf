@@ -143,11 +143,10 @@ function stateFileFor(project: string): string {
 }
 
 /**
- * The key pi-vigilant uses for spec-memory and feedback (cwd basename). Specs are
- * a shared contract between the two extensions, so ASF reads them where
- * vigilant writes them; only ASF's OWN run state moved to the root-based key.
+ * The pre-0.15 key (cwd basename). Used only to find run state written by an
+ * older ASF, and spec memory written by pi-vigilant < 0.9.
  */
-function sharedSpecKey(): string {
+function legacyKey(): string {
   try {
     return basename(process.cwd()) || "default";
   } catch {
@@ -155,12 +154,22 @@ function sharedSpecKey(): string {
   }
 }
 
+/**
+ * The spec store for this project. pi-vigilant >= 0.9 writes it under the same
+ * root-based key ASF uses (pinned vectors in both suites); older versions wrote
+ * it under the basename, which is read as a fallback so an un-upgraded
+ * pi-vigilant does not make ASF go blind to specs.
+ */
+async function loadProjectSpecs(): Promise<SpecItem[] | null> {
+  return (await loadSpecs(projectName())) ?? (await loadSpecs(legacyKey()));
+}
+
 async function loadState(project: string): Promise<ProjectStateFile> {
   const file = stateFileFor(project);
   if (!existsSync(file)) {
     // One-time migration: a run opened under the old basename key is adopted,
     // not orphaned — an upgrade must never silently end an active run.
-    const legacy = stateFileFor(sharedSpecKey());
+    const legacy = stateFileFor(legacyKey());
     if (legacy !== file && existsSync(legacy)) {
       try {
         const data = JSON.parse(await readFile(legacy, "utf-8")) as ProjectStateFile;
@@ -665,7 +674,7 @@ export default function register(pi: ExtensionAPI): void {
         ];
 
         if (scale === "large") {
-          const specs = await loadSpecs(sharedSpecKey());
+          const specs = await loadProjectSpecs();
           lines.push("\nSPEC-TO-CODE TRACEABILITY (M1 — large work):");
           if (!specs || specs.length === 0) {
             lines.push(
@@ -1183,7 +1192,7 @@ export default function register(pi: ExtensionAPI): void {
       let untracedMet: string[] = [];
       try {
         const runStart = Date.parse(state.startedAt || "") || 0;
-        const specs = (await loadSpecs(sharedSpecKey())) || [];
+        const specs = (await loadProjectSpecs()) || [];
         untracedMet = specs
           .filter((sp) => sp.status === "met")
           .filter((sp) => {
