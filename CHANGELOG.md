@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.4] - 2026-11-07
+
+### Added
+
+- (describe changes for 0.17.4)
+
 ## [0.18.0] - 2026-11-07
 
 ### Changed — ASF now passes its own health gate, and the gate measures the right tree
