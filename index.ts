@@ -26,7 +26,7 @@ import { execFileSync } from "node:child_process";
 import { createLedger, deriveSuiteRun, renderLedger } from "./lib/gates/ledger.mjs";
 import { evaluateBlockers, BLOCKERS, RULE_TEXT, refusalStage, __resetRefusals } from "./lib/gates/blockers.mjs";
 import { createAuthority, renderAuthority } from "./lib/gates/authority.mjs";
-import { decideSettlement, renderCompletionGate, MAX_STEERS, MAX_IDENTICAL_STEERS, steerFingerprint } from "./lib/gates/settle.mjs";
+import { decideSettlement, renderCompletionGate, MAX_STEERS, steerFingerprint } from "./lib/gates/settle.mjs";
 import { projectKey as resolveProjectKey, __clearProjectCache } from "./lib/project.mjs";
 import { classifyToolCall, activationDecision, isSourcePath, bashWritesSource } from "./lib/activation.mjs";
 import { renderRunCard, cardSummary, CARD_CEILING_BYTES } from "./lib/run-card.mjs";
