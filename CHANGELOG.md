@@ -9,8 +9,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.17.1] - 2026-11-07
 
-## [0.17.1] - 2026-11-07
-
 ### Added — the health gate ships its own toolchain
 
 The gate could not measure. `detectTools()` looked only in the **project's**
