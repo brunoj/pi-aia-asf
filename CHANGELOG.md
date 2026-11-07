@@ -7,6 +7,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-11-07
+
+### Changed — ASF now passes its own health gate, and the gate measures the right tree
+
+ASF demanded code health of every project and did not meet it itself: 74
+violations across `index.ts` and `lib/`. This release is that debt paid, and two
+real defects the work exposed.
+
+- `index.ts` is 37 lines of wiring. The extension lives in `lib/extension/`
+  (`commands/`, `tools/`, `handlers/`, plus state, specs, evidence, steer, run),
+  so no single file is the whole extension any more.
+- `lib/gates/`: the parameter table moved to `params.mjs` (the table reads as a
+  table), `clamp`/`round2` to `math.mjs` (the table's calibrations use them, and
+  importing them from the resolver was a cycle), `ledger.mjs`/`drift.mjs`/
+  `settle.mjs`/`blockers.mjs`/`config.mjs`/`declarations.mjs`/`authority.mjs`
+  decomposed into named pieces instead of one long function each.
+- `lib/code-health/`: `model-scan.mjs` (file selection and I/O), `model-patterns.mjs`
+  (the pattern tables), `eslint-run.mjs` (config generation and counting),
+  `exec.mjs` (the bounded spawn).
+- Functions that took four or more positional arguments now take one options
+  object (`deriveSuiteRun`, `deriveHealthRun`, `transition`, `evaluateBlockers`,
+  `planMetrics`, `walk`, `resolveParam`'s resolvers, `runBlocker`).
+
+### Fixed — the gate wrote into the repo it was measuring
+
+`jscpd`'s report went to `<project>/.asf-code-health-tmp`, which dirtied the
+measured tree (it tripped ASF's own dirty-tree guards) and shipped a committed
+temp file. It now writes to a `mktemp`-style directory under the OS temp root and
+removes it. A test asserts the `--output` path is outside the project and that
+the directory is gone afterwards.
+
+### Fixed — `asf_health` measured the session's cwd, not the run's project
+
+A session started in `$HOME` measured the whole home directory: 960 "handwritten
+cascade" findings from `site-packages`, and a fail verdict on a healthy repo.
+Every consumer of "the project" (the health tool, `/asf health`, `/asf verify`,
+`/asf config`, the project config read, the git-dirty probe, `PLAN.md`, spec
+traces) now goes through `runRoot()` — the git work-tree root — instead of
+`process.cwd()`. A test fails if any extension module measures
+`process.cwd()` as the project.
+
+### Fixed — the tests stopped covering half the extension
+
+The text-assertion helpers in `test-operator-surface.mjs`, `test-browser-touched.mjs`
+and `test-model-gate.mjs` read `lib/extension/*.ts` non-recursively, so after the
+split the `commands/`, `tools/` and `handlers/` modules were outside every text
+assertion. They read recursively now.
+
+
 ## [0.17.3] - 2026-11-07
 
 ### Fixed — the tools were installed but never found

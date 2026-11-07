@@ -15,12 +15,12 @@ export interface GateStat {
 export interface Authority {
   transitions: GateTransition[];
   currentState(gate: string): string;
-  transition(
-    gate: string,
-    to: string,
-    reason?: string,
-    evidence?: unknown,
-  ): { ok: boolean; noChange?: boolean; transition?: GateTransition; report?: string; error?: string };
+  transition(input: {
+    gate: string;
+    to: string;
+    reason?: string;
+    evidence?: unknown;
+  }): { ok: boolean; noChange?: boolean; transition?: GateTransition; report?: string; error?: string };
   eligibility(
     gate: string,
     stats: { cleanRuns?: number; caughtCases?: number; falsePositives?: number; verdicts?: number },

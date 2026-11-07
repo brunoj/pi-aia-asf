@@ -17,13 +17,14 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { scanModelSource, scanModel, hasPersistenceFiles, isModelRelevant, MODEL_RULES } from '../lib/code-health/model.mjs';
+import { scanModelSource, MODEL_RULES } from '../lib/code-health/model.mjs';
+import { scanModel, hasPersistenceFiles, isModelRelevant } from '../lib/code-health/model-scan.mjs';
 import { normalizeConfig, DEFAULT_CONFIG } from '../lib/code-health/config.mjs';
 import { planMetrics, detectLanguages } from '../lib/code-health/detect.mjs';
 import { runHealth } from '../lib/code-health/index.mjs';
 
 const TOOLS_ALL = { eslint: true, eslintSonarjs: true, jscpd: true, madge: true, dependencyCruiser: true, typescriptParser: true };
-const planFor = (files) => planMetrics(DEFAULT_CONFIG, detectLanguages(files), TOOLS_ALL, { files }).find((r) => r.key === 'modelFindings');
+const planFor = (files) => planMetrics({ config: DEFAULT_CONFIG, languages: detectLanguages(files), tools: TOOLS_ALL, files }).find((r) => r.key === 'modelFindings');
 
 let pass = 0, fail = 0;
 const chk = (name, cond, detail) => {
@@ -49,7 +50,20 @@ export async function run({ extDir }) {
   const base = path.join(extDir, 'skills', 'aia-asf');
   const read = (f) => fs.readFileSync(path.join(base, 'references', f), 'utf8');
   const skillMd = fs.readFileSync(path.join(base, 'SKILL.md'), 'utf8');
-  const indexTs = fs.readFileSync(path.join(extDir, 'index.ts'), 'utf8');
+  // index.ts plus the modules it is split into: a text assertion must follow the
+  // code, not the file it happened to live in.
+  const extModules = path.join(extDir, 'lib', 'extension');
+  // Recursive: the extension is split into subdirectories (commands/, tools/,
+  // handlers/), and a non-recursive read would silently stop covering them.
+  const walkTs = (dir) =>
+    fs.existsSync(dir)
+      ? fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+          const p = path.join(dir, e.name);
+          if (e.isDirectory()) return walkTs(p);
+          return e.name.endsWith('.ts') ? [fs.readFileSync(p, 'utf8')] : [];
+        })
+      : [];
+  const indexTs = [fs.readFileSync(path.join(extDir, 'index.ts'), 'utf8'), ...walkTs(extModules)].join('\n');
 
   // ── 1. the incident, and the controls that make the pass mean something ──
   console.log('\n— the incident shape —');

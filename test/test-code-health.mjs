@@ -121,23 +121,23 @@ section("2. detect: languages, plans, resolve");
   check("languages detected", langs.has("javascript") && langs.has("typescript") && langs.has("python"));
 
   const cfg = config.DEFAULT_CONFIG;
-  const plans = detect.planMetrics(cfg, new Set(["javascript"]), TOOLS_ALL);
+  const plans = detect.planMetrics({ config: cfg, languages: new Set(["javascript"]), tools: TOOLS_ALL });
   check("JS project plans all function+module metrics", plans.length >= 8);
   check("dependencyRules not planned when off", !plans.some((p) => p.key === "dependencyRules"));
 
   const withRules = config.mergeConfig(cfg, { architecture: { dependencyRules: { enabled: true } } });
-  const plans2 = detect.planMetrics(withRules, new Set(["typescript"]), TOOLS_ALL);
+  const plans2 = detect.planMetrics({ config: withRules, languages: new Set(["typescript"]), tools: TOOLS_ALL });
   check("dependencyRules planned when enabled", plans2.some((p) => p.key === "dependencyRules"));
 
-  const python = detect.planMetrics(cfg, new Set(["python"]), TOOLS_ALL);
+  const python = detect.planMetrics({ config: cfg, languages: new Set(["python"]), tools: TOOLS_ALL });
   const resolved = detect.resolvePlans(python, new Set(["python"]));
   check("python project: eslint metrics skipped (no JS)", resolved.filter((p) => p.tool === "eslint").every((p) => p.status === "skip-lang"));
   check("python project: jscpd still runs", resolved.find((p) => p.key === "duplication").status === "run");
 
-  const missing = detect.resolvePlans(detect.planMetrics(cfg, new Set(["javascript"]), { ...TOOLS_ALL, eslint: false }), new Set(["javascript"]));
+  const missing = detect.resolvePlans(detect.planMetrics({ config: cfg, languages: new Set(["javascript"]), tools: { ...TOOLS_ALL, eslint: false } }), new Set(["javascript"]));
   check("missing eslint → skip-tool", missing.filter((p) => p.tool === "eslint").every((p) => p.status === "skip-tool"));
 
-  const disabled = detect.resolvePlans(detect.planMetrics(config.mergeConfig(cfg, { module: { enabled: false } }), new Set(["javascript"]), TOOLS_ALL), new Set(["javascript"]));
+  const disabled = detect.resolvePlans(detect.planMetrics({ config: config.mergeConfig(cfg, { module: { enabled: false } }), languages: new Set(["javascript"]), tools: TOOLS_ALL }), new Set(["javascript"]));
   check("module.enabled:false → module metrics disabled", disabled.filter((p) => p.level === "module").every((p) => p.status === "disabled"));
 }
 

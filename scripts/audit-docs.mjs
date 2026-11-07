@@ -61,6 +61,61 @@ function listFiles(dir, filter) {
 /**
  * @param {string} skillDir  directory holding SKILL.md, references/, agents/
  */
+/** Checks 1 + 2 — relative links resolve, and anchors match a heading. */
+function checkLinks(docs, add, counter) {
+  for (const doc of docs) {
+    for (const m of doc.text.matchAll(LINK)) {
+      const target = m[2];
+      if (/^(https?:|mailto:|#)/.test(target)) continue;
+      counter.checked++;
+      const [rel, anchor] = target.split("#");
+      const abs = path.resolve(path.dirname(doc.abs), rel);
+      if (!fs.existsSync(abs)) {
+        add(doc.file, `relative link points at a file that does not exist: ${target}`);
+        continue;
+      }
+      if (!anchor) continue;
+      counter.checked++;
+      const heads = headingsOf(fs.readFileSync(abs, "utf8"));
+      if (!heads.has(anchor.toLowerCase())) add(doc.file, `anchor #${anchor} does not match any heading in ${rel}`);
+    }
+  }
+}
+
+/** Check 3 — the index and the directory agree, both ways. */
+function checkIndex({ skill, refFiles, refDir, add }) {
+  for (const f of refFiles) {
+    if (!skill.includes(f)) add(`references/${f}`, "not indexed in SKILL.md — an agent can never be routed to it");
+  }
+  for (const m of skill.matchAll(/`?references\/([A-Za-z0-9._-]+\.md)`?/g)) {
+    if (!fs.existsSync(path.join(refDir, m[1]))) add("SKILL.md", `index names references/${m[1]}, which does not exist`);
+  }
+}
+
+/** Check 4 — every reference says when to read it. */
+function checkRouting({ skill, refFiles, refDir, add }) {
+  for (const f of refFiles) {
+    const text = fs.readFileSync(path.join(refDir, f), "utf8");
+    const indexed = skill.includes("`" + f + "`");
+    if (!indexed && !/read when/i.test(text.split("\n").slice(0, 12).join("\n"))) {
+      add(`references/${f}`, "neither a 'Read when' line nor a row in the SKILL.md index — nothing routes to it");
+    }
+  }
+}
+
+/** Check 5 — frontmatter on the skill and every agent. */
+function checkFrontmatter({ skill, agentFiles, agentDir, add }) {
+  const fm = frontmatter(skill);
+  if (!fm || !fm.name || !fm.description) add("SKILL.md", "frontmatter must define name and description");
+  for (const f of agentFiles) {
+    const a = frontmatter(fs.readFileSync(path.join(agentDir, f), "utf8"));
+    if (!a || !a.name || !a.description) add(`agents/${f}`, "frontmatter must define name and description");
+  }
+}
+
+/**
+ * @param {string} skillDir  directory holding SKILL.md, references/, agents/
+ */
 export function auditDocs(skillDir) {
   const problems = [];
   const add = (file, msg) => problems.push({ file, msg });
@@ -74,62 +129,19 @@ export function auditDocs(skillDir) {
   const agentDir = path.join(skillDir, "agents");
   const refFiles = listFiles(refDir, (f) => f.endsWith(".md"));
   const agentFiles = listFiles(agentDir, (f) => f.endsWith(".md"));
+  const counter = { checked: 0 };
 
-  let checked = 0;
-
-  // 1 + 2 — links and anchors
   const docs = [
     { file: "SKILL.md", abs: skillPath, text: skill },
     ...refFiles.map((f) => ({ file: `references/${f}`, abs: path.join(refDir, f), text: fs.readFileSync(path.join(refDir, f), "utf8") })),
   ];
-  for (const doc of docs) {
-    for (const m of doc.text.matchAll(LINK)) {
-      const target = m[2];
-      if (/^(https?:|mailto:|#)/.test(target)) continue;
-      checked++;
-      const [rel, anchor] = target.split("#");
-      const abs = path.resolve(path.dirname(doc.abs), rel);
-      if (!fs.existsSync(abs)) {
-        add(doc.file, `relative link points at a file that does not exist: ${target}`);
-        continue;
-      }
-      if (anchor) {
-        checked++;
-        const heads = headingsOf(fs.readFileSync(abs, "utf8"));
-        if (!heads.has(anchor.toLowerCase())) {
-          add(doc.file, `anchor #${anchor} does not match any heading in ${rel}`);
-        }
-      }
-    }
-  }
+  checkLinks(docs, add, counter);
+  const env = { skill, refFiles, refDir, agentFiles, agentDir, add };
+  checkIndex(env);
+  checkRouting(env);
+  checkFrontmatter(env);
 
-  // 3 — the index and the directory agree, both ways
-  for (const f of refFiles) {
-    if (!skill.includes(f)) add(`references/${f}`, "not indexed in SKILL.md — an agent can never be routed to it");
-  }
-  for (const m of skill.matchAll(/`?references\/([A-Za-z0-9._-]+\.md)`?/g)) {
-    const f = m[1];
-    if (!fs.existsSync(path.join(refDir, f))) add("SKILL.md", `index names references/${f}, which does not exist`);
-  }
-
-  // 4 — every reference says when to read it
-  for (const f of refFiles) {
-    const text = fs.readFileSync(path.join(refDir, f), "utf8");
-    const indexed = skill.includes("`" + f + "`");
-    if (!indexed && !/read when/i.test(text.split("\n").slice(0, 12).join("\n"))) {
-      add(`references/${f}`, "neither a 'Read when' line nor a row in the SKILL.md index — nothing routes to it");
-    }
-  }
-
-  // 5 — frontmatter
-  const fm = frontmatter(skill);
-  if (!fm || !fm.name || !fm.description) add("SKILL.md", "frontmatter must define name and description");
-  for (const f of agentFiles) {
-    const a = frontmatter(fs.readFileSync(path.join(agentDir, f), "utf8"));
-    if (!a || !a.name || !a.description) add(`agents/${f}`, "frontmatter must define name and description");
-  }
-
-  return { problems, checked, references: refFiles.length, agents: agentFiles.length };
+  return { problems, checked: counter.checked, references: refFiles.length, agents: agentFiles.length };
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

@@ -11,6 +11,25 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+/**
+ * The extension source: index.ts plus every module it is split into, at any
+ * depth. A text assertion must follow the code, not the file it happened to
+ * live in — a non-recursive read silently stops covering the subdirectories
+ * the extension is actually split into.
+ */
+function extensionSource(extDir) {
+  const base = path.join(extDir, "lib", "extension");
+  const walk = (dir) =>
+    fs.existsSync(dir)
+      ? fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+          const p = path.join(dir, e.name);
+          if (e.isDirectory()) return walk(p);
+          return e.name.endsWith(".ts") ? [fs.readFileSync(p, "utf8")] : [];
+        })
+      : [];
+  return [fs.readFileSync(path.join(extDir, "index.ts"), "utf8"), ...walk(base)].join("\n");
+}
+
 let pass = 0, fail = 0;
 const chk = (name, cond, detail) => {
   if (cond) { console.log(`  PASS  ${name}${detail ? ' — ' + detail : ''}`); pass++; }
@@ -26,7 +45,7 @@ export async function run({ extDir }) {
   const impl = read('06-implementation.md');
   const skill = fs.readFileSync(path.join(base, 'SKILL.md'), 'utf8');
   const anti = fs.readFileSync(path.join(base, 'references', '06m-antipatterns.md'), 'utf8');
-  const index = fs.readFileSync(path.join(extDir, 'index.ts'), 'utf8');
+  const index = extensionSource(extDir);
 
   console.log('=== 1. Rule 9 trigger is change-level, not deliverable-level ===');
   chk('heading says TOUCH + during the build',

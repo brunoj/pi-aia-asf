@@ -169,12 +169,12 @@ check("a rejected entry is RECORDED, not silently dropped", ledger.rejected.leng
 check("a rejected entry is not in the ledger", ledger.count("suite-run") === 1);
 check("an unknown kind is refused", ledger.append({ kind: "vibes", note: "it looked fine to me" }).ok === false);
 
-check("a full-suite run is recognised from the command", deriveSuiteRun("npm test", 0, 100, "73 passing")?.scope === "full");
-check("a subset run is recognised as a subset", deriveSuiteRun("npm test -- --grep auth", 0, 50, "3 passing")?.scope === "subset");
-check("an unrelated command is not evidence", deriveSuiteRun("git status", 0, 5, "") === null);
-check("test count is 'unknown' when the runner output cannot be read", deriveSuiteRun("npm test", 0, 100, "done")?.testCount === "unknown");
-check("test count is never 0 by default", deriveSuiteRun("npm test", 0, 100, "nonsense")?.testCount !== 0);
-check("a read count is recorded", deriveSuiteRun("npm test", 0, 100, "Tests: 42 passed")?.testCount === 42);
+check("a full-suite run is recognised from the command", deriveSuiteRun("npm test", { durationMs: 100, output: "73 passing" })?.scope === "full");
+check("a subset run is recognised as a subset", deriveSuiteRun("npm test -- --grep auth", { durationMs: 50, output: "3 passing" })?.scope === "subset");
+check("an unrelated command is not evidence", deriveSuiteRun("git status", { durationMs: 5 }) === null);
+check("test count is 'unknown' when the runner output cannot be read", deriveSuiteRun("npm test", { durationMs: 100, output: "done" })?.testCount === "unknown");
+check("test count is never 0 by default", deriveSuiteRun("npm test", { durationMs: 100, output: "nonsense" })?.testCount !== 0);
+check("a read count is recorded", deriveSuiteRun("npm test", { durationMs: 100, output: "Tests: 42 passed" })?.testCount === 42);
 
 section("scanned: 0 is never a pass");
 const v0 = verdict({ fired: true, scanned: 0 });
@@ -230,29 +230,29 @@ const noisy = auth.eligibility("g3", { cleanRuns: 2, caughtCases: 1 });
 check("insufficient clean runs blocks promotion", noisy.promote === false);
 
 section("transitions are attributed or refused");
-const noReason = auth.transition("g4", "active", "");
+const noReason = auth.transition({ gate: "g4", to: "active", reason: "" });
 check("a gate cannot change its own power without saying why", noReason.ok === false, noReason.error);
-const withReason = auth.transition("g5", "active", "5 clean runs and 1 caught fixture case");
+const withReason = auth.transition({ gate: "g5", to: "active", reason: "5 clean runs and 1 caught fixture case" });
 check("an attributed transition is recorded", withReason.ok === true && auth.currentState("g5") === "active");
 check("and it is reportable", typeof withReason.report === "string" && withReason.report.includes("probation → active"));
 check("the log is append-only", auth.transitions.length >= 1);
-check("an unknown state is refused", auth.transition("g6", "godmode", "because").ok === false);
+check("an unknown state is refused", auth.transition({ gate: "g6", to: "godmode", reason: "because" }).ok === false);
 
 section("utility budget: automatic demotion (P45)");
 const auth2 = createAuthority();
-auth2.transition("push-gate", "active", "earned");
+auth2.transition({ gate: "push-gate", to: "active", reason: "earned" });
 const demoted = auth2.checkBudget("push-gate", { verdicts: 100, falsePositives: 20, blocksThisRun: 1, budgets: { falsePositiveBudget: 0.05 } });
 check("a gate exceeding its false-positive budget is demoted automatically", demoted.demote === true, demoted.reasons.join("; "));
 check("the demotion names the evidence that caused it", demoted.reasons[0].includes("20/100"), demoted.reasons.join("; "));
 check("and the state actually changed", auth2.currentState("push-gate") === "demoted");
 
 const auth3 = createAuthority();
-auth3.transition("subset-gate", "active", "earned");
+auth3.transition({ gate: "subset-gate", to: "active", reason: "earned" });
 const overBlocks = auth3.checkBudget("subset-gate", { verdicts: 20, falsePositives: 0, blocksThisRun: 9, budgets: { blocksPerRunBudget: 3 } });
 check("a gate that blocks repeatedly in one run is demoted", overBlocks.demote === true, overBlocks.reasons.join("; "));
 
 const auth4 = createAuthority();
-auth4.transition("good-gate", "active", "earned");
+auth4.transition({ gate: "good-gate", to: "active", reason: "earned" });
 const fine = auth4.checkBudget("good-gate", { verdicts: 100, falsePositives: 1, blocksThisRun: 1, budgets: { falsePositiveBudget: 0.05 } });
 check("a working gate is left alone", fine.demote === false);
 
@@ -261,7 +261,7 @@ check("a probation gate cannot be demoted (it is not blocking yet)", auth5.check
 
 section("a bypass request is not evidence that a gate is wrong");
 const auth6 = createAuthority();
-auth6.transition("g", "active", "earned");
+auth6.transition({ gate: "g", to: "active", reason: "earned" });
 // Nine bypass requests, zero confirmed-false fixtures: the gate stays active.
 const bypassOnly = auth6.checkBudget("g", { verdicts: 100, falsePositives: 0, blocksThisRun: 2, budgets: { falsePositiveBudget: 0.05 } });
 check("bypasses alone do not demote a gate", bypassOnly.demote === false, bypassOnly.reasons.join("; "));

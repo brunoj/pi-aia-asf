@@ -29,12 +29,10 @@ export function createLedger(): Ledger;
 export function validateEntry(entry: unknown): string | null;
 export function deriveSuiteRun(
   command: unknown,
-  exitCode: number,
-  durationMs: number,
-  output?: string,
+  outcome?: { exitCode?: number; durationMs?: number; output?: string },
 ): SuiteRunEntry | null;
 export function isTestCommand(command: unknown): boolean;
-export function deriveHealthRun(command: unknown, verdict?: string, scanned?: number, level?: string): LedgerEntry | null;
+export function deriveHealthRun(command: unknown, opts?: { verdict?: string; scanned?: number; level?: string }): LedgerEntry | null;
 export function sessionFacts(
   ledger: Ledger,
   opts?: { scale?: "small" | "standard" | "major"; webTouched?: boolean },

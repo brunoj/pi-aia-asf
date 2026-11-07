@@ -28,7 +28,7 @@ ledger.append({ kind: "browser-verify", page: "/settings", action: "click save",
 ledger.append({ kind: "spec-transition", specId: "spc-1", status: "met", evidence: "npm test → 73 passing" });
 
 const authority = createAuthority();
-authority.transition("push-without-recorded-green", "active", "5 clean runs and 1 caught fixture case");
+authority.transition({ gate: "push-without-recorded-green", to: "active", reason: "5 clean runs and 1 caught fixture case" });
 
 const report = renderDeliveryReport({
   ledger,

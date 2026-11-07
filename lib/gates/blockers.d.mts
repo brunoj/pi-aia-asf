@@ -22,8 +22,7 @@ export const BLOCKERS: Blocker[];
 export function evaluateBlockers(
   toolName: string,
   input: Record<string, unknown>,
-  ctx?: Record<string, unknown>,
-  opts?: { enabled?: Record<string, boolean> },
+  opts?: { ctx?: Record<string, unknown>; enabled?: Record<string, boolean> },
 ): {
   block: boolean;
   reason?: string;

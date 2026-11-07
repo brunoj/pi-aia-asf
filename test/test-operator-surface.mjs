@@ -10,6 +10,25 @@
 import fs from "node:fs";
 import path from "node:path";
 
+/**
+ * The extension source: index.ts plus every module it is split into, at any
+ * depth. A text assertion must follow the code, not the file it happened to
+ * live in — a non-recursive read silently stops covering the subdirectories
+ * the extension is actually split into.
+ */
+function extensionSource(extDir) {
+  const base = path.join(extDir, "lib", "extension");
+  const walk = (dir) =>
+    fs.existsSync(dir)
+      ? fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+          const p = path.join(dir, e.name);
+          if (e.isDirectory()) return walk(p);
+          return e.name.endsWith(".ts") ? [fs.readFileSync(p, "utf8")] : [];
+        })
+      : [];
+  return [fs.readFileSync(path.join(extDir, "index.ts"), "utf8"), ...walk(base)].join("\n");
+}
+
 const chk = (name, cond, detail) => {
   console.log(`  ${cond ? "PASS" : "FAIL"}  ${name}${detail ? " — " + detail : ""}`);
   if (!cond) process.exitCode = 1;
@@ -21,7 +40,7 @@ export async function run({ extDir }) {
   const sec = read("06h-security.md");
   const qa = read("06b-testing-qa.md");
   const skill = fs.readFileSync(path.join(base, "SKILL.md"), "utf8");
-  const index = fs.readFileSync(path.join(extDir, "index.ts"), "utf8");
+  const index = extensionSource(extDir);
   const cfg = fs.readFileSync(path.join(extDir, "lib", "gates", "config.mjs"), "utf8");
 
   console.log("=== 1. the chapter exists and is conditional ===");

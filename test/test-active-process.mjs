@@ -130,7 +130,7 @@ export async function run({ events, invokeCommand }) {
 
     // a real test run closes the floor; custom runners count
     chk("custom runner `bash test/run-all.sh` is a test run", isTestCommand("bash test/run-all.sh"));
-    chk("`node tests/e2e/full.test.js` is a (subset) test run", deriveSuiteRun("timeout 300 node tests/e2e/full.test.js", 0, 1, "")?.scope === "subset");
+    chk("`node tests/e2e/full.test.js` is a (subset) test run", deriveSuiteRun("timeout 300 node tests/e2e/full.test.js", { durationMs: 1 })?.scope === "subset");
     chk("`node --test` is a test run", isTestCommand("node --test"));
     await toolCall("bash", { command: "bash test/run-all.sh" }, "t-1");
     await toolResult("t-1", "ALL SUITES PASSED");
@@ -427,14 +427,14 @@ export async function run({ events, invokeCommand }) {
   __resetRefusals();
   const ctx = { suiteRuns: [], dirty: () => true };
   const push = { command: "git push origin main" };
-  const a = evaluateBlockers("bash", push, ctx);
-  const b = evaluateBlockers("bash", push, ctx);
-  const c = evaluateBlockers("bash", push, ctx);
+  const a = evaluateBlockers("bash", push, { ctx });
+  const b = evaluateBlockers("bash", push, { ctx });
+  const c = evaluateBlockers("bash", push, { ctx });
   chk("1st identical refusal: refuse with the autonomous exit", a.block && /Autonomous exit/.test(a.reason) && !a.ruleText);
   chk("2nd: refuse and carry the rule text", b.block && b.ruleText === RULE_TEXT["push-without-recorded-green"]);
   chk("3rd: park for the PO (still refused — never silently allowed)", c.block && !!c.park);
   __resetRefusals();
-  chk("NEGATIVE: a new run starts the ladder over", !evaluateBlockers("bash", push, ctx).ruleText);
+  chk("NEGATIVE: a new run starts the ladder over", !evaluateBlockers("bash", push, { ctx }).ruleText);
 
   console.log("=== 10. the irreversibility floor cannot be removed without failing here ===");
   // Negative control for the whole stop policy: "no stops" must never erode the
@@ -451,6 +451,30 @@ export async function run({ events, invokeCommand }) {
   const huge = renderRunCard({ phase: "implementation", scale: "large", objective: "x".repeat(5000), openDod: Array(50).fill("y".repeat(200)), filesTouched: Array(40).fill("/a/very/long/path/file.ts") });
   chk(`the card never exceeds ${CARD_CEILING_BYTES} bytes`, Buffer.byteLength(huge.text) <= CARD_CEILING_BYTES, `${Buffer.byteLength(huge.text)} bytes`);
   chk("activation never re-opens an active run", activationDecision({ call: { mutates: true, source: true }, activeRun: { phase: "implementation", runId: "r" } }).activate === false);
+
+  console.log("=== 12. the gates measure the RUN's project, never the session cwd ===");
+  {
+    // A session started in $HOME measured the whole home directory: 960 phantom
+    // model findings from site-packages, on a repo that was healthy. Every
+    // consumer of "the project" must go through runRoot(), which is the git
+    // work-tree root — not whatever directory the shell happened to be in.
+    const ext = path.join(path.dirname(new URL(import.meta.url).pathname), "..", "lib", "extension");
+    const walkTs = (dir) =>
+      fs.existsSync(dir)
+        ? fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+            const p = path.join(dir, e.name);
+            if (e.isDirectory()) return walkTs(p);
+            return e.name.endsWith(".ts") ? [p] : [];
+          })
+        : [];
+    const offenders = walkTs(ext).filter((f) => {
+      const body = fs.readFileSync(f, "utf8").replace(/^\s*\/\/.*$/gm, "");
+      return /runHealth\(process\.cwd\(\)|readProjectConfig\(process\.cwd\(\)/.test(body);
+    });
+    chk("no gate measures process.cwd() as the project", offenders.length === 0, offenders.map((f) => path.basename(f)).join(","));
+    const paths = fs.readFileSync(path.join(ext, "paths.ts"), "utf8");
+    chk("runRoot() resolves the git work-tree root, not the cwd", /resolveProjectRoot/.test(paths) && /export function runRoot/.test(paths));
+  }
 
   console.log(`\n${pass} passed, ${fail} failed`);
   return fail === 0;

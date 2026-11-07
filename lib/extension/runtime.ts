@@ -1,0 +1,50 @@
+/**
+ * Mutable session state.
+ *
+ * Every field here is written by a handler and read by a later one, so it lives
+ * in a single object rather than as loose module-level `let`s: an imported
+ * binding is read-only across modules, and a scattered global is what made the
+ * 2026-11-07 loop possible in the first place (state nobody owned).
+ */
+
+/** P5: machine turns before a re-anchor is due. */
+export const REANCHOR_AFTER_MACHINE_TURNS = 25;
+/** P5: and never more often than this, however many turns pass. */
+export const REANCHOR_MIN_INTERVAL_MS = 30 * 60 * 1000;
+/** P6: source mutations without a test before the blind-edit nudge. */
+export const BLIND_EDIT_NUDGE_AFTER = 11;
+
+export interface RuntimeState {
+  /** Memoised dirty-tree answer, refreshed at most once per tool call. */
+  dirtyCache: { at: number; dirty: boolean } | null;
+  lastSettleDecision: { missing: string[] } | null;
+  webTouched: boolean;
+  impactStated: boolean;
+  /** A card waiting to be delivered at the next actionable boundary. */
+  pendingCard: { text: string; reason: string } | null;
+  /** P5: machine-authored turns since the last human one, and the last re-anchor. */
+  machineTurnsSinceHuman: number;
+  lastReanchorAt: number;
+  /** P6: source mutations since the last test run in this run. */
+  blindMutations: number;
+  blindNudged: boolean;
+  passiveHeartbeatWritten: boolean;
+  lastScaleWasSmall: boolean;
+  /** Re-anchoring is count-limited per run. */
+  reanchorsThisRun: number;
+}
+
+export const runtime: RuntimeState = {
+  dirtyCache: null,
+  lastSettleDecision: null,
+  webTouched: false,
+  impactStated: false,
+  pendingCard: null,
+  machineTurnsSinceHuman: 0,
+  lastReanchorAt: 0,
+  blindMutations: 0,
+  blindNudged: false,
+  passiveHeartbeatWritten: false,
+  lastScaleWasSmall: false,
+  reanchorsThisRun: 0,
+};

@@ -51,7 +51,18 @@ export async function run({ commands, extDir, api, invokeCommand }) {
   }
 
   console.log("=== 3. source-level guard: no bare-function registration left ===");
-  const src = fs.readFileSync(path.join(extDir, "index.ts"), "utf8");
+  // index.ts plus the modules it is split into: a source assertion must follow
+  // the code, not the file it happened to live in.
+  const extModules = path.join(extDir, "lib", "extension");
+  const src = [
+    fs.readFileSync(path.join(extDir, "index.ts"), "utf8"),
+    ...(fs.existsSync(extModules)
+      ? fs.readdirSync(extModules, { recursive: true })
+          .map(String)
+          .filter((f) => f.endsWith(".ts"))
+          .map((f) => fs.readFileSync(path.join(extModules, f), "utf8"))
+      : []),
+  ].join("\n");
   chk(
     "no registerCommand(name, fn) form in index.ts",
     !/registerCommand\(\s*"[^"]+"\s*,\s*(async\s*)?\(/.test(src),

@@ -9,9 +9,9 @@
 
 import { test } from "node:test";
 import assert from "node:assert";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, sep } from "node:path";
 
 const ROOT = new URL("..", import.meta.url).pathname;
 
@@ -141,6 +141,30 @@ test("every metric MEASURES on a fixture instead of skipping", async () => {
     const madge = await runMadge({}, dir);
     assert.ok(typeof madge.value === "number", `madge must measure, got ${JSON.stringify(madge)}`);
     assert.ok(madge.value >= 1, `madge must see the circular pair, got ${madge.value}`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("jscpd writes its report OUTSIDE the measured repo (a gate must not dirty the tree it measures)", async () => {
+  const dir = fixture({ "src/a.mjs": "export const a = 1;\n" });
+  try {
+    let outDir = null;
+    const fakeExec = async (bin, args) => {
+      const i = args.indexOf("--output");
+      outDir = args[i + 1];
+      // jscpd is stubbed: it reports what it was asked to write (and, like
+      // jscpd, creates the directory itself).
+      mkdirSync(outDir, { recursive: true });
+      writeFileSync(join(outDir, "jscpd-report.json"), JSON.stringify({ statistics: { total: { percentage: 1.5 } } }));
+      return { code: 0, stdout: "", stderr: "", timedOut: false };
+    };
+    const r = await runJscpd({ args: { thresholdPercent: 5, minLines: 5, minTokens: 30 } }, dir, { execFn: fakeExec });
+    assert.equal(r.value, 1.5, `jscpd must read its report, got ${JSON.stringify(r)}`);
+    assert.ok(outDir, "jscpd must be given an --output directory");
+    assert.ok(!outDir.startsWith(dir + sep) && outDir !== dir, `the report must not be written inside the project: ${outDir}`);
+    // and the temp dir it created is cleaned up
+    assert.ok(!existsSync(outDir), `the temp report dir must be removed afterwards: ${outDir}`);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

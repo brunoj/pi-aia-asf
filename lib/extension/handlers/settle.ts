@@ -1,0 +1,219 @@
+/**
+ * agent_before_settle: no "done" without evidence.
+ *
+ * Registered here and not on `agent_settled` because pi documents the latter as
+ * final and notification-only, while `agent_before_settle` is the final
+ * actionable boundary. Nothing here awaits a resumed run: the loop guard
+ * documents a production hang caused by exactly that.
+ *
+ * Every continuation MUST carry content. pi commits `entries` and only then
+ * re-checks whether the context can run another provider request; at settle time
+ * the context ends with the assistant's own message, so a bare
+ * `{ continue: true }` is refused with "agent_before_settle requested
+ * continuation without runnable model context". A custom_message projects to a
+ * user-role message, which is what makes the next request runnable.
+ */
+
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { decideSettlement } from "../../gates/settle.mjs";
+import { projectName } from "../paths.ts";
+import { loadState, saveState, sanitizeSteerFields } from "../state.ts";
+import { loadProjectSpecs, validateTrace } from "../specs.ts";
+import { appendEvidence } from "../evidence.ts";
+import { ledger, suiteRuns, pendingSteers, deliveredSteers } from "../gate-state.ts";
+import { steerLedgerFor, steerContinuationsAllowed, parkedAlready } from "../steer.ts";
+import { currentScale } from "../run.ts";
+import { runtime } from "../runtime.ts";
+import type { AsfState, ProjectStateFile } from "../types.ts";
+
+type Entry = Record<string, unknown>;
+type SettleResult = { entries: Entry[]; continue: true } | undefined;
+
+/** Queued steers go out first, once each; they ride the settle boundary. */
+function drainSteers(prior: Entry[]): Entry[] {
+  const entries: Entry[] = [...prior];
+  if (runtime.pendingCard) {
+    entries.push({ type: "custom_message", customType: "asf-run-card", content: runtime.pendingCard.text, display: true, details: { reason: runtime.pendingCard.reason } });
+    runtime.pendingCard = null;
+  }
+  while (pendingSteers.length) {
+    const text = pendingSteers.shift() as string;
+    const key = text.replace(/\s+/g, " ").trim();
+    if (deliveredSteers.has(key)) continue;
+    deliveredSteers.add(key);
+    entries.push({ type: "custom_message", customType: "asf-steer", content: text, display: true });
+  }
+  return entries;
+}
+
+/** A7: specs met during THIS run need a complete trace. */
+async function untracedMetSpecs(startedAt: string | undefined): Promise<string[]> {
+  try {
+    const runStart = Date.parse(startedAt || "") || 0;
+    const specs = (await loadProjectSpecs()) || [];
+    return specs
+      .filter((sp) => sp.status === "met")
+      .filter((sp) => {
+        const at = Date.parse(String((sp as { verifiedAt?: string }).verifiedAt || ""));
+        return Number.isFinite(at) && at >= runStart;
+      })
+      .filter((sp) => !validateTrace(sp).ok)
+      .map((sp) => sp.id);
+  } catch {
+    /* spec memory unreadable: this item cannot be judged, the rest still is */
+    return [];
+  }
+}
+
+/**
+ * A park is asked ONCE. An autonomous run has no PO waiting to answer, so
+ * re-parking every settle would be the same endless loop in a different costume.
+ */
+interface SettleContext {
+  project: string;
+  file: ProjectStateFile;
+  state: AsfState;
+  entries: Entry[];
+}
+
+async function handlePark(ctx: SettleContext, parkRequest: { reason: string; question: string }): Promise<SettleResult> {
+  const { project, file, state, entries } = ctx;
+  const park = parkRequest;
+  const parkKey = `${state.runId || "run"}|${park.reason}`;
+  const already = parkedAlready.has(parkKey);
+  if (already) {
+    appendEvidence({ kind: "park-suppressed", reason: park.reason });
+  } else {
+    parkedAlready.add(parkKey);
+    entries.push({
+      type: "custom_message",
+      customType: "asf-park",
+      content: `ASF: this needs input ASF cannot supply — ${park.question}\nAsk the PO through the project's input channel (for ticket work: park the ticket), then continue with anything that does not depend on it.`,
+      display: true,
+      details: { park },
+    });
+  }
+  state.parked = { reason: park.reason, question: park.question, at: new Date().toISOString() };
+  await saveState(project, file);
+  appendEvidence({ kind: "park", reason: park.reason, question: park.question });
+  // Only continue while there is something NEW to say; a repeat park is
+  // recorded and the run settles.
+  return entries.some((e) => e.customType === "asf-park") ? { entries, continue: true } : undefined;
+}
+
+/** The steer counter is monotonic: the in-process memory is the authority. */
+interface BlockRequest {
+  steer?: number;
+  fingerprint?: string;
+  continuation?: string;
+  missing: string[];
+}
+
+async function handleBlock(
+  ctx: SettleContext & { mem: { count: number; seen: Set<string> } },
+  decision: BlockRequest,
+): Promise<SettleResult> {
+  const { project, file, state, entries, mem } = ctx;
+  mem.count += 1;
+  if (decision.fingerprint) mem.seen.add(decision.fingerprint);
+  state.steers = Math.max(typeof decision.steer === "number" ? decision.steer : 0, mem.count);
+  state.seenSteers = [...new Set([...(state.seenSteers || []), ...(decision.fingerprint ? [decision.fingerprint] : [])])].slice(-50);
+  state.updatedAt = new Date().toISOString();
+  await saveState(project, file);
+  entries.push({
+    type: "custom_message",
+    customType: "asf-completion-gate",
+    content: decision.continuation || "",
+    display: true,
+    details: { missing: decision.missing, steer: decision.steer },
+  });
+  return { entries, continue: true };
+}
+
+/** An auto-opened run whose floor is met closes itself. */
+async function closeAutoRun(state: AsfState, project: string, file: ProjectStateFile): Promise<void> {
+  file.history.push({ workType: state.workType || "auto", phase: state.phase, startedAt: state.startedAt || state.updatedAt, endedAt: new Date().toISOString() });
+  appendEvidence({ kind: "run-close", runId: state.runId, auto: true });
+  file.current = null;
+  await saveState(project, file);
+}
+
+/** No run (or a passive one): deliver any pending card/steer, never judge. */
+function noRunResult(project: string, entries: Entry[], priorCount: number): SettleResult {
+  if (entries.length <= priorCount) return undefined;
+  if (!steerContinuationsAllowed(steerLedgerFor(`${project}|no-run`))) return undefined;
+  return { entries, continue: true };
+}
+
+async function judgeAndSettle(ctx: SettleContext, priorCount: number): Promise<SettleResult> {
+  const { project, file, state, entries } = ctx;
+  // Only a passing test that STARTED after the last source change validates it.
+  const since = typeof state.lastMutationAt === "number" ? state.lastMutationAt : 0;
+  const testRunRecorded = suiteRuns.some((r) => r.exitCode === 0 && (r.at ?? 0) >= since);
+  const untracedMet = await untracedMetSpecs(state.startedAt);
+  // The in-process ledger is the authority; the file is a record that may be
+  // stale, raced or hand-edited. max() means a counter can never go down.
+  const mem = steerLedgerFor(`${project}|${state.runId || "run"}`);
+  sanitizeSteerFields(state);
+  const decision = decideSettlement(ledger, {
+    untracedMet,
+    scale: currentScale(state),
+    webTouched: runtime.webTouched,
+    continuationsSoFar: Math.max(state.steers || 0, mem.count),
+    seenSteers: [...new Set([...(state.seenSteers || []), ...mem.seen])],
+    sourceMutated: !!state.sourceMutated,
+    testRunRecorded,
+  });
+  runtime.lastSettleDecision = decision;
+  appendEvidence({ kind: "gate-verdict", gate: "completion", fired: decision.missing.length > 0, missing: decision.missing });
+
+  if (decision.park) return await handlePark(ctx, decision.park as { reason: string; question: string });
+  if (decision.block) return await handleBlock({ ...ctx, mem }, decision as BlockRequest);
+  if (decision.missing.length === 0 && state.auto) await closeAutoRun(state, project, file);
+  // A continuation for guidance alone is also bounded: an agent that keeps
+  // producing new distinct steers must not be kept alive by its own advice.
+  if (entries.length > priorCount && steerContinuationsAllowed(mem)) return { entries, continue: true };
+  return undefined;
+}
+
+/**
+ * An internal error is NOT a pass. Silently returning undefined let the run
+ * settle with its evidence gaps unexamined — the gate simply vanished. The error
+ * is recorded and surfaced once, deduped on the error CLASS: an I/O error's
+ * message carries a random tmp filename, so keying on it would make every
+ * occurrence look new and the gate would apologise forever.
+ */
+function gateErrorResult(e: unknown): SettleResult {
+  const msg = `ASF: the completion gate hit an internal error and could not judge this run: ${(e && (e as Error).message) || String(e)}. Record it and continue; the gate did not pass, it failed to run.`;
+  appendEvidence({ kind: "gate-error", error: String((e && (e as Error).message) || e).slice(0, 300) });
+  const key = `gate-error|${(e && (e as { code?: string }).code) || (e && (e as Error).name) || "unknown"}`;
+  if (deliveredSteers.has(key)) return undefined;
+  deliveredSteers.add(key);
+  return { entries: [{ type: "custom_message", customType: "asf-gate-error", content: msg, display: true }], continue: true };
+}
+
+export function registerSettleHandler(pi: ExtensionAPI): void {
+  pi.on("agent_before_settle", async (event) => {
+    try {
+      if (!event || typeof event !== "object") return undefined;
+      const ev = event as unknown as { entries?: Entry[] };
+      const prior: Entry[] = Array.isArray(ev?.entries) ? [...ev.entries] : [];
+      const priorCount = prior.length;
+      const project = projectName();
+      const file = await loadState(project);
+      const state = file.current;
+      const entries = drainSteers(prior);
+
+      if (!state || state.phase === "none" || (state.passiveRunId && state.passiveRunId === state.runId)) {
+        if (!state && !runtime.passiveHeartbeatWritten) {
+          runtime.passiveHeartbeatWritten = true;
+          appendEvidence({ kind: "passive", by: "no-run" });
+        }
+        return noRunResult(project, entries, priorCount) as never;
+      }
+      return (await judgeAndSettle({ project, file, state, entries }, priorCount)) as never;
+    } catch (e) {
+      return gateErrorResult(e) as never;
+    }
+  });
+}
