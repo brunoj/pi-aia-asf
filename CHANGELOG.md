@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-11-07
+
+### Added — the health gate ships its own toolchain
+
+The gate could not measure. `detectTools()` looked only in the **project's**
+`node_modules`, so on any repo without eslint/jscpd/madge it produced eight
+"tool not installed" skips and reported a level it never examined — and a run
+that changed source could be judged by metrics that were all missing.
+
+- **The tools are now ASF's own dependencies**: `eslint`, `eslint-plugin-sonarjs`,
+  `@typescript-eslint/parser`, `jscpd`, `madge`. Installing pi-aia-asf installs
+  them, so a fresh clone with an empty `node_modules` is still measured.
+- **ASF-first resolution** (`lib/code-health/tools.mjs`): ASF's copy, then the
+  project's, then PATH. The same metric means the same thing in every repo, and a
+  project pinning its own eslint still wins.
+- **No more `npx --no-install`.** Every metric tool is spawned by absolute path
+  from the resolved install; `npx` could silently run a different version or none.
+- **Deterministic eslint.** The gate writes its own flat config to a temp file and
+  runs with `--no-config-lookup`, so a project's eslint config cannot change what
+  is measured. The sonarjs plugin and TS parser are imported by absolute file URL
+  from ASF's install.
+- **Missing tools name the package** ("jscpd is not available — it ships with
+  pi-aia-asf; reinstall the package") instead of a bare "tool not installed".
+
+### Fixed
+
+- **A sonarjs metric counted the wrong rule id** (`cognitive-complexity` instead
+  of `sonarjs/cognitive-complexity`), so it always reported zero violations.
+- **Vendored trees were scanned as project source.** The model level walked
+  `.local`, `site-packages`, `.venv`, `vendor`, `third_party`, `target`, `Pods`
+  and every other dot-directory: from a home directory it produced 958 findings
+  from Python packages belonging to nobody's project. Those trees are skipped now.
+- **A circular dependency in ASF itself** (`code-health/model.mjs` ↔ `run.mjs`,
+  via a dynamic import) — found by madge the moment it could actually run. The
+  file walker moved to `lib/code-health/files.mjs`, imported by both.
+
 ## [0.16.1] - 2026-11-07
 
 ### Fixed — the 2026-11-07 endless completion-gate loop
