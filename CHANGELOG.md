@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.1] - 2026-11-07
+
+### Added
+
+- (describe changes for 0.16.1)
+
 ## [0.16.0] - 2026-11-07
 
 ### Fixed — the 2026-11-07 endless completion-gate loop
