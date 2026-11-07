@@ -9,12 +9,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.16.1] - 2026-11-07
 
-### Added
-
-- (describe changes for 0.16.1)
-
-## [0.16.0] - 2026-11-07
-
 ### Fixed — the 2026-11-07 endless completion-gate loop
 
 The gate could steer forever for **no reason the agent could act on**. Two defects
