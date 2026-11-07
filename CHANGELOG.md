@@ -7,6 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-11-07
+
+### Fixed — the 2026-11-07 endless completion-gate loop
+
+The gate could steer forever for **no reason the agent could act on**. Two defects
+compounded: it demanded `/asf health`, a pi slash command an extension has no tool
+to invoke (so the gap could never close), and the "never the same steer twice" rule
+keyed on a fingerprint that concurrent saves kept wiping, so the identical ask was
+re-issued indefinitely. Both are now structurally impossible.
+
+- **A gate can only block on something the agent can close.** `splitGaps()` sorts
+  every gap into blocking (agent-closable) and reported (needs a human), and it
+  runs **once, after all gaps are assembled** — splitting earlier let gaps pushed
+  afterwards skip the filter. A human-only gap is rendered as "not verified / not
+  blocking" and never resumes the run.
+- **`asf_health` tool.** The health gate's only demand is now an agent-side tool
+  call, which records a verdict in the ledger. No gate asks for a slash command.
+- **A warranted loop has no ceiling.** A real, agent-closable gap is steered for as
+  long as it stays open; the old `exhausted` paths that settled the run with gaps
+  still open are gone. Repeats are worded as repeats ("still open after N previous
+  steers") instead of pretending to be new information, and no message claims a
+  bound ("of at most 12") the gate does not have.
+- **The steer count is in-process memory, and state.json is only its record.** A
+  corrupt, raced or hand-edited file can no longer reset the count or erase a
+  fingerprint; `Math.max` on read plus a monotonic merge on write make it
+  non-decreasing.
+- **Saves are serialized per project and merged under the lock.** Eleven paths
+  read-modify-write the state file; the write is now queued per project and
+  re-reads the file inside the lock, merging the monotonic fields (steer count,
+  fingerprints, touched files, last mutation). Write-to-temp-then-`rename` means a
+  reader never sees a half-written file.
+- **A corrupt state file can no longer disable the gate.** Wrong-typed fields used
+  to throw inside the settle handler, and the catch-all returned `undefined` —
+  which settled the run as if the gate had passed. Fields are coerced on load and
+  on both sides of a merge, and an internal error is now surfaced once as
+  `asf-gate-error` (deduped by error class, since an I/O message carries a random
+  tmp filename) instead of being swallowed.
+- **A park is asked once per (run, reason)**, and guidance-only continuations are
+  bounded per run, so no secondary nudge can hold a session open on its own.
+
+Every guard above is pinned by a test that fails when the guard is removed.
+
 ## [0.15.1] - 2026-11-06
 
 ### Fixed

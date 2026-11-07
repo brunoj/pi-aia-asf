@@ -63,12 +63,15 @@ const gapReport = renderDeliveryReport({
   ledger: emptyLedger,
   authority: createAuthority(),
   gateStats: {},
-  completion: { missing: ["the full test suite was not run this session"], exhausted: true },
+  completion: { missing: ["the full test suite was not run this session"] },
 });
 check("an empty ledger says nothing was observed", /no evidence recorded this session/.test(gapReport));
 check("a missing fact is named, not hidden", /full test suite was not run/.test(gapReport));
 check("and is explicitly marked not verified", /not verified/.test(gapReport));
-check("the completion gate reports rather than blocking forever", /raised once, not re-requested — reported, not blocking/.test(gapReport));
+// The report never claims a bound the gate does not have, and never turns an
+// open gap into a pass — a warranted loop stays open, and the report says so.
+check("the report never claims a ceiling", !/at most|raised once|not re-requested/.test(gapReport));
+check("the open gap is rendered as not verified", /not verified/.test(gapReport) && /evidence gap\(s\)/.test(gapReport));
 
 const zeroScan = createLedger();
 zeroScan.entries.push({ kind: "health-run", level: "standard", verdict: "pass", scanned: 0 });

@@ -156,8 +156,11 @@ export async function run({ events }) {
     chk("the entry names what is missing, not just 'continue'",
       typeof msg?.content === "string" && msg.content.length > 0 && /\n- \S/.test(msg.content),
       `${continuationText(result).split("\n").length} lines`);
-    chk("the continuation states its bound and that it never repeats",
-      typeof msg?.content === "string" && msg.content.includes(`of at most ${MAX_STEERS}`) && /never comes back/.test(msg.content));
+    // No ceiling: a warranted loop may run as long as the gap is real. Claiming
+    // "of at most N" is what made the 2026-11-07 loop read as a countdown that
+    // never counted down.
+    chk("the continuation claims no ceiling and says the work is not stopped",
+      typeof msg?.content === "string" && !/of at most/.test(msg.content) && /Nothing here stops you/.test(msg.content) && /no ceiling on warranted work/.test(msg.content));
 
     // The regression assertion: pi's own rule, applied to the handler's result.
     chk("PI WOULD ACCEPT this continuation (the 1.5.0 contract)",
@@ -166,15 +169,16 @@ export async function run({ events }) {
       piSaysCanContinue({}, { continue: true }) === false);
   }
 
-  console.log("=== 5. an identical steer is never issued twice ===");
-    // The replacement for the old fixed cap: no stops, but no repeated
-    // identical asks either. The same gap twice is reported, not re-requested.
+  console.log("=== 5. an unchanged real gap keeps being raised (a warranted loop) ===");
+    // The loop is the mechanism. What it must not do is word the same gap as
+    // new information, or drop it while it is still open.
     const again = await handler({ type: "agent_before_settle", outcome: "completed", context: { canContinue: false } });
-    chk("the identical gap is not raised a second time",
-      !again || again.continue !== true || !(again.entries || []).some((d) => d.customType === "asf-completion-gate"),
-      `again=${JSON.stringify(again)?.slice(0, 80)}`);
+    const againMsg = (again?.entries || []).find((d) => d.customType === "asf-completion-gate");
+    chk("the unchanged real gap is raised again", again?.continue === true && !!againMsg, `again=${JSON.stringify(again)?.slice(0, 80)}`);
+    chk("but it is worded as a repeat, not as new information", /still open after/.test(againMsg?.content || ""), (againMsg?.content || "").slice(0, 60));
     const st = JSON.parse(fs.readFileSync(proj.stateFile, "utf8"));
-    chk("the steer fingerprint is persisted in run state (survives a reload)", Array.isArray(st.current?.seenSteers) && st.current.seenSteers.length === 1);
+    chk("the steer fingerprint is persisted in run state (survives a reload)", Array.isArray(st.current?.seenSteers) && st.current.seenSteers.length >= 1);
+    chk("and the count is persisted, so a reload cannot reset it", typeof st.current?.steers === "number" && st.current.steers >= 2, `steers=${st.current?.steers}`);
 
     console.log("=== 5b. prior boundary entries from other extensions are preserved ===");
     writeState(proj.stateFile, "implementation");

@@ -24,7 +24,7 @@ import {
 } from "../lib/gates/blockers.mjs";
 import { createLedger, deriveSuiteRun, sessionFacts, renderLedger, validateEntry } from "../lib/gates/ledger.mjs";
 import { createAuthority, renderAuthority, PROMOTION_RULE } from "../lib/gates/authority.mjs";
-import { decideSettlement, renderCompletionGate, MAX_STEERS, steerFingerprint } from "../lib/gates/settle.mjs";
+import { decideSettlement, renderCompletionGate, MAX_STEERS, steerFingerprint, agentClosable, splitGaps } from "../lib/gates/settle.mjs";
 import { loadDeclarations, assertSignalsExist, validateTrigger, renderRules } from "../lib/gates/declarations.mjs";
 import fs from "node:fs";
 import path from "node:path";
@@ -278,24 +278,75 @@ const l2 = createLedger();
 const d1 = decideSettlement(l2, { scale: "standard", webTouched: false, continuationsSoFar: 0 });
 check("an empty session cannot settle", d1.block === true);
 check("the continuation names exactly what is missing", typeof d1.continuation === "string" && d1.continuation.includes("Missing"));
-check("the continuation states its bound", d1.continuation.includes(`of at most ${MAX_STEERS}`));
+// A warranted loop has NO ceiling. Claiming one is what made the 2026-11-07
+// loop read as "1st of at most 2 continuations" forever.
+check("the continuation never claims a ceiling it does not have", !/of at most|at most \d+|max(imum)? of \d+/i.test(d1.continuation));
+check("the continuation says the work is not stopped", /Nothing here stops you/.test(d1.continuation) && /no ceiling on warranted work/.test(d1.continuation));
 check("the completion gate never asks a human anything", !/please confirm|approve|Allow\?/i.test(d1.continuation));
 check("the steer carries a fingerprint of exactly its gaps", d1.fingerprint === steerFingerprint(d1.missing));
 
 const d2 = decideSettlement(l2, { scale: "standard", webTouched: false, continuationsSoFar: 1, seenSteers: [d1.fingerprint] });
-check("an identical steer is never issued twice", d2.block === false && d2.exhausted === true);
-check("and the gaps stay visible as gaps", /not verified/.test(renderCompletionGate(d2)));
+// The same REAL gap must keep being raised — the loop is the mechanism, and it
+// may run as long as the gap is real. What it must not do is pretend the gap is
+// a new one, or stop asking while the gap is still open.
+check("a repeated real gap is raised again, not dropped", d2.block === true && d2.steer === 2);
+check("but it is worded as a repeat, not as new information", /still open after 1 previous steer/.test(d2.continuation));
+check("and it names the same gaps", d2.fingerprint === d1.fingerprint);
 // negative control: a DIFFERENT gap is still raised after a steer — the rule is no repeats, not a cap of one
 const l2b = createLedger();
 const d2b = decideSettlement(l2b, { scale: "standard", sourceMutated: true, continuationsSoFar: 1, seenSteers: [d1.fingerprint] });
 check("a new, different gap is still raised", d2b.block === true && d2b.fingerprint !== d1.fingerprint);
-const d2c = decideSettlement(l2b, { scale: "standard", sourceMutated: true, continuationsSoFar: MAX_STEERS });
-check("beyond MAX_STEERS the gate reports instead of asking (never stops work)", d2c.block === false && d2c.exhausted === true);
+// No cap: past any reporting number the gate still blocks on a real gap.
+for (const n of [MAX_STEERS, MAX_STEERS * 10, 1000]) {
+  const d2c = decideSettlement(l2b, { scale: "standard", sourceMutated: true, continuationsSoFar: n });
+  check(`at steer ${n} a real gap still blocks (no cap on warranted work)`, d2c.block === true && d2c.steer === n + 1);
+}
 
 section("A7: specs met this run need a trace");
 const tr = decideSettlement(createLedger(), { scale: "small", untracedMet: ["spc-1"] });
 check("a spec met this run without a trace holds the run", tr.block === true && tr.missing.some((m) => /spc-1/.test(m) && /trace/.test(m)), tr.missing.join(" | "));
 check("NEGATIVE: no untraced specs, no trace gap", decideSettlement(createLedger(), { scale: "small" }).missing.every((m) => !/trace/.test(m)));
+
+section("a gate can only block on something the agent can close");
+{
+  const std = decideSettlement(createLedger(), { scale: "standard" });
+  check("the health gap names the agent-side tool, not a slash command",
+    std.missing.some((m) => /asf_health tool/.test(m)) && !std.missing.some((m) => /\/asf\s+health/.test(m)),
+    std.missing.join(" | "));
+  // The structural guarantee behind the 2026-11-07 loop: sweep every shape of
+  // session and require that NOTHING the gate can block on needs a human keystroke.
+  const shapes = [];
+  for (const scale of ["small", "standard", "major"]) {
+    for (const webTouched of [false, true]) {
+      for (const reportFields of [[], ["delivery"]]) {
+        const l = createLedger();
+        shapes.push(decideSettlement(l, { scale, webTouched, reportFields }));
+        shapes.push(decideSettlement(l, { scale, webTouched, reportFields, sourceMutated: true }));
+      }
+    }
+  }
+  const offending = shapes.flatMap((d) => (d.block ? d.missing : []));
+  check("no blocking gap ever needs a human action (loop-proof sweep)",
+    offending.every(agentClosable),
+    offending.filter((m) => !agentClosable(m)).join(" | ") || `${offending.length} gaps swept, all agent-closable`);
+  check("a human-only gap is reported rather than blocked", (() => {
+    const d = decideSettlement(createLedger(), { scale: "standard", reportFields: ["x"] });
+    return (d.reported || []).every((g) => !agentClosable(g));
+  })());
+  check("agentClosable refuses a slash-command gap", agentClosable("/asf health was not run") === false);
+  // The split itself is the guarantee: a human-only gap can never enter the
+  // blocking list, whatever a future gate writes into it.
+  const sp = splitGaps(["/asf health was not run", "run the tests", "type /asf approve", "needs your approval to deploy"]);
+  check("splitGaps routes human-only gaps to reported", sp.reported.length === 3 && sp.blocking.length === 1, JSON.stringify(sp));
+  check("NEGATIVE: a plain evidence gap still blocks", sp.blocking[0] === "run the tests");
+  // The routing, not just the helper: a gap whose text needs a human must reach
+  // the REPORTED list through decideSettlement itself.
+  const viaSpec = decideSettlement(createLedger(), { scale: "small", untracedMet: ["needs your approval to proceed"] });
+  check("decideSettlement routes a human-only gap to reported, never to blocking",
+    viaSpec.block === false && (viaSpec.reported || []).length === 1 && viaSpec.missing.length === 0,
+    JSON.stringify({ missing: viaSpec.missing, reported: viaSpec.reported })?.slice(0, 140));
+  check("agentClosable accepts a gap the agent can do", agentClosable("run the tests that cover the change") === true);
+}
 
 section("completion floor: source changed => a passing test run");
 const fl = createLedger();

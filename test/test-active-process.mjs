@@ -16,6 +16,7 @@ import { projectKey, __clearProjectCache, sanitizeRoot } from "../lib/project.mj
 import { renderRunCard, CARD_CEILING_BYTES } from "../lib/run-card.mjs";
 import { evaluateBlockers, BLOCKERS, __resetRefusals, RULE_TEXT } from "../lib/gates/blockers.mjs";
 import { isTestCommand, deriveSuiteRun } from "../lib/gates/ledger.mjs";
+import * as settleMod from "../lib/gates/settle.mjs";
 
 const STATE_DIR = path.join(os.homedir(), ".pi", "agent", "skills", "aia-asf", "projects");
 const originalCwd = process.cwd();
@@ -236,6 +237,190 @@ export async function run({ events, invokeCommand }) {
     await invokeCommand("asf", "abort");
   } finally {
     p.cleanup();
+  }
+
+  console.log("=== 8b. THE LOOP: warranted loops never stop, unwarranted ones never start ===");
+  {
+    // The 2026-11-07 production loop was UNWARRANTED: the gate demanded a pi
+    // slash command no tool could satisfy, so the gap could never close. The fix
+    // is not a cap — a real gap must be steered for as long as it is real. What
+    // must never happen: steering over something the agent cannot close, and
+    // losing the count so the same steer restarts as "steer 1".
+    const lp = project("loop");
+    process.chdir(lp.root);
+    __clearProjectCache();
+    try {
+      await toolCall("edit", { path: path.join(lp.root, "src", "a.ts") });
+      let continuations = 0;
+      for (let i = 0; i < 25; i++) {
+        const r = await settle();
+        if ((r?.entries || []).some((e) => e.customType === "asf-completion-gate")) continuations++;
+      }
+      chk("a real gap keeps steering on every settle (no cap on warranted work)", continuations === 25, `got ${continuations} of 25`);
+
+      // The count only goes up — a reset is what let the loop restart itself
+      // with identical text forever.
+      const numbers = [];
+      for (let i = 0; i < 3; i++) {
+        const r = await settle();
+        const txt = (r?.entries || []).map((e) => e.content).join(" ");
+        const n = Number((txt.match(/steer (\d+)/) || [])[1]);
+        if (Number.isFinite(n) && n > 0) numbers.push(n);
+      }
+      chk("the steer counter only ever goes up", numbers.length >= 2 && numbers.every((n, i) => i === 0 || n > numbers[i - 1]), JSON.stringify(numbers));
+
+      // Wiping the state file mid-run must not reset it either: the in-process
+      // memory is the authority, the file is a record.
+      fs.writeFileSync(lp.stateFile, JSON.stringify({ current: { ...lp.read().current, steers: null, seenSteers: ["", "", ""] }, history: [] }));
+      const afterCorrupt = await settle();
+      const corruptTxt = (afterCorrupt?.entries || []).map((e) => e.content).join(" ");
+      const corruptN = Number((corruptTxt.match(/steer (\d+)/) || [])[1]);
+      chk("a corrupted state file cannot reset the counter", Number.isFinite(corruptN) && corruptN > 1, corruptTxt.match(/steer \d+/)?.[0] || "no steer text");
+
+      // ...and a fresh run with a real gap starts its own count at 1.
+      await invokeCommand("asf", "abort");
+      await toolCall("edit", { path: path.join(lp.root, "src", "b.ts") });
+      const r2 = await settle();
+      const freshTxt = (r2?.entries || []).map((e) => e.content).join(" ");
+      chk("a new run with a real gap is steered from steer 1", /steer 1\b/.test(freshTxt) && !/still open/.test(freshTxt), freshTxt.match(/steer \d+/)?.[0] || "no steer text");
+
+      // A state file whose steer fields are the WRONG TYPE must not throw inside
+      // the settle handler: a throw there returns undefined, which lets the run
+      // settle — a gate bypass dressed up as a corrupt file.
+      await invokeCommand("asf", "abort");
+      await toolCall("edit", { path: path.join(lp.root, "src", "typed.ts") });
+      fs.writeFileSync(lp.stateFile, JSON.stringify({ current: { ...lp.read().current, steers: "not-a-number", seenSteers: 12345 }, history: [] }));
+      const rType = await settle();
+      chk("a wrong-typed state file cannot silently bypass the gate", !!(rType?.entries || []).some((e) => e.customType === "asf-completion-gate"), `rType=${JSON.stringify(rType)?.slice(0, 200)} state=${JSON.stringify(lp.read()?.current)?.slice(0, 200)}`);
+      const survived = lp.read();
+      chk("and its steer fields are coerced to sane types on save", typeof survived?.current?.steers === "number" && Array.isArray(survived?.current?.seenSteers), JSON.stringify({ steers: survived?.current?.steers, seen: typeof survived?.current?.seenSteers }));
+      // An internal error must be SURFACED once, never swallowed: swallowing it
+      // is a gate bypass (the run settles as if it had passed). Forced with a
+      // real I/O failure — a read-only state directory — not a fake field.
+      await invokeCommand("asf", "abort");
+      await toolCall("edit", { path: path.join(lp.root, "src", "broken.ts") });
+      const stateDir = path.dirname(lp.stateFile);
+      const settleWithState = async () => {
+        fs.chmodSync(stateDir, 0o555);
+        try { return await settle(); } finally { fs.chmodSync(stateDir, 0o755); }
+      };
+      const rErr = await settleWithState();
+      const errEntries = (rErr?.entries || []).filter((e) => e.customType === "asf-gate-error");
+      chk("an internal gate error is surfaced, not swallowed", errEntries.length === 1 && /did not pass, it failed to run/.test(errEntries[0].content), `entries=${errEntries.length} r=${JSON.stringify(rErr)?.slice(0, 140)}`);
+      const rErr2 = await settleWithState();
+      chk("and it is surfaced once (an error is not a loop)", !(rErr2?.entries || []).some((e) => e.customType === "asf-gate-error"), `again=${(rErr2?.entries || []).length}`);
+      await invokeCommand("asf", "abort");
+      await toolCall("edit", { path: path.join(lp.root, "src", "typed2.ts") });
+      fs.writeFileSync(lp.stateFile, JSON.stringify({ current: { ...lp.read().current, steers: null, seenSteers: ["", ""] }, history: [] }));
+      await settle();
+      // A state file written by an older/buggy version must be repaired on load,
+      // not merely tolerated: steers is a number and no empty fingerprint survives.
+      const repaired = lp.read()?.current;
+      chk("a corrupted state file is repaired on load", typeof repaired?.steers === "number" && (repaired?.seenSteers || []).every((x) => typeof x === "string" && x.trim().length > 0), JSON.stringify({ steers: repaired?.steers, seen: (repaired?.seenSteers || []).length }));
+    } finally {
+      lp.cleanup();
+    }
+  }
+
+  console.log("=== 8c. the health gap is closable by the agent ===");
+  {
+    const tool = (typeof globalThis.__tools !== "undefined" ? globalThis.__tools : []).find((t) => t.name === "asf_health");
+    chk("asf_health is registered as an AGENT TOOL (not only a slash command)", !!tool, `tools=${(globalThis.__tools || []).map((t) => t.name).join(",")}`);
+    if (tool) {
+      chk("its description tells the agent it clears the gate", /completion gate/i.test(tool.description || ""));
+      const hp = project("health");
+      process.chdir(hp.root);
+      __clearProjectCache();
+      try {
+        fs.writeFileSync(path.join(hp.root, "x.ts"), "export const a = 1;\n");
+        const out = await tool.execute("tc-health", {});
+        const text = out?.content?.[0]?.text || "";
+        chk("the tool records a verdict", /verdict: (pass|warn|fail)/.test(text), text.slice(0, 60).replace(/\n/g, " "));
+        chk("and says the gap is closed", /recorded as evidence/.test(text));
+      } finally { hp.cleanup(); }
+    }
+  }
+
+  console.log("=== 8d. the other loop surfaces ===");
+  {
+    const lp2 = project("loop2");
+    process.chdir(lp2.root);
+    __clearProjectCache();
+    try {
+      // (1) a park is asked once, not every settle
+      await toolCall("edit", { path: path.join(lp2.root, "src", "a.ts") });
+      // A REAL park: a standard-scale run whose only remaining gap is a
+      // credential ASF cannot obtain. That is one of the four legitimate parks,
+      // and it must be asked once, not on every settle.
+      const parkDir = path.join(os.homedir(), ".pi", "agent", "skills", "spec-memory", "projects", lp2.key);
+      fs.mkdirSync(parkDir, { recursive: true });
+      let parks = 0;
+      try {
+        await invokeCommand("asf", "abort");
+        await toolCall("edit", { path: path.join(lp2.root, "src", "park.ts") });
+        const st0 = lp2.read();
+        fs.writeFileSync(lp2.stateFile, JSON.stringify({ current: { ...st0.current, scale: "large", steers: null, seenSteers: [] }, history: [] }));
+        // a met spec whose only gap is a credential, plus no health run -> park
+        fs.writeFileSync(path.join(parkDir, "current-task.json"), JSON.stringify({ areas: { functionality: [
+          // the id flows into the gate's message, which is what the park
+          // classifier reads — a genuine unobtainable-credential park.
+          { id: "spc-credential-required", status: "met", verifiedAt: new Date(Date.now() + 1000).toISOString() },
+        ] } }));
+        for (let i = 0; i < 10; i++) {
+          const r = await settle();
+          if ((r?.entries || []).some((e) => e.customType === "asf-park")) parks++;
+        }
+      } finally {
+        fs.rmSync(parkDir, { recursive: true, force: true });
+      }
+      chk("a legitimate park reaches the handler", parks > 0, `parks=${parks}`);
+      chk("but only ONCE in 10 settles (a park is asked once)", parks === 1, `parks=${parks}`);
+
+      // (2) saves are serialized: concurrent mutations never lose the newest write
+      const before = lp2.read()?.current;
+      await Promise.all(Array.from({ length: 20 }, (_, i) => toolCall("edit", { path: path.join(lp2.root, "src", `c${i}.ts`) })));
+      const after = lp2.read()?.current;
+      chk("20 concurrent saves leave a valid, complete state file", !!after && after.runId === before.runId && Array.isArray(after.filesTouched));
+      // No lost updates: every one of the 20 files must be in the final state
+      // (filesTouched keeps the last 10, so the 10 most recent must be there).
+      const touched = after.filesTouched || [];
+      const missingTouched = Array.from({ length: 10 }, (_, i) => `c${i + 10}.ts`).filter((f) => !touched.some((t) => t.endsWith(f)));
+      chk("no concurrent save is lost (read-modify-write is merged)", missingTouched.length === 0, `missing: ${missingTouched.join(",") || "none"} in ${touched.length}`);
+      chk("and the file is never left half-written", (() => { try { JSON.parse(fs.readFileSync(lp2.stateFile, "utf8")); return true; } catch { return false; } })());
+      const strays = fs.readdirSync(path.dirname(lp2.stateFile)).filter((f) => f.includes(".tmp-"));
+      chk("no temporary files are left behind", strays.length === 0, strays.join(","));
+
+      // (3) guidance-only continuations are bounded per RUN. Each pass queues a
+      // genuinely NEW steer (a different test-subset command → different text),
+      // so without a cap every settle would continue forever. Aborting between
+      // passes would start a fresh run and defeat the point of the test.
+      await invokeCommand("asf", "abort");
+      await toolCall("edit", { path: path.join(lp2.root, "src", "g.ts") });
+      // Passive: the completion gate is silent, so guidance is the ONLY reason
+      // to continue — that is the path the cap must bound.
+      await invokeCommand("asf", "passive");
+      let guidanceContinues = 0;
+      for (let i = 0; i < 40; i++) {
+        await toolCall("bash", { command: `npx vitest run src/x${i}.test.ts -t case${i}` }, `sub-${i}`);
+        const r = await settle();
+        if (r?.continue === true) guidanceContinues++;
+      }
+      chk("guidance-only continuations are bounded per run", guidanceContinues > 0 && guidanceContinues < 40, `got ${guidanceContinues} of 40`);
+      chk("and the cap is the documented one (24 per run)", guidanceContinues <= 25, `got ${guidanceContinues}`);
+
+      // (4) a passive run never steers, however many times it settles
+      await invokeCommand("asf", "abort");
+      await toolCall("edit", { path: path.join(lp2.root, "src", "p.ts") });
+      await invokeCommand("asf", "passive");
+      let passiveSteers = 0;
+      for (let i = 0; i < 10; i++) {
+        const r = await settle();
+        if ((r?.entries || []).some((e) => /completion-gate|asf-steer/.test(String(e.customType)))) passiveSteers++;
+      }
+      chk("a passive run is never steered (10 settles)", passiveSteers === 0, `got ${passiveSteers}`);
+    } finally {
+      lp2.cleanup();
+    }
   }
 
   console.log("=== 9. refusal ladder: refuse, then the rule, then park ===");

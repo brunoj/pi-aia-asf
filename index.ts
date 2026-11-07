@@ -12,13 +12,15 @@
  */
 
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { StringEnum } from "@earendil-works/pi-ai";
+import { mkdir, readFile, writeFile, rename } from "node:fs/promises";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { dirname, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 import { homedir } from "node:os";
 import { cpus, loadavg } from "node:os";
+import { Type } from "typebox";
 import { execFileSync } from "node:child_process";
 
 import { createLedger, deriveSuiteRun, renderLedger } from "./lib/gates/ledger.mjs";
@@ -189,6 +191,7 @@ async function loadState(project: string): Promise<ProjectStateFile> {
     if (!data || typeof data !== "object") return restoreFromMirror(project, { current: null, history: [] }, "corrupt");
     if (!data.history) data.history = [];
     if (!data.current) return restoreFromMirror(project, data, "cleared");
+    sanitizeSteerFields(data.current);
     return data;
   } catch {
     return restoreFromMirror(project, { current: null, history: [] }, "corrupt");
@@ -218,12 +221,137 @@ async function restoreFromMirror(project: string, data: ProjectStateFile, how: s
  */
 const runMirror = new Map<string, AsfState>();
 
+/**
+ * How much each run has been steered, held IN THIS PROCESS.
+ *
+ * The 2026-11-07 loop: the bound on identical steers lived only in state.json.
+ * A concurrent writer (the tool_call handler saves the same file on every source
+ * mutation) could put an older copy back, and the counter restarted — so the
+ * same gap was re-asked forever and the autonomous loop never ended. The state
+ * file is now a *record*; this map is the *authority* for this session. A run's
+ * steer count can go up, never down, and an identical steer is never issued
+ * twice in the same process no matter what the file says.
+ */
+const steerMemory = new Map<string, { count: number; seen: Set<string>; guidance: number }>();
+/** (runId|reason) already parked in this process — a park is asked once. */
+const parkedAlready = new Set<string>();
+
+/**
+ * Guidance-only continuations (card, steers) are capped per session. The
+ * completion gate has its own bound; this one covers the paths that continue a
+ * run merely to say something.
+ */
+const MAX_GUIDANCE_CONTINUATIONS = 24;
+/**
+ * Per-RUN, not per-process: a long session runs many runs, and each deserves
+ * its cards. A run kept alive purely by its own advice is the pathology.
+ */
+function steerContinuationsAllowed(mem: { guidance: number }): boolean {
+  if (mem.guidance >= MAX_GUIDANCE_CONTINUATIONS) {
+    appendEvidence({ kind: "steer", gate: "guidance-cap", suppressed: true });
+    return false;
+  }
+  mem.guidance++;
+  return true;
+}
+function steerLedgerFor(key: string): { count: number; seen: Set<string>; guidance: number } {
+  let m = steerMemory.get(key);
+  if (!m) {
+    m = { count: 0, seen: new Set<string>(), guidance: 0 };
+    if (steerMemory.size > 64) steerMemory.clear();
+    steerMemory.set(key, m);
+  }
+  return m;
+}
+
+/** Coerce a loaded run state's steer fields — a hand-edited or raced file must not disable the bound. */
+/**
+ * Coerce the fields the gate reads into the types it assumes. A hand-edited or
+ * older-version file must never be able to (a) throw inside the handler or
+ * (b) make every later save fail — so this runs on load AND on both sides of a
+ * merge, not only on the steer fields it was originally written for.
+ */
+function sanitizeSteerFields(state: AsfState | null | undefined): void {
+  if (!state) return;
+  if (typeof state.steers !== "number" || !Number.isFinite(state.steers) || state.steers < 0) state.steers = 0;
+  if (!Array.isArray(state.seenSteers)) state.seenSteers = [];
+  state.seenSteers = (state.seenSteers as unknown[]).filter((x): x is string => typeof x === "string" && x.trim().length > 0);
+  if (!Array.isArray(state.filesTouched)) state.filesTouched = [];
+  else state.filesTouched = (state.filesTouched as unknown[]).filter((f): f is string => typeof f === "string" && f.trim().length > 0).slice(-10);
+  if (typeof state.lastMutationAt !== "number" || !Number.isFinite(state.lastMutationAt)) state.lastMutationAt = 0;
+}
+
+/**
+ * Saves are SERIALIZED per project.
+ *
+ * Eleven code paths save the same file (activation, settle, park, close, abort,
+ * restore…). Each one read-modify-writes it, so two overlapping saves let an
+ * older copy land last — which is how the 2026-11-07 loop survived its own
+ * bound: the settle handler wrote the steer counter, a source-mutation save put
+ * an older copy back, and the counter restarted. Writes are now queued per
+ * project, so a save cannot interleave with another.
+ */
+const saveQueue = new Map<string, Promise<void>>();
+
+/**
+ * Monotonic fields: once a run has been steered, or has touched a file, an older
+ * copy of the state must never erase that. Eleven code paths read-modify-write
+ * this file; the queue serializes the WRITES, and this merge closes the window
+ * the queue cannot: a caller that loaded the state before another caller saved
+ * it still writes a stale snapshot. Re-reading inside the lock and merging the
+ * monotonic fields makes a lost update impossible for the fields that matter to
+ * the completion gate.
+ */
+function mergeMonotonic(incoming: ProjectStateFile, onDisk: ProjectStateFile | null): ProjectStateFile {
+  const a = incoming.current;
+  const b = onDisk?.current;
+  // Both sides are sanitized: the on-disk copy can be hand-edited or written by
+  // an older version, and spreading a non-array field here threw inside the
+  // settle handler — which then settled the run silently (a gate bypass).
+  sanitizeSteerFields(a);
+  sanitizeSteerFields(b);
+  if (!a || !b) return incoming;
+  if (a.runId !== b.runId) return incoming; // a different run: no merge
+  a.steers = Math.max(Number(a.steers) || 0, Number(b.steers) || 0);
+  a.seenSteers = [...new Set([...(a.seenSteers || []), ...(b.seenSteers || [])])].filter((x) => typeof x === "string" && x.trim()).slice(-50);
+  // Chronological: the on-disk list is older, the incoming one carries the new
+  // entry. Appending the incoming entries AFTER the on-disk ones keeps
+  // newest-last, which is what the slice(-10) below trims.
+  const touched = [...(b.filesTouched || [])];
+  for (const f of a.filesTouched || []) if (!touched.includes(f)) touched.push(f);
+  a.filesTouched = touched.slice(-10);
+  if (typeof b.lastMutationAt === "number") a.lastMutationAt = Math.max(Number(a.lastMutationAt) || 0, b.lastMutationAt);
+  if (!a.parked && b.parked) a.parked = b.parked;
+  return incoming;
+}
+
+async function readStateFile(file: string): Promise<ProjectStateFile | null> {
+  try {
+    const parsed = JSON.parse(await readFile(file, "utf-8")) as ProjectStateFile;
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+async function writeStateFile(project: string, data: ProjectStateFile): Promise<void> {
+  const file = stateFileFor(project);
+  await mkdir(join(STATE_DIR, project), { recursive: true });
+  const merged = mergeMonotonic(data, await readStateFile(file));
+  // Write-then-rename: a reader never sees a half-written file.
+  const tmp = `${file}.tmp-${process.pid}-${Math.random().toString(36).slice(2, 8)}`;
+  await writeFile(tmp, JSON.stringify(merged, null, 2), "utf-8");
+  await rename(tmp, file);
+}
+
 async function saveState(project: string, data: ProjectStateFile): Promise<void> {
   if (data.current) runMirror.set(project, JSON.parse(JSON.stringify(data.current)));
   else runMirror.delete(project);
-  const file = stateFileFor(project);
-  await mkdir(join(STATE_DIR, project), { recursive: true });
-  await writeFile(file, JSON.stringify(data, null, 2), "utf-8");
+  const snapshot = JSON.parse(JSON.stringify(data)) as ProjectStateFile;
+  const prev = saveQueue.get(project) || Promise.resolve();
+  const next = prev.then(() => writeStateFile(project, snapshot), () => writeStateFile(project, snapshot));
+  saveQueue.set(project, next.catch(() => undefined));
+  await next;
 }
 
 // ─── Spec-memory read (shared with pi-vigilant) ────────────────────────────
@@ -373,7 +501,7 @@ const suiteRuns: Array<{ scope: string; exitCode: number; command: string; durat
 /** Memoised dirty-tree answer, refreshed at most once per tool call. */
 let dirtyCache: { at: number; dirty: boolean } | null = null;
 
-let lastSettleDecision: { missing: string[]; exhausted?: boolean } | null = null;
+let lastSettleDecision: { missing: string[] } | null = null;
 let webTouched = false;
 let impactStated = false;
 
@@ -402,9 +530,12 @@ const deliveredSteers = new Set<string>();
  * information. Events (gate-block, suite-run, transitions) are never deduped:
  * they are what a trace study measures.
  */
-const EVENT_KINDS = new Set(["run-restored", "gate-block", "suite-run", "spec-transition", "browser-verify", "browser-na", "health-run", "perf-scenario", "run-open", "run-close", "park", "steer", "passive"]);
+const EVENT_KINDS = new Set(["gate-error", "run-restored", "gate-block", "suite-run", "spec-transition", "browser-verify", "browser-na", "health-run", "perf-scenario", "run-open", "run-close", "park", "steer", "passive"]);
 const persistedVerdicts = new Set<string>();
 let passiveHeartbeatWritten = false;
+/** Re-anchoring is time-rate-limited AND count-limited per run. */
+const MAX_REANCHORS_PER_RUN = 5;
+let reanchorsThisRun = 0;
 
 function verdictSignature(entry: Record<string, unknown>): string {
   const { ts, at, timestamp, ...rest } = entry as Record<string, unknown> & { ts?: unknown; at?: unknown; timestamp?: unknown };
@@ -575,6 +706,67 @@ let lastScaleWasSmall = false;
 
 export default function register(pi: ExtensionAPI): void {
   piRef = pi;
+
+  // ── asf_health: the agent's own way to produce a health verdict ───────────
+  // The completion gate requires a recorded health verdict, and until 0.15.2 the
+  // ONLY way one was recorded was the ledger recognising a bash command that
+  // looked like `/asf health` — a pi slash command the agent cannot type. An
+  // autonomous run was therefore steered forever at a gap it had no hands for
+  // (the 2026-11-07 loop). Any gate that blocks must have an agent-side action;
+  // this is that action for the health gate.
+  pi.registerTool({
+    name: "asf_health",
+    label: "ASF Health",
+    description:
+      "Run ASF's code health gate (function/module/architecture) on this project and " +
+      "record the verdict as evidence. This is the agent-side equivalent of /asf health " +
+      "and it is what clears the completion gate's health gap — call it instead of " +
+      "waiting for a human to type /asf health.",
+    promptSnippet: "Run the code health gate and record its verdict",
+    parameters: Type.Object({
+      level: Type.Optional(
+        StringEnum(["small", "standard", "major"] as const, {
+          description: "Health level to record; defaults to the run's scale.",
+        }),
+      ),
+      scope: Type.Optional(
+        Type.String({ description: "Optional scope passed to the health gate (e.g. 'function')." }),
+      ),
+    }),
+    async execute(_toolCallId: string, params: { level?: unknown; scope?: unknown }) {
+      try {
+        const levelIn = typeof params?.level === "string" ? params.level : "";
+        const scopeIn = typeof params?.scope === "string" ? params.scope : "";
+        const { runHealth } = await import("./lib/code-health/index.mjs");
+        const args = scopeIn ? [`--scope=${scopeIn}`] : [];
+        const res = await runHealth(process.cwd(), args);
+        const verdict = res.exitCode === 1 ? "fail" : res.healthy ? "pass" : "warn";
+        const scanned = Array.isArray(res.rows) ? res.rows.length : 0;
+        const level: string = ["small", "standard", "major"].includes(levelIn) ? levelIn : currentScale();
+        const appended = ledger.append({ kind: "health-run", level, verdict, scanned });
+        appendEvidence({ kind: "health-run", level, verdict, scanned, by: "tool" });
+        return {
+          content: [
+            {
+              type: "text",
+              text:
+                `${res.text}\n\nverdict: ${verdict} (${scanned} metric(s) measured, level ${level}) — ` +
+                (appended.ok
+                  ? "recorded as evidence; the completion gate's health gap is now closed."
+                  : `NOT recorded (${appended.error})`),
+            },
+          ],
+          details: { verdict, scanned, level, recorded: appended.ok, by: "tool", error: "" },
+        };
+      } catch (e) {
+        return {
+          content: [{ type: "text", text: `asf_health failed: ${(e && (e as Error).message) || String(e)}` }],
+          details: { verdict: "unknown", scanned: 0, level: "standard", recorded: false, by: "tool", error: String((e as Error)?.message || e) },
+        };
+      }
+    },
+  });
+
   // Startup check: warn once per session if deps are missing (unless disabled)
   // The extension loads at startup; log to console so it surfaces in logs.
 
@@ -1180,7 +1372,7 @@ export default function register(pi: ExtensionAPI): void {
           passiveHeartbeatWritten = true;
           appendEvidence({ kind: "passive", by: "no-run" });
         }
-        return (steerEntries.length > priorCount ? { entries: steerEntries, continue: true } : undefined) as never;
+        return (steerEntries.length > priorCount && steerContinuationsAllowed(steerLedgerFor(`${project}|no-run`)) ? { entries: steerEntries, continue: true } : undefined) as never;
       }
 
       // Only a passing test that STARTED after the last source change validates
@@ -1204,12 +1396,16 @@ export default function register(pi: ExtensionAPI): void {
       } catch {
         /* spec memory unreadable: this item cannot be judged, the rest still is */
       }
+      // The in-process ledger is the authority; the file is a record that may be
+      // stale, raced or hand-edited. max() means a counter can never go down.
+      const mem = steerLedgerFor(`${project}|${state.runId || "run"}`);
+      sanitizeSteerFields(state);
       const decision = decideSettlement(ledger, {
         untracedMet,
         scale: currentScale(state),
         webTouched,
-        continuationsSoFar: state.steers || 0,
-        seenSteers: state.seenSteers || [],
+        continuationsSoFar: Math.max(state.steers || 0, mem.count),
+        seenSteers: [...new Set([...(state.seenSteers || []), ...mem.seen])],
         sourceMutated: !!state.sourceMutated,
         testRunRecorded,
       });
@@ -1222,22 +1418,36 @@ export default function register(pi: ExtensionAPI): void {
       });
 
       if (decision.park) {
+        // Park the SAME reason once. An autonomous run has no PO waiting to
+        // answer, so re-parking every settle would be the same endless loop in
+        // a different costume: ask, get nothing, settle, ask again.
+        const parkKey = `${state.runId || "run"}|${decision.park.reason}`;
+        if (parkedAlready.has(parkKey)) {
+          appendEvidence({ kind: "park-suppressed", reason: decision.park.reason });
+        } else {
+          parkedAlready.add(parkKey);
+          steerEntries.push({
+            type: "custom_message",
+            customType: "asf-park",
+            content: `ASF: this needs input ASF cannot supply — ${decision.park.question}\nAsk the PO through the project's input channel (for ticket work: park the ticket), then continue with anything that does not depend on it.`,
+            display: true,
+            details: { park: decision.park },
+          });
+        }
         state.parked = { reason: decision.park.reason, question: decision.park.question, at: new Date().toISOString() };
         await saveState(project, file);
         appendEvidence({ kind: "park", reason: decision.park.reason, question: decision.park.question });
-        steerEntries.push({
-          type: "custom_message",
-          customType: "asf-park",
-          content: `ASF: this needs input ASF cannot supply — ${decision.park.question}\nAsk the PO through the project's input channel (for ticket work: park the ticket), then continue with anything that does not depend on it.`,
-          display: true,
-          details: { park: decision.park },
-        });
-        return { entries: steerEntries, continue: true } as never;
+        const parkedEntry = steerEntries.find((e) => e.customType === "asf-park");
+        // Only continue while there is something NEW to say; a repeat park is
+        // recorded and the run settles.
+        return (parkedEntry ? { entries: steerEntries, continue: true } : undefined) as never;
       }
 
       if (decision.block) {
-        state.steers = decision.steer;
-        state.seenSteers = [...(state.seenSteers || []), decision.fingerprint || ""].slice(-50);
+        mem.count += 1;
+        if (decision.fingerprint) mem.seen.add(decision.fingerprint);
+        state.steers = Math.max(typeof decision.steer === "number" ? decision.steer : 0, mem.count);
+        state.seenSteers = [...new Set([...(state.seenSteers || []), ...(decision.fingerprint ? [decision.fingerprint] : [])])].slice(-50);
         state.updatedAt = new Date().toISOString();
         await saveState(project, file);
         // The continuation MUST carry content. pi commits `entries` and only
@@ -1265,9 +1475,25 @@ export default function register(pi: ExtensionAPI): void {
         file.current = null;
         await saveState(project, file);
       }
-      return (steerEntries.length > priorCount ? { entries: steerEntries, continue: true } : undefined) as never;
-    } catch {
-      return undefined;
+      // A continuation for guidance alone (card/steers) is also bounded: an
+      // agent that keeps producing new distinct steers must not be kept alive
+      // by its own advice.
+      const wantsContinue = steerEntries.length > priorCount && steerContinuationsAllowed(mem);
+      return (wantsContinue ? { entries: steerEntries, continue: true } : undefined) as never;
+    } catch (e) {
+      // An internal error is NOT a pass. Silently returning undefined let the
+      // run settle with its evidence gaps unexamined — the gate simply vanished.
+      // The error is recorded, surfaced once (deduped like every other steer),
+      // and the run is left to settle only after the agent has been told.
+      const msg = `ASF: the completion gate hit an internal error and could not judge this run: ${(e && (e as Error).message) || String(e)}. Record it and continue; the gate did not pass, it failed to run.`;
+      appendEvidence({ kind: "gate-error", error: String((e && (e as Error).message) || e).slice(0, 300) });
+      // Keyed on the error CLASS, not the message: an I/O error's message carries
+      // a random tmp filename, so keying on it would make every occurrence look
+      // new and the gate would apologise forever.
+      const key = `gate-error|${(e && (e as { code?: string }).code) || (e && (e as Error).name) || "unknown"}`;
+      if (deliveredSteers.has(key)) return undefined;
+      deliveredSteers.add(key);
+      return { entries: [{ type: "custom_message", customType: "asf-gate-error", content: msg, display: true }], continue: true } as never;
     }
   });
 
@@ -1335,9 +1561,10 @@ export default function register(pi: ExtensionAPI): void {
         machineTurnsSinceHuman++;
         if (machineTurnsSinceHuman >= REANCHOR_AFTER_MACHINE_TURNS && Date.now() - lastReanchorAt >= REANCHOR_MIN_INTERVAL_MS) {
           const file = await loadState(projectName());
-          if (file.current && file.current.phase !== "none") {
+          if (file.current && file.current.phase !== "none" && reanchorsThisRun < MAX_REANCHORS_PER_RUN) {
             lastReanchorAt = Date.now();
             machineTurnsSinceHuman = 0;
+            reanchorsThisRun++;
             pendingCard = { text: cardFor(file.current), reason: "reanchor" };
             appendEvidence({ kind: "steer", gate: "reanchor", machineTurns: REANCHOR_AFTER_MACHINE_TURNS });
           }
