@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.2] - 2026-11-07
+
+### Fixed — the tools were installed but never found
+
+0.17.1 declared the toolchain as dependencies and then looked for it in
+`<pi-aia-asf>/node_modules`, which does not exist in the layout pi installs: npm
+**hoists** a package's dependencies into the shared `node_modules` one level up.
+Every tool therefore read as missing, the gate fell back to a system `eslint` (v8,
+which rejects `--no-config-lookup`), and eight metrics came back as errors — the
+same blindness as before, with a different message.
+
+- Resolution now walks the real `node_modules` chain from ASF's package directory
+  upward, exactly as node resolves, so a hoisted install is found. `require.resolve`
+  is only a last resort: on Debian it escaped the install entirely and returned
+  `/usr/share/nodejs/eslint`.
+- Packages with no `main` field (jscpd) can never be found by `require.resolve`;
+  the directory walk finds them.
+- A regression test builds the hoisted layout on disk and asserts all five tools
+  resolve inside the install prefix, with ASF's copy winning over PATH.
+
 ## [0.17.1] - 2026-11-07
 
 ### Added — the health gate ships its own toolchain

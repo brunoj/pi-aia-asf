@@ -53,6 +53,42 @@ test("ASF ships its own toolchain (resolved from ASF, not the project)", () => {
   }
 });
 
+test("tools resolve from a HOISTED node_modules (the layout pi actually installs)", () => {
+  // pi installs packages into a shared node_modules, so pi-aia-asf has no
+  // node_modules of its own: <prefix>/node_modules/pi-aia-asf and
+  // <prefix>/node_modules/eslint are siblings. A literal <asf>/node_modules
+  // lookup finds nothing here and silently falls back to a system eslint.
+  const prefix = mkdtempSync(join(tmpdir(), "asf-hoist-"));
+  const asfPkg = join(prefix, "node_modules", "pi-aia-asf");
+  mkdirSync(asfPkg, { recursive: true });
+  writeFileSync(join(asfPkg, "package.json"), JSON.stringify({ name: "pi-aia-asf", version: "0.0.0" }));
+  const fake = (name, binName) => {
+    const dir = join(prefix, "node_modules", name);
+    mkdirSync(dir, { recursive: true });
+    const bin = join(dir, "cli.js");
+    writeFileSync(bin, "#!/usr/bin/env node\n", { mode: 0o755 });
+    writeFileSync(join(dir, "package.json"), JSON.stringify({ name, version: "0.0.0", bin: binName ? { [binName]: "./cli.js" } : undefined }));
+  };
+  fake("eslint", "eslint");
+  fake("eslint-plugin-sonarjs");
+  fake("@typescript-eslint/parser");
+  fake("jscpd", "jscpd");   // jscpd declares no `main`, so it cannot be found by require.resolve
+  fake("madge", "madge");
+  try {
+    const tools = resolveTools(join(prefix, "some-project"), { asfRoot: asfPkg });
+    assert.deepEqual(missingTools(tools), [], "every tool must resolve from the hoisted node_modules");
+    assert.equal(tools.sources.eslint, "asf", "the ASF copy must win over PATH");
+    // The five co-packaged tools; dependency-cruiser stays optional (madge
+    // already covers the circular-dependency metric).
+    for (const key of ["eslint", "jscpd", "madge"]) {
+      const bin = tools.bins[key];
+      assert.ok(bin && bin.startsWith(prefix), `${key} must resolve inside the install prefix, got ${bin}`);
+    }
+  } finally {
+    rmSync(prefix, { recursive: true, force: true });
+  }
+});
+
 test("detectTools reports availability for a project that has no tools of its own", () => {
   const dir = fixture({ "src/a.mjs": "export const a = 1;\n" });
   try {
@@ -124,7 +160,7 @@ test("eslint is spawned by absolute path — never npx (which installs a differe
     assert.ok(cmd, "eslint must be spawned");
     assert.notEqual(cmd, "npx", "the gate must not go through npx");
     assert.ok(cmd.startsWith("/"), `eslint must be an absolute path, got ${cmd}`);
-    assert.ok(/eslint$/.test(cmd), `the binary must be eslint, got ${cmd}`);
+    assert.ok(/eslint(\/bin\/eslint\.js)?$/.test(cmd), `the binary must be eslint, got ${cmd}`);
     assert.ok(args.includes("--no-config-lookup"), "the project's own eslint config must not change what the gate measures");
     assert.ok(args.includes("--config"), "the gate must supply its own config");
   } finally {
