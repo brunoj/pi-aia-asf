@@ -22,7 +22,8 @@ import {
   blockPushWithoutGreen,
   blockDestructiveGitDirty,
 } from "../lib/gates/blockers.mjs";
-import { createLedger, deriveSuiteRun, sessionFacts, renderLedger, validateEntry } from "../lib/gates/ledger.mjs";
+import { createLedger, sessionFacts, renderLedger, validateEntry } from "../lib/gates/ledger.mjs";
+import { deriveSuiteRun } from "../lib/gates/suite-runs.mjs";
 import { createAuthority, renderAuthority, PROMOTION_RULE } from "../lib/gates/authority.mjs";
 import { decideSettlement, renderCompletionGate, MAX_STEERS, steerFingerprint, agentClosable, splitGaps } from "../lib/gates/settle.mjs";
 import { loadDeclarations, assertSignalsExist, validateTrigger, renderRules } from "../lib/gates/declarations.mjs";

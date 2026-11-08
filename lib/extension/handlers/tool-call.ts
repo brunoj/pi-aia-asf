@@ -16,7 +16,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { classifyToolCall, activationDecision } from "../../activation.mjs";
 import { evaluateBlockers, BLOCKERS } from "../../gates/blockers.mjs";
-import { deriveSuiteRun } from "../../gates/ledger.mjs";
+import { deriveSuiteRun } from "../../gates/suite-runs.mjs";
 import { readProjectConfig } from "../../gates/config.mjs";
 import { projectName, runRoot } from "../paths.ts";
 import { loadState, saveState } from "../state.ts";
@@ -47,6 +47,11 @@ function nudgeBlindEdits(file: Awaited<ReturnType<typeof loadState>>, path: stri
 async function observeActivation(toolName: string, input: Input): Promise<void> {
   const call = classifyToolCall(toolName, input);
   if (!call.mutates || !call.source) return;
+  // The mutation clock the publish floor compares the suite runs against. Set for
+  // EVERY source mutation, a passive run included: "no steering" is not "no floor"
+  // — the irreversibility floor holds in passive mode, so it must not be able to
+  // publish on a green that predates the edit.
+  runtime.lastMutationAt = Date.now();
   const project = projectName();
   const file = await loadState(project);
   const decision = activationDecision({ call, activeRun: file.current, passiveRunId: file.current?.passiveRunId });
@@ -207,7 +212,15 @@ export function registerToolCallHandler(pi: ExtensionAPI): void {
 
       const config = readProjectConfig(runRoot());
       const res = evaluateBlockers(toolName, input, {
-        ctx: { suiteRuns, dirty: () => gitDirty(), impactStated: runtime.impactStated, trackedPaths: undefined },
+        ctx: {
+          suiteRuns,
+          dirty: () => gitDirty(),
+          impactStated: runtime.impactStated,
+          trackedPaths: undefined,
+          // The publish floor is the settle floor: the LAST full run, green, and
+          // started after the last source change — not "any green this session".
+          lastMutationAt: runtime.lastMutationAt,
+        },
         enabled: blockerSwitches(config),
       });
       emitVerdicts(res);

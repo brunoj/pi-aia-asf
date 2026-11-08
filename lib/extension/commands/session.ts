@@ -9,7 +9,7 @@ import type { AsfPhase, AsfScale, AsfState } from "../types.ts";
 import { projectName, runRoot } from "../paths.ts";
 import { loadState, saveState } from "../state.ts";
 import { newRunId } from "../run.ts";
-import { __resetRefusals } from "../../gates/blockers.mjs";
+import { __resetRefusals } from "../../gates/refusals.mjs";
 
 export interface PhaseChange {
   phase: AsfPhase;

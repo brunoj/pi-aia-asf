@@ -14,7 +14,7 @@ import { appendEvidence } from "./evidence.ts";
 import { loadState, saveState } from "./state.ts";
 import { projectName } from "./paths.ts";
 import { runtime } from "./runtime.ts";
-import { __resetRefusals } from "../gates/blockers.mjs";
+import { __resetRefusals } from "../gates/refusals.mjs";
 import type { AsfState } from "./types.ts";
 
 export function newRunId(): string {
@@ -74,6 +74,7 @@ export async function openAutoRun(trigger: string, path: string | null): Promise
   __resetRefusals();
   runtime.blindMutations = 0;
   runtime.blindNudged = false;
+  runtime.lastMutationAt = Date.now();
   appendEvidence({ kind: "run-open", runId: state.runId, auto: true, trigger, project });
   runtime.pendingCard = { text: cardFor(state), reason: "activation" };
   return state;

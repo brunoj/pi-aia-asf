@@ -3,19 +3,14 @@
  * JavaScript on purpose; this file is the boundary index.ts may rely on, so a
  * field that is not declared here is a type error at the call site rather than
  * a silent `any`.
+ *
+ * Suite-run recognition lives in `suite-runs.d.mjs` (split out in 0.17.5): the
+ * ledger stores entries, the observer decides what a tool call proved.
  */
 export interface LedgerEntry {
   kind: string;
   at?: string;
   [field: string]: unknown;
-}
-export interface SuiteRunEntry extends LedgerEntry {
-  kind: "suite-run";
-  command: string;
-  exitCode: number;
-  durationMs: number;
-  testCount: number | "unknown";
-  scope: "full" | "subset";
 }
 export interface Ledger {
   entries: LedgerEntry[];
@@ -27,12 +22,6 @@ export interface Ledger {
 }
 export function createLedger(): Ledger;
 export function validateEntry(entry: unknown): string | null;
-export function deriveSuiteRun(
-  command: unknown,
-  outcome?: { exitCode?: number; durationMs?: number; output?: string },
-): SuiteRunEntry | null;
-export function isTestCommand(command: unknown): boolean;
-export function deriveHealthRun(command: unknown, opts?: { verdict?: string; scanned?: number; level?: string }): LedgerEntry | null;
 export function sessionFacts(
   ledger: Ledger,
   opts?: { scale?: "small" | "standard" | "major"; webTouched?: boolean },

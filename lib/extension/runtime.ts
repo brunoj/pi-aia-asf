@@ -28,6 +28,14 @@ export interface RuntimeState {
   /** P6: source mutations since the last test run in this run. */
   blindMutations: number;
   blindNudged: boolean;
+  /**
+   * In-process mirror of the active run's `lastMutationAt`, kept so an exit
+   * floor can ask "did a test run start after the last edit?" without a file
+   * read on every tool call. Session-scoped on purpose, exactly like the suite
+   * runs it is compared against: after a restart there are no recorded runs and
+   * no mutations, so the two clocks can only disagree about the past.
+   */
+  lastMutationAt: number;
   passiveHeartbeatWritten: boolean;
   lastScaleWasSmall: boolean;
   /** Re-anchoring is count-limited per run. */
@@ -44,6 +52,7 @@ export const runtime: RuntimeState = {
   lastReanchorAt: 0,
   blindMutations: 0,
   blindNudged: false,
+  lastMutationAt: 0,
   passiveHeartbeatWritten: false,
   lastScaleWasSmall: false,
   reanchorsThisRun: 0,

@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — the publish floor could be satisfied by a green that proved nothing
+
+`push-without-recorded-green` asked for "a recorded full-suite green run in this
+session" and accepted **any** green: a run from before the last edit, or a green
+from earlier in the session that a red had since overtaken. It also disagreed
+with the completion floor, which already required a passing run *started after
+the last source change* — so the two ASF floors had different ideas about what
+"green" means, and the weaker one guarded the only irreversible action.
+
+The floor is now the same rule in both places: the **last** full run, green, and
+started after the last source mutation. Passive mode keeps it — "no steering"
+suspends guidance, not the irreversibility floor. The refusal now names which
+condition failed (`no full-suite run recorded` / `the last full suite run exited
+1` / `the last full-suite green predates the most recent source change`), so the
+autonomous exit is the specific action that closes it.
+
+New assertions drive the real `tool_call`/`tool_result` pair rather than a
+hand-built context, which is what pins the *recorder*: a floor whose demanded
+action does not actually close it is the 2026-11-07 bug class, and the previous
+tests could not see that path at all. Six mutations of the new guards (accept a
+red, accept a stale green, take the oldest full run, drop the mutation clock,
+never record the run, never set the clock) each fail at least one test.
+
+### Changed — two modules split to stay inside the limit ASF enforces
+
+`lib/gates/ledger.mjs` (327 lines) and `lib/gates/blockers.mjs` (301) crossed the
+300-line file limit, so the two halves that changed for different reasons were
+separated: `lib/gates/suite-runs.mjs` (suite-run recognition and the green-run
+rule) and `lib/gates/refusals.mjs` (the refusal ladder and its per-rule text).
+Both are imported explicitly — no re-export shim with two ways to reach one
+function.
+
+### Removed — `deriveHealthRun`
+
+It recognised a health run by matching `/asf health` in a command's text, which
+is the class of bug that produced the endless loop of 2026-11-07: a human slash
+command the agent has no tool for. The `asf_health` tool appends the `health-run`
+ledger entry directly, so nothing called it and nothing tested it.
+
 ## [0.17.4] - 2026-11-07
 
 ### Changed — ASF now passes its own health gate, and the gate measures the right tree

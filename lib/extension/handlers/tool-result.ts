@@ -8,7 +8,7 @@
  */
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { deriveSuiteRun } from "../../gates/ledger.mjs";
+import { deriveSuiteRun } from "../../gates/suite-runs.mjs";
 import { appendEvidence } from "../evidence.ts";
 import { pendingSuiteRuns, suiteRuns } from "../gate-state.ts";
 import { runtime } from "../runtime.ts";

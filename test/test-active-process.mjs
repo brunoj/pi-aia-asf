@@ -14,8 +14,9 @@ import { execFileSync } from "node:child_process";
 import { classifyToolCall, bashWritesSource, isSourcePath, activationDecision, delegatesUnguardedWrites } from "../lib/activation.mjs";
 import { projectKey, __clearProjectCache, sanitizeRoot } from "../lib/project.mjs";
 import { renderRunCard, CARD_CEILING_BYTES } from "../lib/run-card.mjs";
-import { evaluateBlockers, BLOCKERS, __resetRefusals, RULE_TEXT } from "../lib/gates/blockers.mjs";
-import { isTestCommand, deriveSuiteRun } from "../lib/gates/ledger.mjs";
+import { evaluateBlockers, BLOCKERS } from "../lib/gates/blockers.mjs";
+import { __resetRefusals, RULE_TEXT } from "../lib/gates/refusals.mjs";
+import { isTestCommand, deriveSuiteRun, lastFullRun, greenFullRun } from "../lib/gates/suite-runs.mjs";
 import * as settleMod from "../lib/gates/settle.mjs";
 
 const STATE_DIR = path.join(os.homedir(), ".pi", "agent", "skills", "aia-asf", "projects");
@@ -435,6 +436,62 @@ export async function run({ events, invokeCommand }) {
   chk("3rd: park for the PO (still refused — never silently allowed)", c.block && !!c.park);
   __resetRefusals();
   chk("NEGATIVE: a new run starts the ladder over", !evaluateBlockers("bash", push, { ctx }).ruleText);
+
+  console.log("=== 9b. the action a floor demands actually closes that floor ===");
+  {
+    // The 2026-11-07 class of bug aimed at the PUBLISH floor: a gate that demands
+    // an action which does not close it steers forever. This floor reads what the
+    // handlers RECORDED, so it is driven through the real tool_call/tool_result
+    // pair — the hand-built ctx of section 9 cannot catch a broken recorder, and
+    // `some(green)` could not catch a green that predates the last edit.
+    const gp = project("greenfloor", { git: true });
+    process.chdir(gp.root);
+    try {
+      __resetRefusals();
+      const publish = () => toolCall("bash", { command: "npm publish" }, `pub-${Math.random()}`);
+      const runSuite = async (content, isError = false, cmd = "bash test/run-all.sh") => {
+        const id = `s-${Math.random()}`;
+        await toolCall("bash", { command: cmd }, id);
+        await toolResult(id, content, isError);
+      };
+
+      chk("lastFullRun skips subset runs and takes the newest full one",
+        lastFullRun([{ scope: "subset", exitCode: 0, at: 9 }, { scope: "full", exitCode: 1, at: 5 }])?.at === 5);
+      chk("greenFullRun rejects a green that predates the last edit",
+        greenFullRun([{ scope: "full", exitCode: 0, at: 10 }], 20).ok === false);
+      chk("greenFullRun accepts a green that post-dates it",
+        greenFullRun([{ scope: "full", exitCode: 0, at: 30 }], 20).ok === true);
+
+      await runSuite("SUITE FAILURES", true);
+      const red = await publish();
+      chk("publish after a RED full run is refused", red?.block === true && /exited 1/.test(red.reason || ""), JSON.stringify(red)?.slice(0, 90));
+
+      await runSuite("ALL SUITES PASSED");
+      const ok1 = await publish();
+      chk("the SAME publish is allowed once a full run is green", !ok1?.block, JSON.stringify(ok1)?.slice(0, 90));
+
+      await toolCall("edit", { path: path.join(gp.root, "src", "after.ts") });
+      await runSuite("ALL SUITES PASSED", false, "npx vitest run src/one.test.ts -t one");
+      const stale = await publish();
+      chk("a green SUBSET after the last edit does not open the floor", stale?.block === true && /predates the most recent source change/.test(stale.reason || ""), JSON.stringify(stale)?.slice(0, 120));
+
+      await runSuite("ALL SUITES PASSED");
+      const ok2 = await publish();
+      chk("a full green AFTER the last edit opens it again", !ok2?.block, JSON.stringify(ok2)?.slice(0, 90));
+
+      // "No steering" is not "no floor": passive mode suspends guidance, not the
+      // irreversibility floor, so a stale green must still be refused there.
+      await runSuite("ALL SUITES PASSED");
+      await invokeCommand("asf", "passive");
+      await toolCall("edit", { path: path.join(gp.root, "src", "passive.ts") });
+      const passiveBlock = await publish();
+      chk("passive mode keeps the publish floor (stale green still refused)", passiveBlock?.block === true && /predates the most recent source change/.test(passiveBlock.reason || ""), JSON.stringify(passiveBlock)?.slice(0, 120));
+      __resetRefusals();
+    } finally {
+      process.chdir(originalCwd);
+      gp.cleanup();
+    }
+  }
 
   console.log("=== 10. the irreversibility floor cannot be removed without failing here ===");
   // Negative control for the whole stop policy: "no stops" must never erode the
