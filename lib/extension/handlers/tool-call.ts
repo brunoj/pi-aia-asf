@@ -17,6 +17,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { classifyToolCall, activationDecision } from "../../activation.mjs";
 import { evaluateBlockers, BLOCKERS, failSafeBlock } from "../../gates/blockers.mjs";
 import { deriveSuiteRun } from "../../gates/suite-runs.mjs";
+import { noteTrackedCall } from "../../gates/tracked.mjs";
 import { readProjectConfig } from "../../gates/config.mjs";
 import { projectName, runRoot } from "../paths.ts";
 import { loadState, saveState } from "../state.ts";
@@ -100,6 +101,28 @@ function observeSuiteAttempt(input: Input, event: Event): void {
 function observeWebTouch(input: Input): void {
   const touched = typeof input.path === "string" ? input.path : typeof input.file_path === "string" ? input.file_path : "";
   if (touched && /\.(tsx|jsx|html|vue|svelte|css)$/i.test(touched)) runtime.webTouched = true;
+}
+
+/**
+ * What this call did to tracked work (a claimed ticket, an assigned issue).
+ *
+ * The gate needs to know that the session *owns* something, because the failure
+ * it prevents is invisible in the source tree: an agent that ends its run with a
+ * claimed item neither resolved nor parked has stopped, and written a paragraph
+ * about it instead. Claim / resolve / park are read off the tool's name; a
+ * narrated wait is read off the text the agent wrote for the reviewer.
+ */
+function observeTrackedWork(toolName: string, input: Input): void {
+  const kind = noteTrackedCall(runtime.tracked, { toolName, input });
+  if (!kind) return;
+  appendEvidence({ kind: "tracked", action: kind, tool: toolName, item: String(input.ticket_id || input.ticketId || input.id || "") || null });
+  if (kind === "wait") {
+    queueSteer(
+      `ASF: you described tracked work as waiting — that is not a disposition ASF recognises, and the run cannot close on it. ` +
+        `Park it where the reviewer sees it (parking is a marker, not a question, so "do not ask me" never forbids it), take the next ` +
+        `action you control, or do the work that makes the wait end in one step and keep going.`,
+    );
+  }
 }
 
 /** Gate switches the project turned off, as evaluateBlockers wants them. */
@@ -209,6 +232,7 @@ export function registerToolCallHandler(pi: ExtensionAPI): void {
       }
       observeSuiteAttempt(input, ev);
       observeWebTouch(input);
+      observeTrackedWork(toolName, input);
 
       const config = readProjectConfig(runRoot());
       const res = evaluateBlockers(toolName, input, {

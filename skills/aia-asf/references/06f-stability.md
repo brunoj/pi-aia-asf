@@ -86,6 +86,60 @@ correlation IDs, and a runbook exist."*
   unbounded wait, retry, or result set.
 - **Phase 7 (verification):** DoD includes the stability line above.
 
+## 5. Your own artifacts: the drift check
+
+`checkDrift` in `lib/gates/drift.mjs` reads this task's own artifacts (PLAN.md, the
+spec tree, a design doc) and checks the files and symbols they name still exist.
+Invoke it before claiming done:
+
+```bash
+node --input-type=module -e "
+import {checkDrift, renderDrift} from './lib/gates/drift.mjs';
+import fs from 'node:fs';
+const arts = ['PLAN.md'].filter(f => fs.existsSync(f)).map(path => ({path, text: fs.readFileSync(path,'utf8')}));
+console.log(renderDrift(checkDrift({artifacts: arts, repoRoot: process.cwd(), fs})));
+"
+```
+
+Three things it deliberately does **not** do:
+
+- It does not scan the whole repo's documentation. Repo-wide docs drift presumes the
+  documentation exists and is maintained, and products legitimately evolve — a check
+  that produces permanent noise gets switched off, which is worse than never having it.
+- It does not treat "0 unresolved" as a pass on its own. `status: "no-claims"` means
+  the artifact named no files or symbols at all, and that is reported as
+  examined-nothing, never as clean (06b Rule 10: `scanned: 0` is never a pass).
+- It does not replace the traceability matrix. Drift says the artifact still describes
+  the code; the matrix says the spec was actually delivered.
+
+## 6. The stop that looked like a status report (2026-11-09)
+
+An agent working a claimed ticket ended its run with this on the reviewer's card:
+
+> *"Left In Progress at testing — deliberately not resolved, because the user-visible
+> outcome still isn't confirmed, and not parked, since you told me not to ask you for
+> anything. It flips the moment their thread replies: Resume succeeds and I resolve it
+> with mail to ClearStory; fails and I re-diagnose from the factory's own sentence."*
+
+Nothing blocked it. No gate fired. The run closed and the work stopped. The reasoning
+was internally consistent and completely wrong: the agent had been told not to ask
+questions, had correctly worked out that parking *looks like* asking, and so had
+chosen a fifth state that the contract did not name — "in progress, waiting" — and
+explained it. Every clause of that sentence is a stop.
+
+Why it was ASF's bug, not the agent's: the stop policy names four things that may halt
+a run, and "the other side has not replied" is none of them. A contract that forbids
+stopping without naming what to do instead does not produce persistence, it produces
+paragraphs. So the state is now named and illegal, the three legal dispositions are
+listed (06i, "Waiting is not a disposition"), and the gate enforces it: `lib/gates/tracked.mjs`
+records claims, resolutions and parks off the tool names, reads the agent's own progress
+text for the confession, and a claimed item with no disposition is a gap that keeps the
+run open — steered, never stopped, and closable by the agent alone.
+
+Two things this is **not**: it is not a ban on saying "blocked" honestly (say it, in the
+report, with the disposition you took); and it is not a reason to resolve work that is
+not done — a false `resolved` is the worse failure. Park it.
+
 ## Anti-patterns
 
 - ❌ Unbounded retries on non-idempotent writes

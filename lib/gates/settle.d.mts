@@ -25,10 +25,11 @@ export function decideSettlement(
     testRunRecorded?: boolean;
     reportFields?: string[];
     untracedMet?: string[];
+    /** Tracked work opened this session; dangling items are a gap. */
+    tracked?: import("./tracked.mjs").TrackedState;
   },
 ): SettleDecision;
 export function renderCompletionGate(decision: { missing: string[]; exhausted?: boolean; park?: ParkRequest }): string;
 export function classifyPark(missing?: string[]): ParkRequest | null;
 export function steerFingerprint(missing?: string[]): string;
-export const MAX_IDENTICAL_STEERS: number;
 export const MAX_STEERS: number;

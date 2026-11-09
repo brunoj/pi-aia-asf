@@ -559,6 +559,47 @@ export async function run({ events, invokeCommand }) {
     }
   }
 
+  console.log("=== 10c. tracked work cannot be left dangling ===");
+  {
+    // The 2026-11-09 production stop: an agent working a claimed ticket ended its
+    // run with "Left In Progress — deliberately not resolved... and not parked,
+    // since you told me not to ask you for anything". Nothing blocked it, because
+    // ASF had no name for the state, so the agent invented one. Now the state has
+    // a name and the run is steered until it has one of the three dispositions.
+    const tp = project("tracked", { git: true });
+    process.chdir(tp.root);
+    __clearProjectCache();
+    try {
+      await toolCall("edit", { path: path.join(tp.root, "src", "a.ts") });
+      await toolCall("bmx_claim", { ticket_id: "BMX-42" });
+
+      const said = "Left In Progress at testing — deliberately not resolved, because the outcome "
+        + "isn't confirmed, and not parked, since you told me not to ask you for anything. It flips "
+        + "the moment their thread replies.";
+      await toolCall("bmx_ticket_progress", { ticket_id: "BMX-42", text: said });
+
+      const r1 = await settle();
+      const t1 = (r1?.entries || []).map((e) => String(e.content || "")).join(" ");
+      chk("narrating a wait steers immediately, at the message itself", /not a disposition/.test(t1), t1.slice(0, 110));
+      chk("and the run is not allowed to close on the dangling item", /neither resolved nor parked/.test(t1), t1.slice(0, 110));
+
+      await toolCall("bmx_submit_resolution", { ticket_id: "BMX-42", summary: "confirmed with ClearStory; mail sent" });
+      const r2 = await settle();
+      const t2 = (r2?.entries || []).map((e) => String(e.content || "")).join(" ");
+      chk("resolving the item removes that gap", !/neither resolved nor parked/.test(t2), t2.slice(0, 110));
+
+      // A park is equally legal: "do not ask me" is not "do not leave a marker".
+      await toolCall("bmx_claim", { ticket_id: "BMX-43" });
+      await toolCall("bmx_request_input", { ticket_id: "BMX-43", question: "deploy now or hold?" });
+      const r3 = await settle();
+      const t3 = (r3?.entries || []).map((e) => String(e.content || "")).join(" ");
+      chk("parking where a reviewer sees it is a complete disposition", !/neither resolved nor parked/.test(t3), t3.slice(0, 110));
+    } finally {
+      process.chdir(originalCwd);
+      tp.cleanup();
+    }
+  }
+
   console.log("=== 11. the run card is bounded ===");
   const huge = renderRunCard({ phase: "implementation", scale: "large", objective: "x".repeat(5000), openDod: Array(50).fill("y".repeat(200)), filesTouched: Array(40).fill("/a/very/long/path/file.ts") });
   chk(`the card never exceeds ${CARD_CEILING_BYTES} bytes`, Buffer.byteLength(huge.text) <= CARD_CEILING_BYTES, `${Buffer.byteLength(huge.text)} bytes`);

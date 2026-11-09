@@ -163,6 +163,7 @@ async function judgeAndSettle(ctx: SettleContext, priorCount: number): Promise<S
     seenSteers: [...new Set([...(state.seenSteers || []), ...mem.seen])],
     sourceMutated: !!state.sourceMutated,
     testRunRecorded,
+    tracked: runtime.tracked,
   });
   runtime.lastSettleDecision = decision;
   appendEvidence({ kind: "gate-verdict", gate: "completion", fired: decision.missing.length > 0, missing: decision.missing });

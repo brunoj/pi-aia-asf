@@ -7,6 +7,69 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.7] - 2026-11-09
+
+### Fixed — "waiting" is now illegal as a disposition
+
+An agent working a claimed ticket ended its run with this on the reviewer's card:
+*"Left In Progress at testing — deliberately not resolved, because the user-visible
+outcome still isn't confirmed, and not parked, since you told me not to ask you for
+anything."* Nothing blocked it. The run closed and the work stopped. That is a stop
+wearing a status report, and it is the failure this whole process exists to prevent.
+
+The agent did not misbehave; it had no legal state to stand in. The stop policy names
+four things that may halt a run — plan approval, an irreversible action with no safe
+path, an unobtainable credential, a deliverable-shaping either/or — and **"the other
+side has not replied" is none of them**. A contract that forbids stopping without
+naming what to do instead does not produce persistence, it produces paragraphs. And
+the agent had correctly noticed that parking *looks like* asking, so a "don't ask me"
+directive seemed to forbid the one move that was legal.
+
+- **New gate: `lib/gates/tracked.mjs`.** Claims, resolutions and parks are read off the
+  tool *name* (`bmx_claim`, `submit_resolution`, `request_input`, …) — never off shell
+  text, because `git commit` is not a claim. A claimed item with no disposition is a
+  gap that keeps the run open, and the agent's own progress text is read for the
+  confession ("deliberately not resolved", "not parked", "waiting for their reply",
+  "it flips the moment…"), which raises it on the spot.
+- **The three dispositions, all of which the agent can take itself**: park it where a
+  reviewer sees it (parking is a *marker*, not a question, so "don't ask me" never
+  forbids it); take the next action you control; or, if you are genuinely waiting on
+  someone else, make the wait end in one step — the test that will confirm the outcome,
+  the draft mail — and keep going. The gap text offers all three.
+- The gap is worded so it cannot route itself into the report: it names no slash
+  command and never says "ask the PO", because a gap that reads like a human action is
+  filtered out by `splitGaps` and would make the guard decorative. Pinned by a test.
+- **Contract text now lives where the agent reads it.** The no-stops policy existed only
+  in a source docstring; `06i-completeness.md` (always-read) now carries the rule and the
+  DoD has a line for it, with the case study in `06f-stability.md` §6. The always-read
+  load stayed inside its budget (75,953 / 76,000) — detail moved out to 06f rather than
+  the budget being raised.
+
+### Fixed — declaration files that lie about their module
+
+`lib/gates/blockers.d.mts` still declared `RULE_TEXT` / `refusalStage` /
+`__resetRefusals` after they moved to `refusals.mjs` (0.17.5); `lib/gates/settle.d.mts`
+still declared `MAX_IDENTICAL_STEERS` after the cap was deleted; `lib/activation.d.mts`
+still declared `SOURCE_EXTENSIONS` after it was removed. A `.ts` importing any of those
+typechecks clean and gets `undefined` at runtime — the compiler is the tool that is
+wrong. New suite **`test/test-declarations.mjs`** loads every `.mjs` beside each `.d.mts`
+and fails on any declared export the module does not have. It found the third case on
+its first run.
+
+### Fixed — the test runner could not fail
+
+`test/harness.mjs` carried `const ok = globalThis.__tools = tools` where it meant to
+capture the suite's verdict: `ok` was the tools array — always truthy — and the return
+value of `run()` was discarded. A suite reporting failure by returning false printed its
+FAILs and was still counted green, which is precisely the bug the comment above it
+claimed was fixed. The verdict is now captured, and the new declarations suite depends
+on it.
+
+### Also
+
+- `06i-completeness.md` still described the old steering rule ("a gap is steered once,
+  never twice") after 0.16.0 removed the cap.
+
 ## [0.17.6] - 2026-11-09
 
 ### Fixed — a gate that crashes is not a gate that passed

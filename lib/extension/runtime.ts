@@ -7,6 +7,8 @@
  * 2026-11-07 loop possible in the first place (state nobody owned).
  */
 
+import { createTracked, type TrackedState } from "../gates/tracked.mjs";
+
 /** P5: machine turns before a re-anchor is due. */
 export const REANCHOR_AFTER_MACHINE_TURNS = 25;
 /** P5: and never more often than this, however many turns pass. */
@@ -40,6 +42,12 @@ export interface RuntimeState {
   lastScaleWasSmall: boolean;
   /** Re-anchoring is count-limited per run. */
   reanchorsThisRun: number;
+  /**
+   * Tracked work opened this session (a claimed ticket, an assigned issue) and
+   * whether it has a disposition. Session-scoped on purpose: a claim made before
+   * a restart is re-opened by the agent's own progress text if it is still dangling.
+   */
+  tracked: TrackedState;
 }
 
 export const runtime: RuntimeState = {
@@ -56,4 +64,5 @@ export const runtime: RuntimeState = {
   passiveHeartbeatWritten: false,
   lastScaleWasSmall: false,
   reanchorsThisRun: 0,
+  tracked: createTracked(),
 };

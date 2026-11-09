@@ -4,10 +4,9 @@
 every deliverable with real behaviour. **Skip when:** never. Small work needs only
 the Core rule and the DoD checklist at the bottom.
 
-Newer models can produce work that *looks* finished: a function with the right name
-whose body is a placeholder, a screen populated with invented records, a report that
-cites a limit nobody checked. Green tests do not disprove it — the tests were written
-against the stub. This reference is the standing answer.
+Work can *look* finished: the right function name over a placeholder body, a screen of
+invented records, a report citing a limit nobody checked. Green tests do not disprove
+it — they were written against the stub.
 
 ## Core rule
 
@@ -60,31 +59,16 @@ goes in the final message in plain words — never discovered by the user throug
 ## Your own artifacts are part of the deliverable (task-scoped drift)
 
 The plan and the spec tree are artifacts too, and they make checkable claims: a PLAN.md
-that names `lib/gates/suite-runs.mjs` or `deriveSuiteRun()` is asserting those exist. When the
-code has moved and the artifact has not, the delivery report describes something that is
-not there — which is the same defect as a stub, just further from the user's eye.
+naming `lib/gates/suite-runs.mjs` asserts that file exists. When the code moved and the
+artifact did not, the delivery report describes something that is not there — the same
+defect as a stub, further from the user's eye.
 
-Before claiming done, run the drift check against **this task's own artifacts**:
+Before claiming done, run `checkDrift` from `lib/gates/drift.mjs` against **this
+task's own artifacts** (PLAN.md, spec tree, design doc) and put its status in the
+delivery report; the invocation is in 06f, section 5.
 
-```bash
-node --input-type=module -e "
-import {checkDrift, renderDrift} from './lib/gates/drift.mjs';
-import fs from 'node:fs';
-const arts = ['PLAN.md'].filter(f => fs.existsSync(f)).map(path => ({path, text: fs.readFileSync(path,'utf8')}));
-console.log(renderDrift(checkDrift({artifacts: arts, repoRoot: process.cwd(), fs})));
-"
-```
-
-Three things this deliberately does **not** do:
-
-- It does not scan the whole repo's documentation. Repo-wide docs drift presumes the
-  documentation exists and is maintained, and products legitimately evolve — a check that
-  produces permanent noise gets switched off, which is worse than never having it.
-- It does not treat "0 unresolved" as a pass on its own. `status: "no-claims"` means the
-  artifact named no files or symbols at all, and that is reported as examined-nothing,
-  never as clean (06b Rule 10: `scanned: 0` is never a pass).
-- It does not replace the traceability matrix. Drift says the artifact still describes
-  the code; the matrix says the spec was actually delivered.
+What the drift check deliberately does **not** do (and why a check that produces
+permanent noise gets switched off) is in 06f, section 5.
 
 ## Active process (enforced by the harness)
 
@@ -93,13 +77,35 @@ Three things this deliberately does **not** do:
   scratch do not.
 - **Floor:** a passing test run that started after the last change (a lint is not
   a test); a spec met this run needs `trace.outcome` + `trace.codePath`.
-- A gap is steered once, never twice; unclosable gaps are reported **unverified**.
-  Park only for: plan approval, irreversible step, credential, deliverable choice.
+- A **warranted** gap (one you can close) is re-raised until closed — no ceiling on
+  real work. An **unwarranted** one (only a human, or a pi slash command, can close
+  it) is reported **unverified** and never blocks: that was the 2026-11-07 loop.
 - Always refused, even under `/asf passive`: secret in a tracked file, push without
   full-suite green, destructive git on a dirty tree.
 - `/asf passive` = this run only. `/asf abort` ends a run; deleting state does not.
 
+## Waiting is not a disposition
+
+Four things may halt a run: plan approval, an irreversible step, a credential, a
+deliverable choice. **"The other side has not replied" is not one of them.** Never
+leave tracked work — a claimed ticket, an assigned issue — in an intermediate state
+with an explanation of why it is stuck: that is a stop wearing a status report, and
+the run may not close on it (06f carries the case that proved it).
+
+Three dispositions, all yours to take:
+
+1. **Park it where a reviewer sees it** (needs-input). Parking is a *marker*, not a
+   question — "don't ask me anything" never forbids it.
+2. **Take the next action you control, now.** There is always one.
+3. **Waiting on someone else? Make the wait end in one step** — the test that will
+   confirm the outcome, the draft mail, the check you can run today — then keep going.
+
+A claimed item with no disposition is a gap like any other; narrating a wait in a
+progress message raises it on the spot.
+
 ## Definition of Done — completeness
+
+- [ ] No claimed/tracked item left without a disposition: resolved, parked, or acted on.
 
 - [ ] No stub, unimplemented path, placeholder or fabricated data remains on a
       user-reachable path — or it is declared to the user with the reason.

@@ -25,8 +25,9 @@ import {
 import { createLedger, sessionFacts, renderLedger, validateEntry } from "../lib/gates/ledger.mjs";
 import { deriveSuiteRun } from "../lib/gates/suite-runs.mjs";
 import { createAuthority, renderAuthority, PROMOTION_RULE } from "../lib/gates/authority.mjs";
-import { decideSettlement, renderCompletionGate, MAX_STEERS, steerFingerprint, agentClosable, splitGaps } from "../lib/gates/settle.mjs";
+import { decideSettlement, renderCompletionGate, MAX_STEERS, steerFingerprint, agentClosable, splitGaps, classifyPark } from "../lib/gates/settle.mjs";
 import { loadDeclarations, assertSignalsExist, validateTrigger, renderRules } from "../lib/gates/declarations.mjs";
+import { createTracked, noteTrackedCall, danglingGaps, trackedClear, DISPOSITIONS } from "../lib/gates/tracked.mjs";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
@@ -362,6 +363,54 @@ check("evidence gaps are never parked as human input", fa.park === undefined);
 const d3 = decideSettlement(full, { scale: "standard", webTouched: true, continuationsSoFar: 0 });
 check("a session with real evidence settles", d3.block === false && d3.missing.length === 0);
 check("the rendered gate says all facts are recorded", /all session facts recorded/.test(renderCompletionGate(d3)));
+
+// ─── 4b. Tracked work: "waiting" is not a disposition ─────────────────────
+section("dangling tracked work");
+
+const SAID = "Left In Progress at testing — deliberately not resolved, because the user-visible "
+  + "outcome still isn’t confirmed, and not parked, since you told me not to ask you for anything. "
+  + "It flips the moment their thread replies: Resume succeeds and I resolve it with mail to ClearStory; "
+  + "fails and I re-diagnose from the factory’s own sentence.";
+
+const trOpen = createTracked();
+noteTrackedCall(trOpen, { toolName: "bmx_claim", input: { ticket_id: "BMX-42" } });
+check("a claimed item is tracked work", Object.keys(trOpen.open).length === 1);
+
+const trWait = createTracked();
+noteTrackedCall(trWait, { toolName: "bmx_claim", input: { ticket_id: "BMX-42" } });
+check("progress text that describes real work is not a wait",
+  noteTrackedCall(trWait, { toolName: "bmx_ticket_progress", input: { ticket_id: "BMX-42", text: "Implemented the retry path; running the full suite now, then I will submit the PR." } }) === null);
+noteTrackedCall(trWait, { toolName: "bmx_ticket_progress", input: { ticket_id: "BMX-42", text: SAID } });
+check("the sentence that broke the loop IS recognised as a wait", trWait.waits.includes("BMX-42"), JSON.stringify(trWait.waits));
+
+const waitGap = danglingGaps(trWait)[0] || "";
+check("a narrated wait is named as not-a-state", /not a state ASF recognises/.test(waitGap), waitGap.slice(0, 120));
+check("and all three dispositions are offered", DISPOSITIONS.every((d) => waitGap.includes(d.slice(0, 24))), waitGap.slice(0, 160));
+
+const trResolved = createTracked();
+noteTrackedCall(trResolved, { toolName: "bmx_claim", input: { ticket_id: "BMX-1" } });
+noteTrackedCall(trResolved, { toolName: "bmx_submit_resolution", input: { ticket_id: "BMX-1", summary: "did the thing" } });
+check("resolving clears it", trackedClear(trResolved) && danglingGaps(trResolved).length === 0);
+
+const trParked = createTracked();
+noteTrackedCall(trParked, { toolName: "bmx_claim", input: { ticket_id: "BMX-2" } });
+noteTrackedCall(trParked, { toolName: "bmx_request_input", input: { ticket_id: "BMX-2", question: "deploy now?" } });
+check("parking clears it — parking is a legal disposition", trackedClear(trParked) && danglingGaps(trParked).length === 0);
+
+const trNone = createTracked();
+check("a session that claimed nothing is held to nothing", danglingGaps(trNone).length === 0);
+
+// The gate must actually block on it, and must not escalate it.
+const dgap = danglingGaps(trOpen)[0];
+check("the gap is agent-closable, so it BLOCKS rather than being reported", agentClosable(dgap) && splitGaps([dgap]).blocking.length === 1);
+check("the gap is never parked as human input", classifyPark([dgap]) === null);
+const dTracked = decideSettlement(full, { scale: "standard", webTouched: false, tracked: trOpen });
+check("a run ending with tracked work dangling does not settle", dTracked.block === true && dTracked.missing.some((m) => /neither resolved nor parked/.test(m)), dTracked.missing.join(" | ").slice(0, 140));
+check("and it is steered, not parked", dTracked.park === undefined && typeof dTracked.steer === "number");
+const dClear = decideSettlement(full, { scale: "standard", webTouched: false, tracked: trResolved });
+check("the same run settles once the work has a disposition", dClear.block === false, dClear.missing.join(" | ").slice(0, 140));
+check("the gap names no slash command and no 'ask the PO' (else it would self-cancel)",
+  !/\/asf\s|ask the (po|user|human)|needs (your|the po's?) (input|approval|key)/i.test(dgap), dgap.slice(0, 160));
 
 // ─── 5. ASF's own declaration file (P39) ───────────────────────────────────
 section("ASF obligations declaration");

@@ -12,5 +12,4 @@ export function activationDecision(o?: {
   activeRun?: { phase?: string; runId?: string } | null;
   passiveRunId?: string | null;
 }): { activate: boolean; reason?: string };
-export const SOURCE_EXTENSIONS: string[];
 export function delegatesUnguardedWrites(cmd: unknown): boolean;

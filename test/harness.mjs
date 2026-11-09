@@ -65,8 +65,11 @@ const test = await import(path.resolve(testFile));
 if (typeof test.run === 'function') {
   // A suite that reports failure by RETURNING false must fail the run. Before
   // this, such a suite printed its FAILs and the runner still counted it green.
-  const ok = globalThis.__tools = tools;
-  await test.run({ tools, commands, events, api, extDir, invokeCommand });
+  // (And the fix itself was once written `const ok = globalThis.__tools = tools`,
+  // which assigned the tools array — always truthy — and discarded the verdict.
+  // A test runner that cannot fail is the most dangerous kind of test runner.)
+  globalThis.__tools = tools;
+  const ok = await test.run({ tools, commands, events, api, extDir, invokeCommand });
   if (ok === false) {
     console.log(`SUITE REPORTED FAILURE: ${path.basename(testFile)}`);
     process.exit(1);
