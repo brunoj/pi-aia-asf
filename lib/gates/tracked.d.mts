@@ -16,11 +16,21 @@ export interface TrackedState {
 
 export declare const DISPOSITIONS: string[];
 
+export interface TrackedMatchers {
+  claim: RegExp;
+  resolve: RegExp;
+  park: RegExp;
+  wait: RegExp;
+}
+
+/** Built-in matchers, widened (never replaced) by `gate.tracked.*` in the project config. */
+export function matchersFromConfig(config?: Record<string, unknown>): TrackedMatchers;
+
 export function createTracked(): TrackedState;
 
 export function noteTrackedCall(
   tracked: TrackedState,
-  call: { toolName?: string; input?: Record<string, unknown> },
+  call: { toolName?: string; input?: Record<string, unknown>; matchers?: TrackedMatchers },
 ): "claim" | "resolve" | "park" | "wait" | null;
 
 export function danglingGaps(tracked: TrackedState | undefined): string[];

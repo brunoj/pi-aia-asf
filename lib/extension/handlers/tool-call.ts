@@ -17,7 +17,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { classifyToolCall, activationDecision } from "../../activation.mjs";
 import { evaluateBlockers, BLOCKERS, failSafeBlock } from "../../gates/blockers.mjs";
 import { deriveSuiteRun } from "../../gates/suite-runs.mjs";
-import { noteTrackedCall } from "../../gates/tracked.mjs";
+import { noteTrackedCall, matchersFromConfig } from "../../gates/tracked.mjs";
 import { readProjectConfig } from "../../gates/config.mjs";
 import { projectName, runRoot } from "../paths.ts";
 import { loadState, saveState } from "../state.ts";
@@ -112,8 +112,8 @@ function observeWebTouch(input: Input): void {
  * about it instead. Claim / resolve / park are read off the tool's name; a
  * narrated wait is read off the text the agent wrote for the reviewer.
  */
-function observeTrackedWork(toolName: string, input: Input): void {
-  const kind = noteTrackedCall(runtime.tracked, { toolName, input });
+function observeTrackedWork(toolName: string, input: Input, config: Record<string, unknown>): void {
+  const kind = noteTrackedCall(runtime.tracked, { toolName, input, matchers: matchersFromConfig(config) });
   if (!kind) return;
   appendEvidence({ kind: "tracked", action: kind, tool: toolName, item: String(input.ticket_id || input.ticketId || input.id || "") || null });
   if (kind === "wait") {
@@ -223,6 +223,9 @@ export function registerToolCallHandler(pi: ExtensionAPI): void {
       const ev = event as Event;
       const toolName = String(ev.toolName || "");
       const input = ev.input || {};
+      // Read once, hand it to whoever needs it: the gate below and the tracked-work
+      // matcher both ask, and a second read is a second answer to the same question.
+      const config = readProjectConfig(runRoot());
 
       // An observer failure here must not block the work, so it is fenced.
       try {
@@ -232,9 +235,8 @@ export function registerToolCallHandler(pi: ExtensionAPI): void {
       }
       observeSuiteAttempt(input, ev);
       observeWebTouch(input);
-      observeTrackedWork(toolName, input);
+      observeTrackedWork(toolName, input, config);
 
-      const config = readProjectConfig(runRoot());
       const res = evaluateBlockers(toolName, input, {
         ctx: {
           suiteRuns,

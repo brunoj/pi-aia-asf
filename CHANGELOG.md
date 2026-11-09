@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.8] - 2026-11-09
+
+### Added — the tracked-work vocabulary is the project's to widen
+
+`gate.tracked.claim` / `.resolve` / `.park` / `.wait` in `.asf/config.json` add patterns
+(string or array) to the built-in matcher set. They **widen, never replace**: a project
+that typos `claim` would otherwise stop tracking its own claims, and a floor that a
+stray character in a config file can switch off is not a floor. Non-string entries are
+ignored rather than compiled in.
+
+`lib/gates/tracked.mjs` now says plainly what it is — **a tripwire over tool names and
+the agent's own prose, not an authority over ticket state**. It cannot see a tracker's
+database and its vocabulary is a small illustrative set; a tool named `grabWorkItem` is
+invisible until the project says so. The asymmetry is deliberate: a miss costs a run
+that settles early, a false alarm costs one steer.
+
+### Fixed — a matcher that matched everything
+
+`matchersFromConfig()` built the wait matcher as `alternatives + "|" + extras` even when
+`extras` was empty, leaving a trailing `|`. An empty alternative matches the empty
+string, so **every progress message in every project would have been read as a
+confessed wait** — a gate that trips on everything is as useless as one that trips on
+nothing, and much harder to notice. Every union is now guarded by a length check, and a
+test pins that no matcher matches `""`, `"anything at all"`, or a config entry of
+`""`/`undefined`/`null`. Caught by the suite that checks a benign progress message is
+not a wait, and mutation-verified: restoring the dangling `|` fails two checks.
+
 ## [0.17.7] - 2026-11-09
 
 ### Fixed — "waiting" is now illegal as a disposition

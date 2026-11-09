@@ -140,6 +140,18 @@ Two things this is **not**: it is not a ban on saying "blocked" honestly (say it
 report, with the disposition you took); and it is not a reason to resolve work that is
 not done — a false `resolved` is the worse failure. Park it.
 
+It is a **tripwire over tool names and the agent's own prose, not an authority over
+ticket state** — it cannot see a tracker's database, and its vocabulary is a small
+illustrative set. A project widens it (never narrows it) in `.asf/config.json`:
+
+```json
+{ "gate.tracked.claim": "grabWorkItem", "gate.tracked.wait": ["still stuck on"] }
+```
+
+Keys: `gate.tracked.claim`, `.resolve`, `.park`, `.wait`. A miss costs a run that
+settles early; a false alarm costs one steer. That asymmetry is why the defaults lean
+toward catching.
+
 ## Anti-patterns
 
 - ❌ Unbounded retries on non-idempotent writes

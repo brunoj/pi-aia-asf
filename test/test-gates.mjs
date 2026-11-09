@@ -27,7 +27,7 @@ import { deriveSuiteRun } from "../lib/gates/suite-runs.mjs";
 import { createAuthority, renderAuthority, PROMOTION_RULE } from "../lib/gates/authority.mjs";
 import { decideSettlement, renderCompletionGate, MAX_STEERS, steerFingerprint, agentClosable, splitGaps, classifyPark } from "../lib/gates/settle.mjs";
 import { loadDeclarations, assertSignalsExist, validateTrigger, renderRules } from "../lib/gates/declarations.mjs";
-import { createTracked, noteTrackedCall, danglingGaps, trackedClear, DISPOSITIONS } from "../lib/gates/tracked.mjs";
+import { createTracked, noteTrackedCall, danglingGaps, trackedClear, DISPOSITIONS, matchersFromConfig } from "../lib/gates/tracked.mjs";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
@@ -399,6 +399,24 @@ check("parking clears it — parking is a legal disposition", trackedClear(trPar
 
 const trNone = createTracked();
 check("a session that claimed nothing is held to nothing", danglingGaps(trNone).length === 0);
+
+// The vocabulary is a tripwire, not an authority: a project may widen it, and a
+// typo in a config file must never be able to switch the gate off.
+const mCfg = matchersFromConfig({ "gate.tracked.claim": "grabWorkItem", "gate.tracked.wait": ["still stuck on", 42, null] });
+const trCfg = createTracked();
+check("a project can widen the claim vocabulary", noteTrackedCall(trCfg, { toolName: "linear_grabWorkItem", input: { id: "L-1" }, matchers: mCfg }) === "claim");
+check("widening never replaces the built-ins", noteTrackedCall(trCfg, { toolName: "bmx_claim", input: { ticket_id: "BMX-5" }, matchers: mCfg }) === "claim");
+check("a project's own phrasing of a wait is caught", noteTrackedCall(trCfg, { toolName: "linear_progress", input: { id: "L-1", text: "still stuck on the vendor" }, matchers: mCfg }) === "wait");
+check("non-string config entries are ignored, not compiled into the matcher", danglingGaps(trCfg).length === 2, Object.keys(trCfg.open).join(","));
+check("empty config yields the built-ins unchanged", matchersFromConfig().claim.source === /(^|[_-])(claim|assign|take|acquire)([_-]|$)/i.source);
+check("no matcher matches the empty string (a dangling `|` would trip on everything)",
+  ["", "anything at all", "Implemented the retry path"].every((x) => {
+    const mm = matchersFromConfig();
+    return !mm.wait.test(x) && !mm.claim.test(x) && !mm.resolve.test(x) && !mm.park.test(x);
+  }) && ["", undefined, null].every((x) => {
+    const mm = matchersFromConfig({ "gate.tracked.wait": [x] });
+    return !mm.wait.test("Implemented the retry path");
+  }));
 
 // The gate must actually block on it, and must not escalate it.
 const dgap = danglingGaps(trOpen)[0];
