@@ -60,7 +60,7 @@ goes in the final message in plain words — never discovered by the user throug
 ## Your own artifacts are part of the deliverable (task-scoped drift)
 
 The plan and the spec tree are artifacts too, and they make checkable claims: a PLAN.md
-that names `lib/gates/ledger.mjs` or `deriveSuiteRun()` is asserting those exist. When the
+that names `lib/gates/suite-runs.mjs` or `deriveSuiteRun()` is asserting those exist. When the
 code has moved and the artifact has not, the delivery report describes something that is
 not there — which is the same defect as a stub, just further from the user's eye.
 

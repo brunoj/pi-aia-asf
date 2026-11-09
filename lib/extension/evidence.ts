@@ -27,6 +27,30 @@ export function queueSteer(text: string) {
   pendingSteers.push(text);
 }
 
+/**
+ * An internal gate error must never be able to look like a pass.
+ *
+ * Every ASF handler is fenced, because an observer must not break the work it
+ * watches. Fencing *without* reporting is exactly how the 2026-11-07 loop became
+ * possible: a gate demanded something, the code that would have shown why
+ * swallowed its own error, and the agent was steered forever toward an action
+ * that could not register. So a swallowed error is (a) recorded as evidence and
+ * (b) told to the agent once, as a steer — guidance, never a stop.
+ *
+ * The settle gate has a stronger channel (it returns the entry inline, so the
+ * agent sees it in the same turn); the tool handlers do not, so they use this.
+ */
+export function reportGateError(gate: string, e: unknown) {
+  const message = String((e as Error | null)?.message || e || "unknown");
+  appendEvidence({ kind: "gate-error", gate, error: message.slice(0, 300) });
+  const cls = (e as { code?: string } | null)?.code || (e as Error | null)?.name || "unknown";
+  queueSteer(
+    `ASF: the ${gate} hit an internal error (${cls}: ${message.slice(0, 140)}) and did not run. ` +
+      `That is not a pass — the check failed to execute. Re-issue the action; if it repeats, ` +
+      `this is an ASF bug to report, not a rule to satisfy.`,
+  );
+}
+
 
 export function appendEvidence(entry: Record<string, unknown>) {
   const res = ledger.append(entry);

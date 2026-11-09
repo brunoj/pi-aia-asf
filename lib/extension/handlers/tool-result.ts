@@ -9,7 +9,7 @@
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { deriveSuiteRun } from "../../gates/suite-runs.mjs";
-import { appendEvidence } from "../evidence.ts";
+import { appendEvidence, reportGateError } from "../evidence.ts";
 import { pendingSuiteRuns, suiteRuns } from "../gate-state.ts";
 import { runtime } from "../runtime.ts";
 
@@ -52,7 +52,11 @@ export function registerToolResultHandler(pi: ExtensionAPI): void {
       pendingSuiteRuns.delete(id);
       completeSuiteRun(ev, pending);
       return undefined;
-    } catch {
+    } catch (e) {
+      // Swallowing this one silently is how the publish floor becomes an
+      // unclosable gap: the run happened, the recorder failed, and the gate then
+      // demands a run that can never register.
+      reportGateError("suite recorder", e);
       return undefined;
     }
   });

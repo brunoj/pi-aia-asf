@@ -63,6 +63,13 @@ in the absence of a user definition.
    - **Deployed app:** smoke-test in **production** (health endpoint, key user journey) — a deploy that breaks prod is not a successful release.
    - **Not applicable** (internal-only experiment, no runtime surface): say so explicitly in the report (06b Rule 11).
    - If the published artifact is broken: **fix forward** (new patch), never pretend the release succeeded.
+   - **The copy you are testing may not be the copy you shipped.** `pi` loads extensions once at
+     process start: a session that was already open keeps enforcing the *previous* version's
+     gates no matter what you publish, and its messages quote text that no longer exists in the
+     source. Before concluding a released gate is broken, confirm which build is loaded — compare
+     a string unique to the new release against the behaviour you saw, and check the process
+     start time (`ps -o lstart -p <pid>`). `/reload`, or a new session, is what picks up the new
+     code. This is the difference between "the fix did not work" and "the fix is not running".
 
 ## CI/CD offer
 
@@ -79,3 +86,4 @@ After a successful release (or for a new project), **offer** to set up a CI/CD p
 - The version in package.json, the git tag, and the npm release must match
 - If publishing fails partway, fix forward; never publish a second version with the same number
 - **Test on publish / in production, if applicable — always** (step 7)
+- **Never diagnose a gate from a session that predates the release** — confirm the loaded build first (step 7)

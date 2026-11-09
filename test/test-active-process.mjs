@@ -504,6 +504,61 @@ export async function run({ events, invokeCommand }) {
   const subsetRes = evaluateBlockers("bash", { command: "npx vitest run src/a.test.ts -t foo" }, { suiteRuns: [], dirty: () => false });
   chk("test-subset-without-impact steers instead of refusing", subsetRes.block === false && (subsetRes.steers || []).some((s) => s.gate === "test-subset-without-impact"), JSON.stringify(subsetRes.steers)?.slice(0, 80));
 
+  console.log("=== 10b. a swallowed internal error is never a pass ===");
+  {
+    // Every handler is fenced, because an observer must not break the work it
+    // watches. Fencing without reporting is what made the 2026-11-07 loop
+    // unclosable; fencing AND failing open is worse — it lets anyone who can
+    // make the other code throw write a secret. Both halves are pinned here.
+    const ep = project("gateerror", { git: true });
+    process.chdir(ep.root);
+    try {
+      await toolCall("edit", { path: path.join(ep.root, "src", "a.ts") });
+
+      // (a) the recorder dies → the run must not silently count as unrecorded
+      const circular = {};
+      circular.self = circular;
+      await toolCall("bash", { command: "bash test/run-all.sh" }, "tc-circular");
+      await toolResult("tc-circular", circular);
+
+      // (b) the gate dies before the blockers ran
+      const boomSecret = {
+        get command() { throw new Error("probe: input getter throws"); },
+        path: "src/leak.ts",
+        content: "const k = 'sk-abcdefghijklmnopqrstuvwx';",
+      };
+      const blocked = await toolCall("bash", boomSecret , "tc-boom-secret");
+      chk("gate error FAILS CLOSED on the irreversibility floor", blocked?.block === true && /secret-in-tracked-file/.test(String(blocked?.reason || "")), JSON.stringify(blocked)?.slice(0, 110));
+
+      const boomPlain = { get command() { throw new Error("probe: input getter throws"); } };
+      const allowed = await toolCall("bash", boomPlain , "tc-boom-plain");
+      chk("a gate error does not stop ordinary work", !allowed?.block, JSON.stringify(allowed)?.slice(0, 90));
+
+      // (c) the fail-safe rule itself is what throws — a rule guarding an
+      // irreversible action cannot report "nothing found" when it crashed. Both
+      // getters throw: `command` so the gate falls into its catch, `path` so the
+      // re-run of the secret rule is the thing that dies.
+      const boomPath = {
+        get command() { throw new Error("probe: command getter throws"); },
+        get path() { throw new Error("probe: path getter throws"); },
+        content: "nothing to see",
+      };
+      const blockedPath = await toolCall("write", boomPath, "tc-boom-path");
+      chk("a crashing fail-safe rule refuses rather than reports nothing found", blockedPath?.block === true && /could not run/.test(String(blockedPath?.reason || "")), JSON.stringify(blockedPath)?.slice(0, 110));
+
+      const rs = await settle();
+      const steers = (rs?.entries || []).filter((e) => e.customType === "asf-steer").map((e) => String(e.content));
+      chk("the swallowed recorder error is told to the agent, not hidden", steers.some((s) => /suite recorder/.test(s) && /internal error/.test(s) && /not a pass/.test(s)), steers.join(" | ").slice(0, 120));
+      chk("and so is the swallowed gate error", steers.some((s) => /tool_call gate/.test(s) && /internal error/.test(s)), steers.join(" | ").slice(0, 120));
+      const rs2 = await settle();
+      const again = (rs2?.entries || []).filter((e) => e.customType === "asf-steer").map((e) => String(e.content));
+      chk("and it is told once, not on every call", !again.some((s) => /internal error/.test(s)), again.join(" | ").slice(0, 90));
+    } finally {
+      process.chdir(originalCwd);
+      ep.cleanup();
+    }
+  }
+
   console.log("=== 11. the run card is bounded ===");
   const huge = renderRunCard({ phase: "implementation", scale: "large", objective: "x".repeat(5000), openDod: Array(50).fill("y".repeat(200)), filesTouched: Array(40).fill("/a/very/long/path/file.ts") });
   chk(`the card never exceeds ${CARD_CEILING_BYTES} bytes`, Buffer.byteLength(huge.text) <= CARD_CEILING_BYTES, `${Buffer.byteLength(huge.text)} bytes`);

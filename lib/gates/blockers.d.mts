@@ -34,9 +34,8 @@ export function evaluateBlockers(
   verdicts: BlockerVerdict[];
   steers?: Array<{ gate: string; reason: string }>;
 };
-export const RULE_TEXT: Record<string, string>;
-export function refusalStage(gate: string, fingerprint: string): number;
-export function __resetRefusals(): void;
+/** Re-run the fail-safe-block rules from the raw input alone, when the gate itself could not run. */
+export function failSafeBlock(input: Record<string, unknown>): { block: true; reason: string } | undefined;
 export function blockSecretWrite(input: Record<string, unknown>, ctx?: Record<string, unknown>): BlockerVerdict;
 export function blockTestSubset(input: Record<string, unknown>, ctx?: Record<string, unknown>): BlockerVerdict;
 export function blockPushWithoutGreen(input: Record<string, unknown>, ctx?: Record<string, unknown>): BlockerVerdict;

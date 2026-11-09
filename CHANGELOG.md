@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.6] - 2026-11-09
+
+### Fixed — a gate that crashes is not a gate that passed
+
+Both tool handlers were fenced with `catch { return undefined }`, which had two consequences of
+exactly the kind ASF bans:
+
+- A failure inside the **suite recorder** lost the run silently, after which the publish and
+  completion floors demanded a run that could never register — an unclosable gap with no visible
+  cause.
+- Because pi's own semantics for a crashing `tool_call` handler are *block*, returning "allow"
+  overrode them: anything that made the earlier code throw — a config read, the activation
+  observer — disabled the **irreversibility floor** for that call.
+
+Now:
+
+- `reportGateError(gate, e)` records a `gate-error` ledger entry and tells the agent once, as a
+  steer: *"That is not a pass — the check failed to execute."* Guidance, never a stop.
+- When the gate dies **before** the blockers ran, `failSafeBlock(input)` re-runs just the rules
+  whose `failSafe` is `block`, from the raw tool input alone, with no context to fail on. A secret
+  in a tracked file is still refused when the gate itself is broken; ordinary work is never
+  stopped by an internal error.
+- A fail-safe rule that *itself* throws refuses ("could not run") rather than reporting nothing
+  found.
+
+Three assertions pin this, each mutation-tested: removing the report, the fail-closed call, or the
+crash-refusal each fails a test.
+
+- `lib/gates/blockers.d.mts` still declared `RULE_TEXT`, `refusalStage` and `__resetRefusals` after
+  they moved to `lib/gates/refusals.mjs` in 0.17.5 — a `.ts` could import them, typecheck, and get
+  `undefined` at runtime. The declarations now match the modules.
+
+### Removed
+
+- Dead export `SOURCE_EXTENSIONS` from `lib/activation.mjs` (no importer).
+
+### Documented
+
+- **The loaded copy is not the shipped copy** (07-release.md step 7 + hygiene rule): `pi` loads
+  extensions once at process start, so a session open across a release keeps enforcing the previous
+  version and quoting text that no longer exists in the source. Confirm which build is loaded — a
+  string unique to the new release, and the process start time — before concluding a released gate
+  is broken. That is the difference between "the fix did not work" and "the fix is not running", and
+  it cost hours chasing a phantom bug in 0.17.5.
+- `06i-completeness.md` pointed its drift example at `lib/gates/ledger.mjs` / `deriveSuiteRun()`;
+  those moved to `lib/gates/suite-runs.mjs` in 0.17.5, and the doc — which is about not trusting
+  stale references — was itself stale.
+
 ## [0.17.5] - 2026-11-08
 
 ### Fixed — the publish floor could be satisfied by a green that proved nothing

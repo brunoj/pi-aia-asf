@@ -15,13 +15,13 @@
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { classifyToolCall, activationDecision } from "../../activation.mjs";
-import { evaluateBlockers, BLOCKERS } from "../../gates/blockers.mjs";
+import { evaluateBlockers, BLOCKERS, failSafeBlock } from "../../gates/blockers.mjs";
 import { deriveSuiteRun } from "../../gates/suite-runs.mjs";
 import { readProjectConfig } from "../../gates/config.mjs";
 import { projectName, runRoot } from "../paths.ts";
 import { loadState, saveState } from "../state.ts";
 import { openAutoRun, gitDirty, numberConfig } from "../run.ts";
-import { appendEvidence, queueSteer } from "../evidence.ts";
+import { appendEvidence, queueSteer, reportGateError } from "../evidence.ts";
 import { gateStats, pendingSuiteRuns, suiteRuns, recordVerdict } from "../gate-state.ts";
 import { authority } from "../gate-state.ts";
 import { runtime, BLIND_EDIT_NUDGE_AFTER } from "../runtime.ts";
@@ -230,10 +230,14 @@ export function registerToolCallHandler(pi: ExtensionAPI): void {
       if (park) await parkRun(park);
       if (!res.block) return undefined;
       return await handleBlock({ pi, res: res as Refusal["res"], park, config });
-    } catch {
-      // An observer must never break the thing it observes. The fail-safe for
-      // the secret rule lives inside evaluateBlockers, where it is explicit.
-      return undefined;
+    } catch (e) {
+      // An observer must never break the thing it observes — so this does not
+      // stop the work. But it must not look like a clean pass either, and it must
+      // not hand anyone a way past the irreversibility floor: an error raised
+      // before the blockers ran is re-checked against the rules that guard
+      // irreversible actions, from the raw tool input alone.
+      reportGateError("tool_call gate", e);
+      return failSafeBlock((event as { input?: Input } | null)?.input || {});
     }
   });
 }
