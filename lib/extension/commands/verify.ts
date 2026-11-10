@@ -55,8 +55,12 @@ async function traceabilitySection(): Promise<string[]> {
 /** Gate 8 — objective convolution measurement, on the real working tree. */
 async function healthSection(): Promise<string[]> {
   const { runHealth } = await import("../../code-health/index.mjs");
+  const { recordHealthVerdict, recordLine } = await import("../health-record.ts");
   const health = await runHealth(runRoot(), []);
-  const lines = ["\nCODE HEALTH (Gate 8 — large work):", health.text];
+  // Same rule as the tool and the slash command: a measurement that is produced
+  // is a measurement that is recorded.
+  const rec = recordHealthVerdict(health, { by: "verify" });
+  const lines = ["\nCODE HEALTH (Gate 8 — large work):", health.text, recordLine(rec)];
   if (health.exitCode === 1) {
     lines.push("\n  ✗ GATE NOT PASSED — resolve code-health violations before delivery.");
   } else if (!health.healthy && health.config?.gate?.mode === "warn") {

@@ -40,14 +40,19 @@ export async function cmdStatus(): Promise<string> {
 /** Code Health Gate: objective measurement at function / module / architecture level. */
 export async function cmdHealth(args: string[]): Promise<string> {
   const { runHealth } = await import("../../code-health/index.mjs");
+  const { recordHealthVerdict, recordLine } = await import("../health-record.ts");
   const res = await runHealth(runRoot(), args.slice(1));
+  // The command records what it measured. Before this, only the asf_health TOOL
+  // recorded: a human could run /asf health, read HEALTHY, and leave the
+  // completion gate's health gap open with no trace that anything was measured.
+  const rec = recordHealthVerdict(res, { by: "command" });
   const tail =
     res.exitCode === 1
       ? "\n\n✗ GATE FAILED — resolve the violations before delivery."
       : res.config?.gate?.mode === "warn" && !res.healthy
         ? "\n\n(warn mode: violations reported, gate not blocking)"
         : "";
-  return res.text + tail;
+  return `${res.text}${tail}\n\n${recordLine(rec)}`;
 }
 
 /** "What enforces anything around browser testing?" — answered from the registry. */

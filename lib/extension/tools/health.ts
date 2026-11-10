@@ -12,15 +12,17 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { StringEnum } from "@earendil-works/pi-ai";
 import { Type } from "typebox";
-import { ledger } from "../gate-state.ts";
-import { appendEvidence } from "../evidence.ts";
 import { currentScale } from "../run.ts";
+import { recordHealthVerdict, recordLine } from "../health-record.ts";
 
 interface HealthResult {
   text: string;
   healthy: boolean;
   exitCode: number;
   rows?: unknown[];
+  /** Metrics actually measured (pass+fail). Skipped and error rows are NOT in it. */
+  ran?: number;
+  skipped?: number;
 }
 
 async function runHealthGate(scope: string): Promise<HealthResult> {
@@ -33,20 +35,18 @@ async function runHealthGate(scope: string): Promise<HealthResult> {
   return (await runHealth(runRoot(), args)) as HealthResult;
 }
 
-/** A recorded verdict is the point: measuring without recording clears nothing. */
+/**
+ * A recorded verdict is the point: measuring without recording clears nothing.
+ * The counting rules and the wording live in health-record.ts so the tool, the
+ * slash command and `/asf verify` cannot drift into disagreeing with each other.
+ */
 async function measureAndRecord(levelIn: string, scopeIn: string) {
   const res = await runHealthGate(scopeIn);
-  const verdict = res.exitCode === 1 ? "fail" : res.healthy ? "pass" : "warn";
-  const scanned = Array.isArray(res.rows) ? res.rows.length : 0;
   const level: string = ["small", "standard", "major"].includes(levelIn) ? levelIn : currentScale();
-  const appended = ledger.append({ kind: "health-run", level, verdict, scanned });
-  appendEvidence({ kind: "health-run", level, verdict, scanned, by: "tool" });
-  const recorded = appended.ok
-    ? "recorded as evidence; the completion gate's health gap is now closed."
-    : `NOT recorded (${appended.error})`;
+  const rec = recordHealthVerdict(res, { by: "tool", level });
   return {
-    text: `${res.text}\n\nverdict: ${verdict} (${scanned} metric(s) measured, level ${level}) — ${recorded}`,
-    details: { verdict, scanned, level, recorded: appended.ok, by: "tool", error: "" },
+    text: `${res.text}\n\n${recordLine(rec)}`,
+    details: { verdict: rec.verdict, scanned: rec.scanned, level: rec.level, recorded: rec.recorded, by: "tool", error: rec.error },
   };
 }
 

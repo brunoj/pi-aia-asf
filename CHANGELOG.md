@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.9] - 2026-11-10
+
+### Fixed — the health verdict now reports what it measured, not what it planned
+
+`asf_health` recorded `scanned` as `rows.length`, and `rows` contains every metric
+the gate **planned** — including the ones that never ran because a tool was not
+installed. Three things followed, all reported from the same observation:
+
+- the ledger's `scanned 0` rule ("examined nothing, not a pass") was unreachable
+  while any metric was planned, so a run that measured nothing was recorded as a
+  nine-metric audit;
+- the tool's own summary line contradicted the report printed directly above it —
+  `NOT healthy — 8 metric(s) skipped` followed by `9 metric(s) measured`;
+- the honest number already existed and was thrown away: `verdict()` returns
+  `ran`, counting pass+fail and deliberately **excluding** error rows, but
+  `runHealth()` never returned it.
+
+`runHealth()` now returns `ran` and `skipped`, and the recorded count comes from
+them. Counting `status !== "skipped"` was the tempting fix and is wrong: it counts
+errored rows as measured, which puts the report, the ledger and the summary line
+back out of agreement — the exact disagreement being fixed. A metric that does not
+apply (no persistence in the project) is neither ran nor skipped.
+
+### Changed — every path that produces a health verdict records it
+
+`/asf health` and the Gate 8 section of `/asf verify` printed the measurement and
+left no trace, so a human could run the command, read HEALTHY, and leave the
+completion gate's health gap open. Recording was the `asf_health` tool's private
+privilege; it is now shared, with `by:` saying who produced the verdict
+(`tool` / `command` / `verify`). The counting rules and the summary wording moved
+to `lib/code-health/measure.mjs` — pure, dependency-free, and tested without a
+harness — so the three callers cannot drift into contradicting each other again.
+
+A verdict over zero metrics says so out loud: *"Nothing was actually measured — a
+verdict over zero metrics is not a pass, and installing the missing tools is what
+closes this properly."*
+
+
 ## [0.17.8] - 2026-11-09
 
 ### Added — the tracked-work vocabulary is the project's to widen

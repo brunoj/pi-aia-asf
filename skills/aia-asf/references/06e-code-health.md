@@ -67,6 +67,20 @@ whose tool is not installed are skipped (or fail the gate when
 `/asf verify` (large work) runs the gate as **Gate 8** after the M1
 traceability matrix. Small work shows the report but never blocks.
 
+All three paths — the `/asf health` command, `/asf verify`, and the
+**`asf_health` tool** — record the verdict as evidence, so any of them closes the
+completion gate's health gap. An autonomous run uses the tool: a slash command is
+something the agent cannot type, and a gap it cannot close is a bug, not a gate.
+
+**What `scanned` counts.** It is the number of metrics that actually ran
+(pass/fail), never the number of metrics planned. Skipped metrics (tool not
+installed, level off) and disabled ones (no persistence in the project) are not
+in it, and neither are rows that errored. So `scanned: 0` means the gate examined
+nothing — which the ledger prints as *"examined nothing, not a pass"* rather than
+letting a green-looking line summarise a measurement of nothing at all. If every
+metric is skipped, installing the toolchain is what closes the gap properly;
+re-running the gate does not.
+
 ## 3. Configuration
 
 Optional `.asf-code-health.json` at the project root. Merged over the defaults
