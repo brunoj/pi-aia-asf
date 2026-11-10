@@ -89,10 +89,9 @@ function scaleLine(scale: string | undefined): string {
   const suffix =
     scale === "large"
       ? " — mechanical traceability gate ACTIVE"
-      : scale === "small"
-        ? " (floor only — no mechanical traceability gate)"
-        : "";
-  return `Scale: ${scale || "unset"}${suffix}`;
+      : " (floor only — no mechanical traceability gate)";
+  // Unset is judged small (PO policy); say so instead of printing a bare "unset".
+  return `Scale: ${scale || "unset — judged small"}${suffix}`;
 }
 
 export async function cmdVerify(ctx: ExtensionCommandContext): Promise<string> {

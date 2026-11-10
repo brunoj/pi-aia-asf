@@ -7,7 +7,7 @@ import { projectName, runRoot } from "../paths.ts";
 import { loadState } from "../state.ts";
 import { ledger, authority, gateStats } from "../gate-state.ts";
 import { runtime } from "../runtime.ts";
-import { cardFor, collectMeasurements, extensionDir, measureRoot } from "../run.ts";
+import { cardFor, collectMeasurements, currentScale, extensionDir, measureRoot } from "../run.ts";
 import { renderLedger } from "../../gates/ledger.mjs";
 import { renderAuthority } from "../../gates/authority.mjs";
 import { renderCompletionGate } from "../../gates/settle.mjs";
@@ -22,12 +22,12 @@ export async function cmdStatus(): Promise<string> {
   if (!state.current) return "No active ASF session.";
   const cur = state.current;
   const floor =
-    cur.scale === "small" ? " (floor: a real test run and evidence; no plan/approval gates)" : "";
+    currentScale(cur) === "small" ? " (floor: a real test run and evidence; no plan/approval gates)" : "";
   const auto = cur.auto ? " — opened automatically by software work" : "";
   return (
     `ASF status (${project}):\n` +
     `  work type: ${cur.workType || "unset"}\n` +
-    `  scale: ${cur.scale || "unset"}${floor}${auto}\n` +
+    `  scale: ${cur.scale ? cur.scale : `unset — judged ${currentScale(cur)}`}${floor}${auto}\n` +
     `  phase: ${cur.phase}\n` +
     `  plan approved: ${cur.planApproved ? "yes" : "no"}\n` +
     (cur.passiveRunId && cur.passiveRunId === cur.runId ? `  passive: this run only\n` : "") +

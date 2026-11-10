@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed — no scale means small (PO policy)
+
+PO decision: "If no scale, assume small." `currentScale()` used to judge a run with no
+recorded scale as **standard**, unless an earlier `/asf small` in the same process had
+flipped a global flag. That meant two things. First, the same unscaled run got a
+different verdict depending on what a previous run had done. Second, the run card
+printed the raw field ("unset", or "small") while the gate demanded standard's
+`/asf health` and full suite. The stuck sessions this produced were unreadable from the
+card alone.
+
+- `currentScale()` now returns small for an unset scale. Explicit `large` still judges
+  major and explicit `standard` still judges standard, so the change cannot widen.
+- The default in `sessionFacts` and `decideSettlement` is small too, so a caller that
+  forgets to pass a scale gets the floor rather than a ceremony nobody chose. The floor
+  itself still holds: changed source still needs a real test run.
+- The run card, `/asf status` and `/asf verify` print the scale the gate judges by.
+  Unset reads "unset — judged small", never a bare "unset".
+- `runtime.lastScaleWasSmall` and `markSmallScale()` are deleted. With small as the
+  default the flag decided nothing, and a field that reads as load-bearing but is not
+  is how this disagreement started.
+
+The reachable scale-less path is pinned: `/asf verify` calls `setPhase` without a scale,
+and `setPhase` only writes the field when given one. `test/test-scale-policy.mjs` covers
+that path end to end, along with the judged scale, settlement and the card. Five
+mutations, one per layer, are each caught.
+
 ## [0.17.12] - 2026-11-10
 
 ### Fixed — the health gate measured the wrong project

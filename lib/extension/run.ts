@@ -62,7 +62,10 @@ export function cardFor(state: AsfState | null, nextStep?: string, remedy?: stri
         : `advance the ${state.phase} phase`);
   const card = renderRunCard({
     phase: state.phase,
-    scale: state.scale,
+    // The scale the gate judges by, not the raw field: an unset scale is judged
+    // small, and a card that printed "unset" (or the raw value) while the gate held
+    // the run to another scale is how a stuck run became unreadable.
+    scale: currentScale(state),
     workType: state.workType,
     objective: state.objective,
     openDod,
@@ -203,10 +206,24 @@ export function numberConfig(config: Record<string, unknown>, key: string, fallb
   return typeof v === "number" && Number.isFinite(v) ? v : fallback;
 }
 
-/** Small work is held to the reduced DoD — the scale rule is the trigger here. */
+/**
+ * The scale every gate judges a run by.
+ *
+ * PO policy: "If no scale, assume small." A run nobody scaled — auto-opened, or one
+ * whose scale was never written (`/asf verify` calls setPhase without one) — is held
+ * to the small floor: a real test run and evidence, not the health audit and full
+ * suite that standard demands. Only an explicit reading widens it. This used to fall
+ * back to standard unless an earlier `/asf small` had flipped a process-wide flag, so
+ * the same unscaled run was judged differently depending on what an earlier run in
+ * the same process had done — and the card, which printed the raw field, said "small"
+ * while the gate demanded standard's ceremony.
+ */
 export function currentScale(state?: AsfState | null): "small" | "standard" | "major" {
-  if (state?.scale === "small") return "small";
-  if (state?.scale === "large") return "major";
-  return runtime.lastScaleWasSmall ? "small" : "standard";
+  // Compared as strings: "standard" is not an AsfScale today, but a state file may
+  // carry it (hand-edited, or written by a newer ASF), and it must keep its meaning.
+  const raw = String(state?.scale ?? "");
+  if (raw === "large") return "major";
+  if (raw === "standard") return "standard";
+  return "small";
 }
 

@@ -10,7 +10,6 @@ import { newRunId } from "../run.ts";
 import { dependencySummary } from "../deps.ts";
 import { setPhase } from "./session.ts";
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
-import { runtime } from "../runtime.ts";
 
 export async function cmdPassive(): Promise<string> {
   const project = projectName();
@@ -52,7 +51,3 @@ export function helpText(): string {
   );
 }
 
-/** `small` is a scale the next run inherits; recorded here, not in the switch. */
-export function markSmallScale(): void {
-  runtime.lastScaleWasSmall = true;
-}

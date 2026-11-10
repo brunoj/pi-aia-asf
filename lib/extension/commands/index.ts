@@ -9,7 +9,7 @@ import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-c
 import { setPhase, runApprove } from "./session.ts";
 import { cmdVerify } from "./verify.ts";
 import { cmdStatus, cmdHealth, cmdRules, cmdConfig, cmdReport, cmdGates, cmdCard } from "./inspect.ts";
-import { cmdPassive, cmdAbort, helpText, markSmallScale } from "./run-control.ts";
+import { cmdPassive, cmdAbort, helpText } from "./run-control.ts";
 
 type Command = (args: string[], ctx: ExtensionCommandContext) => Promise<string> | string;
 
@@ -18,10 +18,7 @@ const COMMANDS: Record<string, Command> = {
   feature: (_a, ctx) => setPhase(ctx, { phase: "intake", workType: "feature", scale: "large" }),
   bugfix: (_a, ctx) => setPhase(ctx, { phase: "intake", workType: "major-bugfix", scale: "large" }),
   refactor: (_a, ctx) => setPhase(ctx, { phase: "intake", workType: "refactor", scale: "large" }),
-  small: (_a, ctx) => {
-    markSmallScale();
-    return setPhase(ctx, { phase: "implementation", scale: "small" });
-  },
+  small: (_a, ctx) => setPhase(ctx, { phase: "implementation", scale: "small" }),
   status: () => cmdStatus(),
   verify: (_a, ctx) => cmdVerify(ctx),
   health: (a) => cmdHealth(a),

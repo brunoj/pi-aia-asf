@@ -39,7 +39,6 @@ export interface RuntimeState {
    */
   lastMutationAt: number;
   passiveHeartbeatWritten: boolean;
-  lastScaleWasSmall: boolean;
   /** Re-anchoring is count-limited per run. */
   reanchorsThisRun: number;
   /**
@@ -81,7 +80,6 @@ export const runtime: RuntimeState = {
   blindNudged: false,
   lastMutationAt: 0,
   passiveHeartbeatWritten: false,
-  lastScaleWasSmall: false,
   reanchorsThisRun: 0,
   tracked: createTracked(),
   decisionsRead: [],
