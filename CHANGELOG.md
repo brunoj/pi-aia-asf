@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - (describe changes for 0.17.10)
 
-## [0.18.0] - 2026-11-10
+## [0.17.10] - 2026-11-10
 
 ### Added — the browser evidence the completion gate demands can now be produced
 
