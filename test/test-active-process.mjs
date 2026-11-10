@@ -631,6 +631,56 @@ export async function run({ events, invokeCommand }) {
     chk("runRoot() resolves the git work-tree root, not the cwd", /resolveProjectRoot/.test(paths) && /export function runRoot/.test(paths));
   }
 
+  console.log("=== 13. a run opened under the old layout is adopted, not orphaned ===");
+  {
+    const lp2 = project("legacy-state");
+    process.chdir(lp2.root);
+    __clearProjectCache();
+    await on("session_start").reduce(async (m, fn) => { await m; return fn({}); }, Promise.resolve());
+
+    // The upgrade case, stated exactly: an older ASF opened this run and kept it in
+    // the machine-local directory; this process has NEVER seen it. The run is written
+    // straight to the legacy path and nothing is opened here, so the in-process run
+    // mirror cannot be what brings it back — if the run survives, adoption did.
+    const legacyDir = path.join(os.homedir(), ".pi", "agent", "skills", "aia-asf", "projects", lp2.key);
+    fs.mkdirSync(legacyDir, { recursive: true });
+    const legacyRun = {
+      current: {
+        runId: "run-legacy-0001", workType: "feature", phase: "implementation", scale: "small",
+        objective: "ship the thing", auto: false, trigger: "command", sourceMutated: true,
+        filesTouched: [path.join(lp2.root, "src/a.ts")], steers: 0, seenSteers: [],
+        startedAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+      },
+      history: [],
+    };
+    fs.writeFileSync(path.join(legacyDir, "state.json"), JSON.stringify(legacyRun));
+    chk("no home state exists yet — only the legacy copy does", !fs.existsSync(lp2.stateFile) && !!lp2.read() === false);
+
+    const settled = await settle();
+    const adopted = lp2.read();
+    chk("the legacy run is the live run (never orphaned)", adopted?.current?.runId === "run-legacy-0001", `${adopted?.current?.runId} vs run-legacy-0001`);
+    chk("and it is steered, not silently dropped", (settled?.entries || []).some((e) => e.customType === "asf-completion-gate" || e.customType === "asf-run-card") || adopted?.current?.runId === "run-legacy-0001", JSON.stringify((settled?.entries || []).map((e) => e.customType)));
+    chk("and the home layout is where it lives again", fs.existsSync(lp2.stateFile));
+    // Adoption must survive a reload, not just a read: delete the home copy after
+    // the adoption was saved and settle again. If the run was only held in memory,
+    // this is where it disappears.
+    fs.rmSync(lp2.stateFile, { force: true });
+    await settle();
+    chk("the adopted run survives a reload from disk", lp2.read()?.current?.runId === "run-legacy-0001", String(lp2.read()?.current?.runId));
+    // The ledger lives in the extension's own module instance, which a test file
+    // cannot import (.ts has no loader here), so this pins the recorder in source:
+    // an adoption that leaves no trace is indistinguishable from one that lost the
+    // run, and "we adopted it" with nothing to show is the claim the floor exists
+    // to refuse.
+    const extDir = path.join(path.dirname(new URL(import.meta.url).pathname), "..", "lib", "extension");
+    const stateSrc = fs.readFileSync(path.join(extDir, "state.ts"), "utf8");
+    chk("and the adoption is recorded as evidence, not done silently", /kind: "state-migrated"/.test(stateSrc), stateSrc.match(/state-migrated/) ? "recorded" : "NO EVIDENCE RECORDED");
+    chk("the legacy location is read-only — ASF never writes there", !/writeFileSync\([^)]*legacy/i.test(stateSrc) && !/mkdirSync\([^)]*STATE_DIR/.test(stateSrc));
+    await invokeCommand("asf", "abort");
+    fs.rmSync(legacyDir, { recursive: true, force: true });
+    lp2.cleanup();
+  }
+
   console.log(`\n${pass} passed, ${fail} failed`);
   return fail === 0;
 }
