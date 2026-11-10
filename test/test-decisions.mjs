@@ -107,7 +107,17 @@ section("the .asf/ home: one directory, legacy still readable");
   ensureHome(root2);
   check("a project's own ignore rules are kept, not clobbered", /local\//.test(fs.readFileSync(path.join(dir, ".gitignore"), "utf-8")));
 
+  // The harness redirects the whole state tree (ASF_STATE_ROOT) so a suite that
+  // forgets to chdir cannot write into the developer's live run state. Pin BOTH
+  // behaviours: the real layout when unset, the override when set — otherwise the
+  // isolation is either untested or silently defeats this assertion.
+  const savedOverride = process.env.ASF_STATE_ROOT;
+  delete process.env.ASF_STATE_ROOT;
   check("state lives under .asf/state/<key>", homeStateDir(root2, "home-brunoj-x") === path.join(dir, "state", "home-brunoj-x"));
+  process.env.ASF_STATE_ROOT = path.join(os.tmpdir(), "asf-state-override-probe");
+  check("the harness override redirects the whole state tree", homeStateDir(root2, "home-brunoj-x") === path.join(os.tmpdir(), "asf-state-override-probe", "home-brunoj-x"), homeStateDir(root2, "home-brunoj-x"));
+  check("and the override cannot escape into the project it isolates", !homeStateDir(root2, "k").startsWith(dir), homeStateDir(root2, "k"));
+  if (savedOverride === undefined) delete process.env.ASF_STATE_ROOT; else process.env.ASF_STATE_ROOT = savedOverride;
   check("decisions dir is configurable for projects that keep MADR files elsewhere",
     decisionsDir(root2, { decisions: { dir: "docs/decisions" } }) === path.join(root2, "docs/decisions"));
   check("and defaults to the home when unset", decisionsDir(root2, {}) === path.join(dir, "decisions"));

@@ -7,6 +7,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-11-10
+
+### Added — a run can be completed, and tests can no longer corrupt one
+
+Two defects from the same blind spot: ASF tracked runs but had no honest way to finish
+one, and nothing stopped a test suite from writing into the run state a real user reads.
+
+**`asf_run_complete`.** A run used to close only when the completion gate happened to
+pass at settle time, or when a human typed `/asf abort`. There was no action the agent
+could take, so a run that had genuinely finished stayed open and swallowed the next
+piece of work. This project carried a single run opened three days earlier that had
+absorbed several releases and unrelated changes in its `filesTouched` — the gate was
+judging today's work against Monday's evidence, so nothing settled and the loop never
+closed. The user's instruction was to "properly complete and mark as completed every
+run, so you judge the next run separately again".
+
+- The tool asks the **same question the gate asks**: `evaluateRun()` is now the single
+  judge, called by both `judgeAndSettle` and the tool. Two implementations of "is this
+  run done" drift, and the drift reads as a run the agent closed that the gate still
+  counts as open.
+- It **fails closed**. An unfinished run is refused with its gaps listed and stays open
+  with its evidence. A tool that closed runs on request would be an exit around the
+  completion gate, which is worse than the bug it fixes.
+- `closeRun()` is the only writer of run history and the only clearer of `current`, and
+  it records `by` — `auto` from the gate, `asf_run_complete` from the agent — so a close
+  that happened outside the gate is visible in evidence.
+
+### Changed — the decision register follows the code
+
+`asf_decisions` wrote to the session workspace. Working in a repository opened from a
+parent directory (a home directory that is itself a checkout is the common case) put the
+ADRs one level above the project they describe, where nothing would ever read them. The
+register is durable knowledge *about* the code, so it now resolves through `measureRoot()`
+like every other measurement. `currentRegister()` was deleted: it announced itself as
+"exposed for the handlers" and had no callers.
+
+### Fixed — a test suite could not touch a live run
+
+A suite that forgot to `chdir` wrote into the developer's real run state: `/etc/passwd`
+and a scratch path appeared in the live run's `filesTouched`, and the reviewer saw them
+in the run card. State is the one thing a test corrupts with no visible failure — the
+assertion passes and the user's screen is wrong.
+
+- `homeStateDir()` honours `ASF_STATE_ROOT`, and `test/harness.mjs` sets it to a fresh
+  temp directory before the extension loads. The whole suite is now provably inert
+  against real state, verified by diffing the state tree across a full `run-all`.
+- `test-decisions.mjs` pins **both** behaviours — the real `.asf/state/<key>` layout when
+  unset, the override when set — so the isolation cannot silently defeat the assertion
+  it was added next to.
+
+`scripts/verify-published.mjs` also states its own boundary: `scripts/` does not ship, so
+a user cannot run it, which is fine only because every assertion it makes delegates to
+shipped code (`lib/gates/evidence-coverage.mjs`, the same module behind
+`asf_evidence_check`). A check added there that cannot be reproduced from an install is a
+check only a releaser can run.
+
 ## [0.17.13] - 2026-11-10
 
 ### Changed — no scale means small (PO policy)

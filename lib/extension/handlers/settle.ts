@@ -135,10 +135,21 @@ async function handleBlock(
   return { entries, continue: true };
 }
 
-/** An auto-opened run whose floor is met closes itself. */
-async function closeAutoRun(state: AsfState, project: string, file: ProjectStateFile): Promise<void> {
+/**
+ * Close a run: archive it to history and clear `current`.
+ *
+ * The next piece of work then opens its own run and is judged on its own facts. A run
+ * that is never closed accretes everything the session does — this project once carried
+ * a single run opened three days earlier, with four releases and several unrelated
+ * changes inside its `filesTouched`, so the gate was judging today's work against
+ * Monday's evidence and nothing could settle.
+ *
+ * `by` records who closed it: the gate itself (`auto`) or the agent asking
+ * (`asf_run_complete`), so a run that closed without the gate passing is visible.
+ */
+export async function closeRun(state: AsfState, file: ProjectStateFile, { project, by = "auto" }: { project: string; by?: string }): Promise<void> {
   file.history.push({ workType: state.workType || "auto", phase: state.phase, startedAt: state.startedAt || state.updatedAt, endedAt: new Date().toISOString() });
-  appendEvidence({ kind: "run-close", runId: state.runId, auto: true });
+  appendEvidence({ kind: "run-close", runId: state.runId, auto: by === "auto", by });
   file.current = null;
   await saveState(project, file);
 }
@@ -179,8 +190,15 @@ function decisionFacts(state: AsfState) {
   }
 }
 
-async function judgeAndSettle(ctx: SettleContext, priorCount: number): Promise<SettleResult> {
-  const { project, file, state, entries } = ctx;
+/**
+ * Judge a run: the same decision the completion gate makes, in one place.
+ *
+ * Exported because the agent needs to ask the same question before it claims a run is
+ * finished (`asf_run_complete`). Two implementations of "is this run done" drift, and
+ * the drift shows up as a run the agent closed and the gate still thinks is open —
+ * which is how a run from three days ago was still being carried into new work.
+ */
+export async function evaluateRun(project: string, state: AsfState) {
   // Only a passing test that STARTED after the last source change validates it.
   const since = typeof state.lastMutationAt === "number" ? state.lastMutationAt : 0;
   const testRunRecorded = suiteRuns.some((r) => r.exitCode === 0 && (r.at ?? 0) >= since);
@@ -189,7 +207,7 @@ async function judgeAndSettle(ctx: SettleContext, priorCount: number): Promise<S
   // stale, raced or hand-edited. max() means a counter can never go down.
   const mem = steerLedgerFor(`${project}|${state.runId || "run"}`);
   sanitizeSteerFields(state);
-  const decision = decideSettlement(ledger, {
+  return decideSettlement(ledger, {
     untracedMet,
     scale: currentScale(state),
     webTouched: runtime.webTouched,
@@ -200,12 +218,18 @@ async function judgeAndSettle(ctx: SettleContext, priorCount: number): Promise<S
     tracked: runtime.tracked,
     decisionGaps: decisionFacts(state),
   });
+}
+
+async function judgeAndSettle(ctx: SettleContext, priorCount: number): Promise<SettleResult> {
+  const { project, file, state, entries } = ctx;
+  const mem = steerLedgerFor(`${project}|${state.runId || "run"}`);
+  const decision = await evaluateRun(project, state);
   runtime.lastSettleDecision = decision;
   appendEvidence({ kind: "gate-verdict", gate: "completion", fired: decision.missing.length > 0, missing: decision.missing });
 
   if (decision.park) return await handlePark(ctx, decision.park as { reason: string; question: string });
   if (decision.block) return await handleBlock({ ...ctx, mem }, decision as BlockRequest);
-  if (decision.missing.length === 0 && state.auto) await closeAutoRun(state, project, file);
+  if (decision.missing.length === 0 && state.auto) await closeRun(state, file, { project });
   // A continuation for guidance alone is also bounded: an agent that keeps
   // producing new distinct steers must not be kept alive by its own advice.
   if (entries.length > priorCount && steerContinuationsAllowed(mem)) return { entries, continue: true };

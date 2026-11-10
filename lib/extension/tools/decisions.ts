@@ -21,6 +21,7 @@ import { registerAt, addDecision, supersedeDecision, relativeTo } from "../../de
 import { matchesAny } from "../../decisions/glob.mjs";
 import { readProjectConfig } from "../../gates/config.mjs";
 import { runRoot, projectName } from "../paths.ts";
+import { measureRoot } from "../run.ts";
 import { loadState } from "../state.ts";
 import { runtime } from "../runtime.ts";
 import { appendEvidence } from "../evidence.ts";
@@ -43,9 +44,12 @@ async function planApproved(): Promise<boolean> {
   }
 }
 
-function config(): Record<string, unknown> {
+function config(root: string): Record<string, unknown> {
   try {
-    return readProjectConfig(runRoot());
+    // The register is durable knowledge ABOUT the code, so it follows the code the
+    // run is changing — not the session workspace, which for a repo opened from a
+    // parent directory would put the ADRs one level above the project they describe.
+    return readProjectConfig(root);
   } catch {
     return {};
   }
@@ -88,14 +92,14 @@ function renderProblems(problems: { severity: string; file?: string; field?: str
 }
 
 async function listAction(root: string): Promise<ActionOut> {
-  const { dir, records, problems } = registerAt(root, config());
+  const { dir, records, problems } = registerAt(root, config(root));
   const errors = problems.filter((p) => p.severity === "error");
   const text = `${dir}\n\n${renderList(records)}${errors.length ? `\n\n${renderProblems(errors)}` : ""}`;
   return { text, ok: errors.length === 0, count: records.length };
 }
 
 async function getAction(root: string, id: string): Promise<ActionOut> {
-  const { records } = registerAt(root, config());
+  const { records } = registerAt(root, config(root));
   const found = records.find((r) => String(r.id).toLowerCase() === id.toLowerCase());
   if (!found) return { text: `No ${id} in the register.`, ok: false, count: 0 };
   if (!runtime.decisionsRead.includes(String(found.id))) runtime.decisionsRead.push(String(found.id));
@@ -106,7 +110,7 @@ async function getAction(root: string, id: string): Promise<ActionOut> {
 }
 
 async function matchAction(root: string, filePath: string): Promise<ActionOut> {
-  const { records } = registerAt(root, config());
+  const { records } = registerAt(root, config(root));
   const hit = records.filter((r) => r.status === "accepted" && matches(r, filePath));
   const text = hit.length
     ? `${filePath} is governed by:\n${renderList(hit)}\n\nRead them with action=get before changing the file.`
@@ -121,11 +125,11 @@ function matches(r: DecisionRecord, filePath: string): boolean {
 
 async function recordAction(root: string, p: Record<string, unknown>): Promise<ActionOut> {
   const approved = await planApproved();
-  const { records } = registerAt(root, config());
+  const { records } = registerAt(root, config(root));
   const out = addDecision(root, {
     record: recordFrom(p),
     body: str(p.body),
-    config: config(),
+    config: config(root),
     planApproved: approved,
     read: records,
   });
@@ -140,7 +144,7 @@ async function recordAction(root: string, p: Record<string, unknown>): Promise<A
 
 async function supersedeAction(root: string, p: Record<string, unknown>): Promise<ActionOut> {
   const approved = await planApproved();
-  const { records } = registerAt(root, config());
+  const { records } = registerAt(root, config(root));
   // The `id` parameter names the decision being REPLACED; the record built from
   // the same params must not carry it, or the new decision is written with the old
   // decision's id and the register ends up with two claimants for one number.
@@ -150,7 +154,7 @@ async function supersedeAction(root: string, p: Record<string, unknown>): Promis
     by: "agent",
     record: recordFrom(recordParams),
     body: str(p.body),
-    config: config(),
+    config: config(root),
     planApproved: approved,
     read: records,
   });
@@ -161,7 +165,7 @@ async function supersedeAction(root: string, p: Record<string, unknown>): Promis
 }
 
 async function checkAction(root: string): Promise<ActionOut> {
-  const { dir, records, problems } = registerAt(root, config());
+  const { dir, records, problems } = registerAt(root, config(root));
   const errors = problems.filter((p) => p.severity === "error");
   const notices = problems.filter((p) => p.severity === "notice");
   // What the completion floor believes about THIS run. Without it the citation rules
@@ -228,7 +232,7 @@ export function registerDecisionsTool(pi: ExtensionAPI): void {
     promptSnippet: "Consult or record the project's architecture decisions",
     parameters: Type.Object(DECISION_PARAMS),
     async execute(_toolCallId: string, params: Record<string, unknown>) {
-      const root = runRoot();
+      const root = await measureRoot();
       const action = str(params?.action);
       try {
         return toolResult(action, await runAction(root, action, params));
@@ -245,7 +249,3 @@ export function registerDecisionsTool(pi: ExtensionAPI): void {
   });
 }
 
-/** Exposed for the handlers: the register as the rest of ASF sees it. */
-export function currentRegister() {
-  return registerAt(runRoot(), config());
-}

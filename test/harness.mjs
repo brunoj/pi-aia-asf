@@ -8,6 +8,19 @@ import os from 'node:os';
 const extDir = process.argv[2];
 const testFile = process.argv[3];
 
+/*
+ * Isolate run state BEFORE anything imports the extension.
+ *
+ * A suite that forgets to chdir was writing into the developer's LIVE run state —
+ * `/etc/passwd` and a scratch path ended up in the real run's `filesTouched`, and the
+ * reviewer saw them in the run card. State is the one thing a test can corrupt with no
+ * visible failure, so the whole tree is redirected here and no suite can reach the real
+ * one. Set ASF_STATE_ROOT yourself (run-all does not) to debug against real state.
+ */
+if (!process.env.ASF_STATE_ROOT) {
+  process.env.ASF_STATE_ROOT = fs.mkdtempSync(path.join(os.tmpdir(), "asf-harness-state-"));
+}
+
 // --- Mock ExtensionAPI ---
 const tools = [];
 const commands = [];

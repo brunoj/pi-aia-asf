@@ -15,6 +15,15 @@
  * declared obligations to be present in the installed copy, because an ASF release
  * whose skill did not ship is an empty deliverable that installs without error.
  *
+ * What is reproducible from an install, and what is not: `scripts/` is not in
+ * `files`, so this file itself does not ship and a user cannot run it. That is
+ * deliberate — the *assertions* ship (they live in `lib/gates/evidence-coverage.mjs`,
+ * which this script imports FROM THE INSTALLED COPY, and the same module backs the
+ * `asf_evidence_check` tool a user can call at any time). What cannot ship is the
+ * harness: installing from the registry into a throwaway prefix is a release-time
+ * act, not something the package can do to itself. So the rule is: any check added
+ * here must delegate to shipped code, or it is a check nobody but a releaser can run.
+ *
  * Usage:   node scripts/verify-published.mjs [version]     (default: package.json version)
  * Exit 0 only if every check passes.
  */
