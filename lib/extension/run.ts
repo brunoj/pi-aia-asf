@@ -7,6 +7,7 @@ import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname } from "node:path";
 import { runRoot } from "./paths.ts";
+import { ensureHome } from "../home.mjs";
 import { cpus, loadavg } from "node:os";
 import { renderRunCard, cardSummary, CARD_CEILING_BYTES } from "../run-card.mjs";
 import { ledger, suiteRuns, gateStats } from "./gate-state.ts";
@@ -15,10 +16,38 @@ import { loadState, saveState } from "./state.ts";
 import { projectName } from "./paths.ts";
 import { runtime } from "./runtime.ts";
 import { __resetRefusals } from "../gates/refusals.mjs";
+import { cardIndex, registerAt } from "../decisions/consult.mjs";
+import { readProjectConfig } from "../gates/config.mjs";
 import type { AsfState } from "./types.ts";
 
 export function newRunId(): string {
   return `run-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+}
+
+/**
+ * The decision index, budgeted separately from the card.
+ *
+ * It rides the card's delivery because a register nobody has in context is a
+ * register nobody follows — but it does not share the card's ceiling, so adding
+ * a decision can never push the DoD list off the card. Titles are rules, so
+ * three lines steer; that is the whole point of the format.
+ */
+function decisionBlock(root: string): string {
+  try {
+    const cfg = readProjectConfig(root);
+    if (cfg["gate.decisions.inject"] === false) return "";
+    const { records } = registerAt(root, cfg);
+    const lines = cardIndex(records, {
+      max: Number(cfg["gate.decisions.max_lines"]) || 3,
+      bytes: Number(cfg["gate.decisions.max_bytes"]) || 600,
+    });
+    if (!lines.length) return "";
+    return `\ndecisions in force:\n${lines.map((l) => `  ${l}`).join("\n")}\n  (asf_decisions action=get before changing governed code)`;
+  } catch {
+    // A broken register is reported by the register's own checks; it must never
+    // be a reason for the card to disappear.
+    return "";
+  }
 }
 
 export function cardFor(state: AsfState | null, nextStep?: string, remedy?: string): string {
@@ -31,7 +60,7 @@ export function cardFor(state: AsfState | null, nextStep?: string, remedy?: stri
       : state.phase === "implementation"
         ? "implement test-first; keep the suite green"
         : `advance the ${state.phase} phase`);
-  return renderRunCard({
+  const card = renderRunCard({
     phase: state.phase,
     scale: state.scale,
     workType: state.workType,
@@ -44,6 +73,7 @@ export function cardFor(state: AsfState | null, nextStep?: string, remedy?: stri
     auto: state.auto,
     steers: state.steers,
   }).text;
+  return card + decisionBlock(runRoot());
 }
 
 /**
@@ -70,6 +100,14 @@ export async function openAutoRun(trigger: string, path: string | null): Promise
     seenSteers: [],
   };
   file.current = state;
+  // The home is created when a run opens, not when a file is first needed: the
+  // `.gitignore` inside it must exist before the first telemetry write, or the
+  // ledger shows up as untracked noise in the user's `git status`.
+  try {
+    ensureHome(runRoot());
+  } catch {
+    /* a read-only project must not stop a run from opening */
+  }
   await saveState(project, file);
   __resetRefusals();
   runtime.blindMutations = 0;

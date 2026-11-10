@@ -18,8 +18,10 @@ import { evaluateBlockers, BLOCKERS } from "../lib/gates/blockers.mjs";
 import { __resetRefusals, RULE_TEXT } from "../lib/gates/refusals.mjs";
 import { isTestCommand, deriveSuiteRun, lastFullRun, greenFullRun } from "../lib/gates/suite-runs.mjs";
 import * as settleMod from "../lib/gates/settle.mjs";
+import { homeStateDir } from "../lib/home.mjs";
 
-const STATE_DIR = path.join(os.homedir(), ".pi", "agent", "skills", "aia-asf", "projects");
+// Where the run state lives is ASF's business, not the test's: the path comes
+// from lib/home.mjs so a relocation moves the code and this suite together.
 const originalCwd = process.cwd();
 
 let pass = 0, fail = 0;
@@ -36,12 +38,12 @@ function project(prefix, { git = false } = {}) {
   return {
     root,
     key,
-    stateFile: path.join(STATE_DIR, key, "state.json"),
+    stateFile: path.join(homeStateDir(root, key), "state.json"),
     read() { try { return JSON.parse(fs.readFileSync(this.stateFile, "utf8")); } catch { return null; } },
     cleanup() {
       try { process.chdir(originalCwd); } catch { /* gone */ }
       fs.rmSync(root, { recursive: true, force: true });
-      fs.rmSync(path.join(STATE_DIR, key), { recursive: true, force: true });
+      fs.rmSync(path.join(path.join(os.homedir(), ".pi", "agent", "skills", "aia-asf", "projects"), key), { recursive: true, force: true });
     },
   };
 }

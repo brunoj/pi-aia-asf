@@ -5,29 +5,53 @@
 
 import { mkdir, readFile, writeFile, rename } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { dirname } from "node:path";
 import type { AsfState, ProjectStateFile } from "./types.ts";
 import { appendEvidence, queueSteer } from "./evidence.ts";
-import { stateFileFor, projectName, legacyKey, STATE_DIR } from "./paths.ts";
+import { stateFileFor, legacyStateFileFor, projectName, legacyKey } from "./paths.ts";
+
+/**
+ * Every place this project's run state could legitimately be, current home first.
+ *
+ * Two migrations meet here: the pre-home machine-local directory
+ * (~/.pi/agent/skills/aia-asf/projects) and the pre-0.15 basename key. Both are
+ * **copied, never moved** — an older copy stays exactly where it was, so an
+ * upgrade or a rollback can always find it again.
+ */
+function stateCandidates(project: string): string[] {
+  const here = stateFileFor(project);
+  const out: string[] = [];
+  const oldKey = legacyKey();
+  for (const candidate of [legacyStateFileFor(project), stateFileFor(oldKey), legacyStateFileFor(oldKey)]) {
+    if (candidate !== here && !out.includes(candidate)) out.push(candidate);
+  }
+  return out;
+}
+
+/** Adopt a live run from an older location, recording where it came from. */
+async function adoptState(project: string): Promise<ProjectStateFile | null> {
+  for (const file of stateCandidates(project)) {
+    if (!existsSync(file)) continue;
+    try {
+      const data = JSON.parse(await readFile(file, "utf-8")) as ProjectStateFile;
+      if (!data || !data.current) continue;
+      await saveState(project, data);
+      appendEvidence({ kind: "state-migrated", from: file, project });
+      return data;
+    } catch {
+      /* an unreadable older copy is not adopted */
+    }
+  }
+  return null;
+}
 
 export async function loadState(project: string): Promise<ProjectStateFile> {
   const file = stateFileFor(project);
   if (!existsSync(file)) {
-    // One-time migration: a run opened under the old basename key is adopted,
-    // not orphaned — an upgrade must never silently end an active run.
-    const legacy = stateFileFor(legacyKey());
-    if (legacy !== file && existsSync(legacy)) {
-      try {
-        const data = JSON.parse(await readFile(legacy, "utf-8")) as ProjectStateFile;
-        if (data && data.current) {
-          await saveState(project, data);
-          await writeFile(legacy, JSON.stringify({ current: null, history: data.history || [], movedTo: project }, null, 2), "utf-8");
-          return data;
-        }
-      } catch {
-        /* unreadable legacy state is not adopted */
-      }
-    }
+    // One-time adoption: a run opened under an older layout is adopted, not
+    // orphaned — an upgrade must never silently end an active run.
+    const adopted = await adoptState(project);
+    if (adopted) return adopted;
     return restoreFromMirror(project, { current: null, history: [] }, "missing");
   }
   try {
@@ -142,7 +166,7 @@ export async function readStateFile(file: string): Promise<ProjectStateFile | nu
 
 export async function writeStateFile(project: string, data: ProjectStateFile): Promise<void> {
   const file = stateFileFor(project);
-  await mkdir(join(STATE_DIR, project), { recursive: true });
+  await mkdir(dirname(file), { recursive: true });
   const merged = mergeMonotonic(data, await readStateFile(file));
   // Write-then-rename: a reader never sees a half-written file.
   const tmp = `${file}.tmp-${process.pid}-${Math.random().toString(36).slice(2, 8)}`;

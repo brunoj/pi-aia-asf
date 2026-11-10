@@ -1,5 +1,5 @@
-export const CONFIG_FILE: string;
 export function configPath(projectDir: string): string;
+export function configWritePath(projectDir: string): string;
 export function readProjectConfig(projectDir: string): Record<string, unknown>;
 export function writeProjectConfig(projectDir: string, values: Record<string, unknown>): string;
 export function validateDraft(draft: Record<string, unknown>): string[];

@@ -34,7 +34,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-const STATE_DIR = path.join(os.homedir(), ".pi", "agent", "skills", "aia-asf", "projects");
+import { homeStateDir } from "../lib/home.mjs";
 
 /**
  * The gate reads ASF's per-project state (keyed on process.cwd()), so the test
@@ -47,14 +47,14 @@ function makeProject(prefix) {
   fs.mkdirSync(dir, { recursive: true });
   __clearProjectCache();
   const key = projectKey(dir);
-  fs.mkdirSync(path.join(STATE_DIR, key), { recursive: true });
+  fs.mkdirSync(homeStateDir(dir, key), { recursive: true });
   return {
     dir,
-    stateFile: path.join(STATE_DIR, key, "state.json"),
+    stateFile: path.join(homeStateDir(dir, key), "state.json"),
     cleanup() {
       try { process.chdir(originalCwd); } catch { /* already gone */ }
       fs.rmSync(root, { recursive: true, force: true });
-      fs.rmSync(path.join(STATE_DIR, key), { recursive: true, force: true });
+      fs.rmSync(path.join(os.homedir(), ".pi", "agent", "skills", "aia-asf", "projects", key), { recursive: true, force: true });
     },
   };
 }

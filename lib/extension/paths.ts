@@ -9,8 +9,13 @@ import { join } from "node:path";
 import { basename } from "node:path";
 import { homedir } from "node:os";
 import { projectKey as resolveProjectKey, projectRoot as resolveProjectRoot } from "../project.mjs";
+import { homeStateDir } from "../home.mjs";
 
 export const SKILLS_DIR = join(homedir(), ".pi", "agent", "skills");
+/**
+ * The pre-home location, machine-local. Read-only now: kept so an upgrade never
+ * orphans a run that is mid-flight under an older ASF.
+ */
 export const STATE_DIR = join(SKILLS_DIR, "aia-asf", "projects");
 
 /**
@@ -26,7 +31,20 @@ export function projectName(): string {
   return resolveProjectKey();
 }
 
+/**
+ * Where a run's state lives: `.asf/state/<projectKey>/state.json` in the project.
+ *
+ * It sits inside the home but is git-ignored by `.asf/.gitignore`: it is
+ * append-only telemetry, and a ledger that dirtied the tree on every tool call
+ * would defeat the "tree is clean" precondition ASF demands before an
+ * irreversible action.
+ */
 export function stateFileFor(project: string): string {
+  return join(homeStateDir(runRoot(), project), "state.json");
+}
+
+/** The machine-local path an older ASF used. Read-only; never written. */
+export function legacyStateFileFor(project: string): string {
   return join(STATE_DIR, project, "state.json");
 }
 

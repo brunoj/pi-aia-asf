@@ -9,7 +9,6 @@ export interface SettleDecision {
   missing: string[];
   continuation?: string;
   report?: string | null;
-  exhausted?: boolean;
   park?: ParkRequest;
   fingerprint?: string;
   steer?: number;
@@ -27,9 +26,11 @@ export function decideSettlement(
     untracedMet?: string[];
     /** Tracked work opened this session; dangling items are a gap. */
     tracked?: import("./tracked.mjs").TrackedState;
+    /** Pre-computed decision floor gaps (see lib/gates/decisions.mjs). */
+    decisionGaps?: { gate?: string; gap: string; remedy: string }[];
   },
 ): SettleDecision;
-export function renderCompletionGate(decision: { missing: string[]; exhausted?: boolean; park?: ParkRequest }): string;
+export function renderCompletionGate(decision: { missing: string[]; park?: ParkRequest }): string;
 export function classifyPark(missing?: string[]): ParkRequest | null;
 export function steerFingerprint(missing?: string[]): string;
 export const MAX_STEERS: number;

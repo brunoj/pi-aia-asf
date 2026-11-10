@@ -20,7 +20,8 @@ const chk = (name, cond, detail = "") => {
   else { console.log(`  FAIL  ${name}${detail ? " — " + detail : ""}`); fail++; }
 };
 
-const STATE_ROOT = path.join(os.homedir(), ".pi", "agent", "skills", "aia-asf", "projects");
+const STATE_ROOT = path.join(os.homedir(), ".pi", "agent", "skills", "aia-asf", "projects"); // pre-home location
+import { homeStateDir } from "../lib/home.mjs";
 
 export async function run({ commands, extDir, api, invokeCommand }) {
   console.log("=== 1. the harness enforces pi's contract (negative control) ===");
@@ -114,6 +115,7 @@ export async function run({ commands, extDir, api, invokeCommand }) {
     fs.rmSync(tmp, { recursive: true, force: true });
     fs.rmSync(path.join(STATE_ROOT, path.basename(tmp)), { recursive: true, force: true });
     fs.rmSync(path.join(STATE_ROOT, projectKey(tmp)), { recursive: true, force: true });
+    fs.rmSync(homeStateDir(tmp, projectKey(tmp)), { recursive: true, force: true });
   }
 
   console.log(`\n${pass}/${pass + fail} checks passed`);

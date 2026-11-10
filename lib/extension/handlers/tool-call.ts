@@ -18,6 +18,7 @@ import { classifyToolCall, activationDecision } from "../../activation.mjs";
 import { evaluateBlockers, BLOCKERS, failSafeBlock } from "../../gates/blockers.mjs";
 import { deriveSuiteRun } from "../../gates/suite-runs.mjs";
 import { noteTrackedCall, matchersFromConfig } from "../../gates/tracked.mjs";
+import { observeDecisions } from "./observe-decisions.ts";
 import { readProjectConfig } from "../../gates/config.mjs";
 import { projectName, runRoot } from "../paths.ts";
 import { loadState, saveState } from "../state.ts";
@@ -217,6 +218,44 @@ async function handleBlock({ pi, res, park, config }: Refusal): Promise<{ block:
   return { block: true, reason: refusalReason(res, park) };
 }
 
+/**
+ * Everything the call is watched for. Each observer is fenced on purpose: an
+ * observer that cannot run must not stop the work it is watching, and none of
+ * them is a gate — a missed observation shows up as a missing piece of evidence
+ * at settle, which is where evidence is checked.
+ */
+async function observeCall({ toolName, input, ev, config }: { toolName: string; input: Input; ev: Event; config: Record<string, unknown> }): Promise<void> {
+  try {
+    await observeActivation(toolName, input);
+  } catch {
+    /* activation is an observer: it never breaks the call it watches */
+  }
+  observeSuiteAttempt(input, ev);
+  observeWebTouch(input);
+  observeTrackedWork(toolName, input, config);
+  try {
+    observeDecisions(toolName, input, config);
+  } catch {
+    /* never blocks the work it watches */
+  }
+}
+
+/** The blockers, with the session facts they are allowed to consult. */
+function runBlockers(toolName: string, input: Input, config: Record<string, unknown>) {
+  return evaluateBlockers(toolName, input, {
+    ctx: {
+      suiteRuns,
+      dirty: () => gitDirty(),
+      impactStated: runtime.impactStated,
+      trackedPaths: undefined,
+      // The publish floor is the settle floor: the LAST full run, green, and
+      // started after the last source change — not "any green this session".
+      lastMutationAt: runtime.lastMutationAt,
+    },
+    enabled: blockerSwitches(config),
+  });
+}
+
 export function registerToolCallHandler(pi: ExtensionAPI): void {
   pi.on("tool_call", async (event) => {
     try {
@@ -226,29 +265,9 @@ export function registerToolCallHandler(pi: ExtensionAPI): void {
       // Read once, hand it to whoever needs it: the gate below and the tracked-work
       // matcher both ask, and a second read is a second answer to the same question.
       const config = readProjectConfig(runRoot());
+      await observeCall({ toolName, input, ev, config });
 
-      // An observer failure here must not block the work, so it is fenced.
-      try {
-        await observeActivation(toolName, input);
-      } catch {
-        /* activation is an observer: it never breaks the call it watches */
-      }
-      observeSuiteAttempt(input, ev);
-      observeWebTouch(input);
-      observeTrackedWork(toolName, input, config);
-
-      const res = evaluateBlockers(toolName, input, {
-        ctx: {
-          suiteRuns,
-          dirty: () => gitDirty(),
-          impactStated: runtime.impactStated,
-          trackedPaths: undefined,
-          // The publish floor is the settle floor: the LAST full run, green, and
-          // started after the last source change — not "any green this session".
-          lastMutationAt: runtime.lastMutationAt,
-        },
-        enabled: blockerSwitches(config),
-      });
+      const res = runBlockers(toolName, input, config);
       emitVerdicts(res);
       emitSteers(res);
 

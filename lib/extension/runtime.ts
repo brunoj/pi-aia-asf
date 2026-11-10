@@ -48,6 +48,18 @@ export interface RuntimeState {
    * a restart is re-opened by the agent's own progress text if it is still dangling.
    */
   tracked: TrackedState;
+  /**
+   * Decision ids this run has actually read through the tool. The read-before-edit
+   * floor is about the decision being *in context* when the code is written — a
+   * register nobody opened is a register nobody followed.
+   */
+  decisionsRead: string[];
+  /** Decisions already steered on: one steer per decision per run, not per call. */
+  decisionsSteered: string[];
+  /** Accepted decisions the agent cited (in a plan, a message or a tool call). */
+  decisionsCited: string[];
+  /** Decisions this run wrote. Recording is engaging with the register too. */
+  decisionsRecorded: string[];
 }
 
 export const runtime: RuntimeState = {
@@ -65,4 +77,8 @@ export const runtime: RuntimeState = {
   lastScaleWasSmall: false,
   reanchorsThisRun: 0,
   tracked: createTracked(),
+  decisionsRead: [],
+  decisionsSteered: [],
+  decisionsCited: [],
+  decisionsRecorded: [],
 };

@@ -3,10 +3,10 @@
  */
 
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
-import { join } from "node:path";
 import { existsSync } from "node:fs";
 import type { AsfPhase, AsfScale, AsfState } from "../types.ts";
 import { projectName, runRoot } from "../paths.ts";
+import { readPath } from "../../home.mjs";
 import { loadState, saveState } from "../state.ts";
 import { newRunId } from "../run.ts";
 import { __resetRefusals } from "../../gates/refusals.mjs";
@@ -65,10 +65,12 @@ export async function runApprove(): Promise<string> {
   const state = await loadState(project);
   if (!state.current) return "No active ASF session — start one with /asf new|feature|bugfix|refactor.";
 
-  const planPath = join(runRoot(), "PLAN.md");
+  // Home first, then the root: a task started under an older ASF keeps its plan
+  // where it wrote it, and Gate 5 refuses on the same file it would approve.
+  const planPath = readPath(runRoot(), "plan");
   if (!existsSync(planPath)) {
     return (
-      `No PLAN.md found in ${runRoot()}.\n` +
+      `No PLAN.md found in ${runRoot()} (looked for ${planPath}).\n` +
       "Gate 5 approves a written plan — write PLAN.md and present it to the user first."
     );
   }

@@ -12,7 +12,7 @@ const chk = (name, cond, detail = "") => {
   else { console.log(`  FAIL  ${name}${detail ? " — " + detail : ""}`); fail++; }
 };
 
-const STATE_ROOT = path.join(os.homedir(), ".pi", "agent", "skills", "aia-asf", "projects");
+import { homeStateDir } from "../lib/home.mjs";
 
 function makeProject(files) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "asf-ch-ext-"));
@@ -69,7 +69,7 @@ export async function run({ commands, extDir, invokeCommand }) {
 
     // ── 3. /asf verify (large) includes CODE HEALTH Gate 8 ──
     const proj = projectKey(god);
-    const stateDir = path.join(STATE_ROOT, proj);
+    const stateDir = homeStateDir(god, proj);
     fs.mkdirSync(stateDir, { recursive: true });
     fs.writeFileSync(path.join(stateDir, "state.json"), JSON.stringify({
       current: { workType: "feature", scale: "large", phase: "implementation", startedAt: new Date().toISOString(), updatedAt: new Date().toISOString() },

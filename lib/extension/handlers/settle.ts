@@ -24,6 +24,11 @@ import { ledger, suiteRuns, pendingSteers, deliveredSteers } from "../gate-state
 import { steerLedgerFor, steerContinuationsAllowed, parkedAlready } from "../steer.ts";
 import { currentScale } from "../run.ts";
 import { runtime } from "../runtime.ts";
+import { decisionGaps, touchedGoverned, reopensNow } from "../../gates/decisions.mjs";
+import { matchesAny } from "../../decisions/glob.mjs";
+import { registerAt, relativeTo } from "../../decisions/consult.mjs";
+import { readProjectConfig } from "../../gates/config.mjs";
+import { runRoot } from "../paths.ts";
 import type { AsfState, ProjectStateFile } from "../types.ts";
 
 type Entry = Record<string, unknown>;
@@ -145,6 +150,35 @@ function noRunResult(project: string, entries: Entry[], priorCount: number): Set
   return { entries, continue: true };
 }
 
+/**
+ * The decision floor's facts, read from the register at settle time.
+ *
+ * Returns null when the project switched the floor off. A register that cannot
+ * be read must not stop the run from closing — the register's own checks report
+ * that; the completion gate does not punish it.
+ */
+function decisionFacts(state: AsfState) {
+  try {
+    const cfg = readProjectConfig(runRoot());
+    if (cfg["gate.decisions.at_settle"] === false) return [];
+    const { records } = registerAt(runRoot(), cfg);
+    const touched = relativeTo(runRoot(), state.filesTouched || []);
+    const governedTouched = touchedGoverned(touched, records, matchesAny);
+    const ids = [...new Set(governedTouched.map((g: { id: string }) => g.id))];
+    return decisionGaps({
+      sourceChanged: !!state.sourceMutated,
+      governedTouched,
+      cited: runtime.decisionsCited,
+      recorded: runtime.decisionsRecorded,
+      unreadGoverned: ids,
+      read: runtime.decisionsRead,
+      reopens: reopensNow(state.objective, records),
+    });
+  } catch (e) {
+    return [];
+  }
+}
+
 async function judgeAndSettle(ctx: SettleContext, priorCount: number): Promise<SettleResult> {
   const { project, file, state, entries } = ctx;
   // Only a passing test that STARTED after the last source change validates it.
@@ -164,6 +198,7 @@ async function judgeAndSettle(ctx: SettleContext, priorCount: number): Promise<S
     sourceMutated: !!state.sourceMutated,
     testRunRecorded,
     tracked: runtime.tracked,
+    decisionGaps: decisionFacts(state),
   });
   runtime.lastSettleDecision = decision;
   appendEvidence({ kind: "gate-verdict", gate: "completion", fired: decision.missing.length > 0, missing: decision.missing });
