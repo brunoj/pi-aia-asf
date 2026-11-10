@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-11-10
+
 ### Added — a required question goes where the answer actually lives
 
 PO policy: a long loop runs until the work is resolved, and stops for input only when
@@ -44,7 +46,6 @@ on a `0.x` version does not span a minor. Every gate read the registry or the wo
 tree; none read the copy pi actually loads, so fixes believed installed and verified
 were not installed at all. Version equality alone would still pass a hand-patched or
 partially installed copy, which is why the check compares bytes.
-
 
 ## [0.18.0] - 2026-11-10
 
