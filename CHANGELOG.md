@@ -7,6 +7,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-11-10
+
+### Added — the browser evidence the completion gate demands can now be produced
+
+The gate required browser verification whenever a UI file was touched (in two places:
+the ledger's completeness check and the delivery report), but the only registered
+tools were `asf_health` and `asf_decisions`. Any session that edited a tsx/html/css
+file was steered at a gap it had no hands for — the health loop, one layer down. Two
+agent-callable tools now close it, mirroring `asf_health`:
+
+- `asf_browser_verify {page, action, assertion}` — **refused** unless the session
+  actually drove a browser. ASF sees every `tool_call`, so a verification with no
+  browser in the room is a claim about a page nobody opened; `browser_diagnose` and
+  `browser_logs` do not count, because they report on the daemon, not on the surface.
+  All three fields are required: that is the minimum a reviewer can go and repeat.
+- `asf_browser_na {reason}` — **refused** when the reason is a placeholder (`n/a`,
+  `none`, `not applicable`, one word). A structured n/a is worth having only if a
+  reviewer can disagree with it; otherwise it is an exit around the gate.
+
+Recorded, not claimed: a tool that accepted "I verified it" would make the gate
+decorative, and a decorative gate reads as coverage. The rules live in
+`lib/gates/browser-evidence.mjs` (pure, testable without a browser) with a thin
+extension adapter, mirroring the `measure.mjs` / `health-record.ts` split.
+
+### Fixed — five ledger kinds had no producer
+
+`browser-verify`, `browser-na`, `clean-room`, `spec-transition` and `perf-scenario`
+could be validated and rendered but never written. Now:
+
+- `spec-transition` is **observed** from the real `update_spec_status` call, so the
+  delivery report renders actual transitions without anyone remembering to record them;
+- `clean-room` is observed from the release pipeline (`npm run release` /
+  `verify-published.mjs`) together with its exit code — the definition-of-done line
+  about the shipped artifact no longer promises evidence nothing can produce;
+- `perf-scenario` is **dropped**: no producer, no requirement, five mandatory fields
+  nobody could fill.
+
+### Added — the runner can no longer read a suite as green when it never checked
+
+`test/harness.mjs` honoured only `export async function run()` returning false. A
+suite exposing its verdict as the module's default export was ignored entirely —
+which is how a new suite reported "51 passed" while enforcing nothing. The runner now
+reads `run()`, a boolean default, or a boolean `ok`; a suite claiming `selfReports`
+must contain a real failure channel (`process.exit(1)` or `node:test`) or it warns;
+and a suite with none of these is named instead of passing silently. The whole class
+is pinned by `test/test-evidence-kinds.mjs`: every ledger kind must have a producer in
+the shipped package, and no kind a gate *requires* may be an orphan.
+
+Also: `tool-call.ts` passed the 300-line ceiling and its work observers moved to
+`lib/extension/handlers/observe-work.ts`, with pi's `Input`/`Event` shapes declared
+once in `observed.ts` instead of three times; `String(undefined)` → `?? ""` in the
+evidence builders (the literal "undefined" reads like a value and passes a presence
+check); and a redundant guard in `placeholderReason` was deleted because no mutation
+of it failed a test — a guard that cannot be failed is decoration, not protection.
+
 ## [0.17.9] - 2026-11-10
 
 ### Fixed — the health verdict now reports what it measured, not what it planned

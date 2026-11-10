@@ -257,11 +257,11 @@ instances.
   Rule 9 to the documents you write: SKILL.md, references, PLAN.md, README —
   split them when they outgrow editability. **Characterize before refactoring
   untested code (P13)**; check for smells (P09) as you go.
-- **Phase 7 (verification)**: the DoD checklist includes: no duplicated shared
-  logic (Rule 2), no hardcoded config values (Rule 3), every module tested
-  standalone with the same calls (Rule 4), architecture doc written (Rule 6),
-  existing functionality still green (Rule 8). Documents: no doc so large that
-  editing it is fragile (Rule 9).
+- **Phase 7 (verification)**: the DoD checklist is Rules 1–9 rephrased as checks —
+  no duplicated shared logic (Rule 2), no hardcoded config (Rule 3), every module
+  tested standalone with the same calls (Rule 4), architecture doc written (Rule 6),
+  existing functionality still green (Rule 8), and no doc so large that editing it is
+  fragile (Rule 9).
 
 ## Anti-patterns
 

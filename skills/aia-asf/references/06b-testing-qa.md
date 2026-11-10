@@ -119,7 +119,9 @@ two-sided. Half a test suite hides half the bugs.
 
 ## Rule 9 — Browser-test every interface you TOUCH, during the build
 
-The trigger is **can this change reach a rendered surface** — page, route, component, form, markup, styling, copy, formatting, client-side state, or an API a UI consumes — not whether the project "has a UI". Exercise it through `pi-aia-browser` **before committing that change**, not at final verification. Uncertain whether it reaches a surface? Then it is touched. Report the page opened, the action taken and what was asserted, or `n/a` with a reason; if the browser tool is unavailable, **say so rather than letting it read as passed**.
+The trigger is **can this change reach a rendered surface** — page, route, component, form, markup, styling, client-side state, or an API a UI consumes — not whether the project "has a UI". Uncertain whether it reaches a surface? Then it is touched. Exercise it through `pi-aia-browser` **before committing that change**, not at final verification, and report the page opened, the action taken and what was asserted — or `n/a` with a reason; if the browser tool is unavailable, **say so rather than letting it read as passed**.
+
+Record it with `asf_browser_verify` / `asf_browser_na` (rules in `06b-appendix.md`).
 
 The full procedure — the trigger table, the silent-async paths, the screenshot/assertion record and the n/a wording — is in `06b-appendix.md` §`Browser testing procedure`.
 

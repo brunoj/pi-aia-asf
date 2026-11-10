@@ -90,15 +90,13 @@ Four things may halt a run: plan approval, an irreversible step, a credential, a
 deliverable choice. **"The other side has not replied" is not one of them.** Never
 leave tracked work — a claimed ticket, an assigned issue — in an intermediate state
 with an explanation of why it is stuck: that is a stop wearing a status report, and
-the run may not close on it (06f carries the case that proved it).
+the run may not close on it (case study in 06f).
 
-Three dispositions, all yours to take:
-
-1. **Park it where a reviewer sees it** (needs-input). Parking is a *marker*, not a
-   question — "don't ask me anything" never forbids it.
-2. **Take the next action you control, now.** There is always one.
-3. **Waiting on someone else? Make the wait end in one step** — the test that will
-   confirm the outcome, the draft mail, the check you can run today — then keep going.
+Three dispositions, all yours to take: **park it where a reviewer sees it** (a
+marker, not a question — "don't ask me" never forbids it); **take the next action you
+control, now** (there is always one); or, waiting on someone else, **make the wait end
+in one step** — the test that confirms the outcome, the draft mail, the check you can
+run today — then keep going.
 
 A claimed item with no disposition is a gap like any other; narrating a wait in a
 progress message raises it on the spot.

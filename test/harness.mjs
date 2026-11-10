@@ -62,16 +62,33 @@ await factory(api);
 
 // Run the test file with access to the captured registrations
 const test = await import(path.resolve(testFile));
+// How a suite says it failed. Two shapes are honoured, and the difference matters:
+// a suite that reports failure by RETURNING false used to print its FAILs and still
+// be counted green (and an early version of that fix assigned the tools array to
+// `ok`, which is always truthy, and discarded the verdict again). A suite that
+// exposes its verdict as the module's DEFAULT export was ignored the same way —
+// `test.run` was simply absent, so nothing was ever checked. A test runner that
+// cannot fail is the most dangerous kind of test runner, so an unreadable verdict
+// is now called out instead of passing silently.
+let verdict;
 if (typeof test.run === 'function') {
-  // A suite that reports failure by RETURNING false must fail the run. Before
-  // this, such a suite printed its FAILs and the runner still counted it green.
-  // (And the fix itself was once written `const ok = globalThis.__tools = tools`,
-  // which assigned the tools array — always truthy — and discarded the verdict.
-  // A test runner that cannot fail is the most dangerous kind of test runner.)
   globalThis.__tools = tools;
-  const ok = await test.run({ tools, commands, events, api, extDir, invokeCommand });
-  if (ok === false) {
-    console.log(`SUITE REPORTED FAILURE: ${path.basename(testFile)}`);
-    process.exit(1);
-  }
+  verdict = await test.run({ tools, commands, events, api, extDir, invokeCommand });
+} else if (typeof test.default === 'boolean') {
+  verdict = test.default;
+} else if (typeof test.ok === 'boolean') {
+  verdict = test.ok;
+} else if (typeof test.selfReports !== 'boolean') {
+  // Suites that report their own failure are legitimate — but say so, or the next
+  // suite that expects its verdict to be read will be read as nothing at all.
+  console.log(`WARNING: ${path.basename(testFile)} exports no run(), no boolean default and no selfReports marker — the runner cannot tell whether it passed. Export async function run() returning the verdict, or export const selfReports = true if it reports its own failure.`);
+} else if (!/process\.exit\(1\)|from "node:test"|require\("node:test"\)/.test(fs.readFileSync(path.resolve(testFile), 'utf8'))) {
+  // The marker is a claim, and claims get checked: a suite that says it reports its
+  // own failure but contains no failure channel is a suite that cannot fail, which is
+  // the exact hole this block exists to close.
+  console.log(`WARNING: ${path.basename(testFile)} claims selfReports but contains no process.exit(1) and does not use node:test — nothing here can fail the run.`);
+}
+if (verdict === false) {
+  console.log(`SUITE REPORTED FAILURE: ${path.basename(testFile)}`);
+  process.exit(1);
 }

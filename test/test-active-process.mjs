@@ -681,6 +681,67 @@ export async function run({ events, invokeCommand }) {
     lp2.cleanup();
   }
 
+  console.log("=== 14. the browser evidence is recorded, not claimed ===");
+  {
+    const bp = project("browser-evidence", { git: true });
+    process.chdir(bp.root);
+    __clearProjectCache();
+    await on("session_start").reduce(async (m, fn) => { await m; return fn({}); }, Promise.resolve());
+    const tools = typeof globalThis.__tools !== "undefined" ? globalThis.__tools : [];
+    const verify = tools.find((t) => t.name === "asf_browser_verify");
+    const na = tools.find((t) => t.name === "asf_browser_na");
+    chk("asf_browser_verify is registered as an AGENT TOOL", !!verify, `tools=${tools.map((t) => t.name).join(",")}`);
+    chk("asf_browser_na is registered as an AGENT TOOL", !!na);
+    // The gate demands browser evidence whenever a UI file is touched; these two are
+    // the only hands that can give it. Without them the run is steered at a gap it
+    // cannot close — the health loop one layer down.
+    await toolCall("edit", { path: "src/App.tsx", content: "export const A = 1;\n" });
+    const three = { page: "/checkout", action: "clicked pay", assertion: "an order id appears" };
+
+    // Daemon chatter first, while the session has touched no page at all. The
+    // observation list is SESSION-scoped on purpose (like webTouched and the suite
+    // runs, which the same gate reads), so this case has to run before any real
+    // navigation happens — not because the guard is per-project, but because
+    // "did this session drive a browser?" is the question the gate actually asks.
+    const daemonOnly = project("browser-daemon");
+    process.chdir(daemonOnly.root);
+    __clearProjectCache();
+    await on("session_start").reduce(async (m, fn) => { await m; return fn({}); }, Promise.resolve());
+    await toolCall("edit", { path: "src/Widget.tsx", content: "export const W = 1;\n" });
+    await toolCall("browser_diagnose", {});
+    await toolCall("browser_logs", {});
+    const daemon = await verify.execute("tc-verify-4", { ...three });
+    chk("NEGATIVE: reading the daemon's logs is not looking at the user's page", /no browser call was made/.test((daemon?.content || []).map((c) => c.text).join(" ")), (daemon?.content || []).map((c) => c.text).join(" ").slice(0, 120));
+    daemonOnly.cleanup();
+
+    process.chdir(bp.root);
+    __clearProjectCache();
+    const early = await verify.execute("tc-verify-1", { ...three });
+    const earlyText = (early?.content || []).map((c) => c.text).join(" ");
+    chk("NEGATIVE: verification is refused before any browser was driven", /no browser call was made/.test(earlyText), earlyText.slice(0, 120));
+    chk("NEGATIVE: and nothing is written to the ledger for it", early?.details?.ok !== true, JSON.stringify(early?.details));
+
+    const partial = await verify.execute("tc-verify-2", { page: "/checkout", action: "clicked pay" });
+    chk("NEGATIVE: a verification without an assertion is refused", /assertion/.test((partial?.content || []).map((c) => c.text).join(" ")), (partial?.content || []).map((c) => c.text).join(" ").slice(0, 120));
+
+    // Now actually drive a page, the way a session would.
+    await toolCall("browser_navigate", { url: "http://localhost:3000/checkout" });
+    await toolCall("browser_screenshot", {});
+    const after = await verify.execute("tc-verify-3", { ...three });
+    chk("after driving the page, the same verification is recorded", after?.details?.ok === true && /browser verified/.test((after?.content || []).map((c) => c.text).join(" ")), (after?.content || []).map((c) => c.text).join(" ").slice(0, 140));
+    chk("and it carries the page, action and assertion the reviewer needs", after?.details?.page === "/checkout" && after?.details?.assertion === "an order id appears", JSON.stringify(after?.details));
+
+    const badNa = await na.execute("tc-na-1", { reason: "n/a" });
+    chk("NEGATIVE: 'n/a' is not an n/a a reviewer can check", badNa?.details?.ok !== true && /not a reason a reviewer can check/.test((badNa?.content || []).map((c) => c.text).join(" ")), (badNa?.content || []).map((c) => c.text).join(" ").slice(0, 120));
+    const goodNa = await na.execute("tc-na-2", { reason: "server-side retry policy only; no UI consumes this module" });
+    chk("a real n/a is recorded", goodNa?.details?.ok === true, JSON.stringify(goodNa?.details));
+
+    // The tools exist because the gate demands this evidence; the ledger rule itself
+    // is pinned in test-evidence-kinds.mjs, so here the question is only whether an
+    // agent can actually reach it — which the two executions above just demonstrated.
+    bp.cleanup();
+  }
+
   console.log(`\n${pass} passed, ${fail} failed`);
   return fail === 0;
 }

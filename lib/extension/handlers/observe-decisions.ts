@@ -18,7 +18,7 @@ import { runRoot } from "../paths.ts";
 import { runtime } from "../runtime.ts";
 import { appendEvidence, queueSteer } from "../evidence.ts";
 
-type Input = Record<string, unknown>;
+import type { Input } from "./observed.ts";
 
 /**
  * The fields that count as the run AUTHORED something. A citation has to be text

@@ -27,8 +27,13 @@ export async function run({ extDir }) {
   chk('refactor before it hurts', cq.includes('Refactor before it hurts'));
 
   console.log('=== 2. Where-this-applies + anti-patterns ===');
-  chk('Phase 6 mentions Rule 9', cq.includes('Apply\n  Rule 9') || cq.includes('Rule 9 to the documents'));
-  chk('Phase 7 mentions Rule 9', cq.includes('no doc so large that\n  editing it is fragile'));
+  // Substance, not line wrapping: an assertion that pinned the exact newline+indent
+  // failed when the same sentence was reflowed, and a docs test that breaks on
+  // formatting teaches people to distrust docs tests.
+  const norm = (s) => s.replace(/\s+/g, " ");
+  chk('Phase 6 mentions Rule 9', norm(cq).includes('Rule 9 to the documents'));
+  chk('Phase 7 mentions Rule 9', /Phase 7 \(verification\)/.test(norm(cq)) && norm(cq).includes('no doc so large that editing it is fragile') && norm(cq).includes('Rules 1–9'));
+  chk('Phase 7 cites the rules it checks', /Rules 1–9/.test(norm(cq)) && norm(cq).includes('(Rule 2)') && norm(cq).includes('(Rule 8)'));
   chk('anti-pattern: let doc grow', cq.includes('Letting a document grow until edits start breaking'));
   chk('anti-pattern: wall-of-prose SKILL.md', cq.includes('wall of prose instead of a map'));
 

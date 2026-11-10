@@ -20,6 +20,13 @@ export const gateStats: Record<string, GateStat> = {};
 
 /** suite-run attempts awaiting their result, keyed by toolCallId. */
 export const pendingSuiteRuns = new Map<string, Record<string, unknown>>();
+
+/**
+ * A release/clean-room command that has started and is waiting for its exit code.
+ * Paired with `tool_result`, so the recorded result is what the command returned
+ * rather than what anyone says it returned.
+ */
+export const pendingCleanRoom = new Map<string, { package: string; command: string }>();
 /** Completed suite runs — the fact the push gate checks for. */
 export const suiteRuns: Array<{ scope: string; exitCode: number; command: string; durationMs: number; testCount: number | string; at?: number }> = [];
 /** Memoised dirty-tree answer, refreshed at most once per tool call. */
@@ -55,7 +62,7 @@ export const deliveredSteers = new Set<string>();
  * information. Events (gate-block, suite-run, transitions) are never deduped:
  * they are what a trace study measures.
  */
-export const EVENT_KINDS = new Set(["gate-error", "run-restored", "gate-block", "suite-run", "spec-transition", "browser-verify", "browser-na", "health-run", "perf-scenario", "run-open", "run-close", "park", "steer", "passive"]);
+export const EVENT_KINDS = new Set(["gate-error", "run-restored", "gate-block", "suite-run", "spec-transition", "browser-verify", "browser-na", "health-run", "run-open", "run-close", "park", "steer", "passive"]);
 export const persistedVerdicts = new Set<string>();
 export let passiveHeartbeatWritten = false;
 /** Re-anchoring is time-rate-limited AND count-limited per run. */

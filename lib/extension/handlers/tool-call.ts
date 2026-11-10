@@ -19,17 +19,17 @@ import { evaluateBlockers, BLOCKERS, failSafeBlock } from "../../gates/blockers.
 import { deriveSuiteRun } from "../../gates/suite-runs.mjs";
 import { noteTrackedCall, matchersFromConfig } from "../../gates/tracked.mjs";
 import { observeDecisions } from "./observe-decisions.ts";
+import { observeCleanRoom, observeSuiteAttempt, observeWebTouch, observeBrowserCall, observeSpecTransition, observeTrackedWork } from "./observe-work.ts";
+import type { Input, Event } from "./observed.ts";
 import { readProjectConfig } from "../../gates/config.mjs";
 import { projectName, runRoot } from "../paths.ts";
 import { loadState, saveState } from "../state.ts";
 import { openAutoRun, gitDirty, numberConfig } from "../run.ts";
 import { appendEvidence, queueSteer, reportGateError } from "../evidence.ts";
-import { gateStats, pendingSuiteRuns, suiteRuns, recordVerdict } from "../gate-state.ts";
+import { gateStats, pendingSuiteRuns, pendingCleanRoom, suiteRuns, recordVerdict } from "../gate-state.ts";
 import { authority } from "../gate-state.ts";
 import { runtime, BLIND_EDIT_NUDGE_AFTER } from "../runtime.ts";
 
-type Input = Record<string, unknown>;
-type Event = { toolName?: unknown; input?: Input; toolCallId?: unknown };
 
 /** P6: a long blind-editing stretch gets one steer, never a block. */
 function nudgeBlindEdits(file: Awaited<ReturnType<typeof loadState>>, path: string | null): void {
@@ -75,57 +75,6 @@ async function observeActivation(toolName: string, input: Input): Promise<void> 
 }
 
 /** A suite run becomes evidence only because we saw the command, not the claim. */
-function observeSuiteAttempt(input: Input, event: Event): void {
-  const command = typeof input.command === "string" ? input.command : undefined;
-  if (!command) return;
-  const started = Date.now();
-  const derived = deriveSuiteRun(command);
-  if (derived) {
-    // Exit code and duration are filled in by tool_result; recording the attempt
-    // here keeps the ledger chronological.
-    (derived as Record<string, unknown>)._startedAt = started;
-    pendingSuiteRuns.set(String(event.toolCallId || started), derived);
-  }
-  if (!/\basf-approve\b/.test(command)) return;
-  // A bypass is recorded as friction, never as evidence the gate is wrong:
-  // otherwise the exploit is to bypass a gate until it demotes.
-  appendEvidence({
-    kind: "gate-block",
-    gate: "asf-approve",
-    rule: "bypass-requested",
-    reason: "asf-approve invoked — recorded as friction; a bypass request is not evidence that a gate is wrong",
-    bypassed: true,
-  });
-}
-
-/** A write to a web surface means browser verification is owed. */
-function observeWebTouch(input: Input): void {
-  const touched = typeof input.path === "string" ? input.path : typeof input.file_path === "string" ? input.file_path : "";
-  if (touched && /\.(tsx|jsx|html|vue|svelte|css)$/i.test(touched)) runtime.webTouched = true;
-}
-
-/**
- * What this call did to tracked work (a claimed ticket, an assigned issue).
- *
- * The gate needs to know that the session *owns* something, because the failure
- * it prevents is invisible in the source tree: an agent that ends its run with a
- * claimed item neither resolved nor parked has stopped, and written a paragraph
- * about it instead. Claim / resolve / park are read off the tool's name; a
- * narrated wait is read off the text the agent wrote for the reviewer.
- */
-function observeTrackedWork(toolName: string, input: Input, config: Record<string, unknown>): void {
-  const kind = noteTrackedCall(runtime.tracked, { toolName, input, matchers: matchersFromConfig(config) });
-  if (!kind) return;
-  appendEvidence({ kind: "tracked", action: kind, tool: toolName, item: String(input.ticket_id || input.ticketId || input.id || "") || null });
-  if (kind === "wait") {
-    queueSteer(
-      `ASF: you described tracked work as waiting — that is not a disposition ASF recognises, and the run cannot close on it. ` +
-        `Park it where the reviewer sees it (parking is a marker, not a question, so "do not ask me" never forbids it), take the next ` +
-        `action you control, or do the work that makes the wait end in one step and keep going.`,
-    );
-  }
-}
-
 /** Gate switches the project turned off, as evaluateBlockers wants them. */
 function blockerSwitches(config: Record<string, unknown>): Record<string, boolean> {
   const enabled: Record<string, boolean> = {};
@@ -231,7 +180,10 @@ async function observeCall({ toolName, input, ev, config }: { toolName: string; 
     /* activation is an observer: it never breaks the call it watches */
   }
   observeSuiteAttempt(input, ev);
+  observeCleanRoom(input, ev);
   observeWebTouch(input);
+  observeBrowserCall(toolName);
+  observeSpecTransition(toolName, input);
   observeTrackedWork(toolName, input, config);
   try {
     observeDecisions(toolName, input, config);

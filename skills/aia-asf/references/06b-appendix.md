@@ -19,6 +19,24 @@ API/curl checks do not replicate what a human sees. Via `pi-aia-browser`:
 
 A 200 response with a blank or broken page is a **failure**.
 
+**Recording it — `asf_browser_verify` / `asf_browser_na`.** The completion gate
+requires browser evidence whenever a UI file is touched, and these two tools are
+the only hands that give it. Neither takes your word for what ASF can check itself:
+
+- `asf_browser_verify {page, action, assertion}` is **refused** if the session made
+  no `browser_*` call at all. ASF sees every tool call, so a verification with no
+  browser in the room is a claim about a page nobody opened. It is also refused if
+  any of the three fields is missing — `page` + `action` + `assertion` is the
+  minimum a reviewer can go and repeat. `browser_diagnose` and `browser_logs` do not
+  count as having driven a page: they report on the daemon, not on the surface.
+- `asf_browser_na {reason}` is **refused** when the reason is a placeholder
+  (`n/a`, `none`, `not applicable`, one word). The point of a structured n/a is a
+  sentence a reviewer can disagree with; "n/a" is not one, and without that rule the
+  n/a is simply an exit around the gate.
+
+A gate that accepts "I verified it" measures nothing, which is worse than no gate:
+it reads as coverage.
+
 **The trigger is what the change TOUCHES, not whether the project "has a UI".**
 A deliverable-level trigger lets a small edit slide: "I only changed a helper"
 is exactly the change that reaches a rendered surface unnoticed. So the

@@ -60,6 +60,13 @@ export interface RuntimeState {
   decisionsCited: string[];
   /** Decisions this run wrote. Recording is engaging with the register too. */
   decisionsRecorded: string[];
+  /**
+   * Every `browser_*` call the session made, as ASF observed it. This is what
+   * makes browser verification evidence rather than a claim: the tool checks the
+   * session actually drove a browser before it will record that it was verified.
+   * Bounded — it is a yes/no with receipts, not a log to mine.
+   */
+  browserCalls: Array<{ tool: string; at: number }>;
 }
 
 export const runtime: RuntimeState = {
@@ -81,4 +88,5 @@ export const runtime: RuntimeState = {
   decisionsSteered: [],
   decisionsCited: [],
   decisionsRecorded: [],
+  browserCalls: [],
 };

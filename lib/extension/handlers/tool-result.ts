@@ -10,7 +10,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { deriveSuiteRun } from "../../gates/suite-runs.mjs";
 import { appendEvidence, reportGateError } from "../evidence.ts";
-import { pendingSuiteRuns, suiteRuns } from "../gate-state.ts";
+import { pendingSuiteRuns, pendingCleanRoom, suiteRuns } from "../gate-state.ts";
 import { runtime } from "../runtime.ts";
 
 type ResultEvent = { toolCallId?: unknown; content?: unknown; isError?: boolean };
@@ -42,11 +42,27 @@ function completeSuiteRun(event: ResultEvent, pending: Record<string, unknown>):
   appendEvidence({ ...derived });
 }
 
+function completeCleanRoom(pending: { package: string; command: string }, isError?: boolean): void {
+  appendEvidence({
+    kind: "clean-room",
+    package: pending.package,
+    result: isError ? "fail" : "pass",
+    command: pending.command,
+    by: "observed",
+    at: new Date().toISOString(),
+  });
+}
+
 export function registerToolResultHandler(pi: ExtensionAPI): void {
   pi.on("tool_result", (event) => {
     try {
       const ev = event as ResultEvent;
       const id = String(ev.toolCallId || "");
+      const cleanRoom = pendingCleanRoom.get(id);
+      if (cleanRoom) {
+        pendingCleanRoom.delete(id);
+        completeCleanRoom(cleanRoom, ev.isError);
+      }
       const pending = pendingSuiteRuns.get(id);
       if (!pending) return undefined;
       pendingSuiteRuns.delete(id);

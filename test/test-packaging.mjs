@@ -138,3 +138,10 @@ if (failed.length) {
   console.log("FAILED: " + failed.map((f) => f.name).join(" | "));
   process.exit(1);
 }
+
+/**
+ * This suite reports its own failure (process.exit / node:test) rather than returning a
+ * verdict, so the runner does not read one. The marker is checked: the harness
+ * warns if it is claimed without a failure channel in the file.
+ */
+export const selfReports = true;

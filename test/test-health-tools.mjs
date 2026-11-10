@@ -240,3 +240,10 @@ test("vendored and generated trees are not measured as project source", () => {
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+/**
+ * This suite reports its own failure (process.exit / node:test) rather than returning a
+ * verdict, so the runner does not read one. The marker is checked: the harness
+ * warns if it is claimed without a failure channel in the file.
+ */
+export const selfReports = true;

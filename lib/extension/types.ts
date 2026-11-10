@@ -55,7 +55,7 @@ export const QA_CHECKLIST: Array<{ key: string; label: string }> = [
   { key: "tests", label: "Full test suite green (not a subset) — the gate; Rule 19 never relaxes this checkbox" },
   { key: "regression", label: "Regression test added for every bug fixed this cycle" },
   { key: "triggers", label: "Triggers AND non-triggers tested for conditional behavior" },
-  { key: "artifact", label: "Shipped artifact inspected (npm pack file list) + clean-room install" },
+  { key: "artifact", label: "Shipped artifact inspected and clean-room installed — performed by the release pipeline (`npm run release` → verify-published), which ASF records when it runs; a run that never ran it has no clean-room evidence to claim" },
   { key: "observable", label: "Observable end state verified as a user would experience it" },
   { key: "browser", label: "Every interface the change TOUCHES exercised through a real browser during the build (06b Rule 9) — page + action + assertion named; n/a with reason if none" },
   { key: "specs", label: "Every MUST spec 'met' with concrete evidence" },
