@@ -6,6 +6,7 @@
  */
 
 import { projectName, runRoot } from "../paths.ts";
+import { measureRoot } from "../run.ts";
 import { loadState } from "../state.ts";
 import { loadProjectSpecs, validateTrace } from "../specs.ts";
 import { QA_CHECKLIST, type SpecItem } from "../types.ts";
@@ -56,7 +57,7 @@ async function traceabilitySection(): Promise<string[]> {
 async function healthSection(): Promise<string[]> {
   const { runHealth } = await import("../../code-health/index.mjs");
   const { recordHealthVerdict, recordLine } = await import("../health-record.ts");
-  const health = await runHealth(runRoot(), []);
+  const health = await runHealth(await measureRoot(), []);
   // Same rule as the tool and the slash command: a measurement that is produced
   // is a measurement that is recorded.
   const rec = recordHealthVerdict(health, { by: "verify" });

@@ -27,12 +27,12 @@ interface HealthResult {
 
 async function runHealthGate(scope: string): Promise<HealthResult> {
   const { runHealth } = await import("../../code-health/index.mjs");
-  const { runRoot } = await import("../paths.ts");
+  const { measureRoot } = await import("../run.ts");
   const args = scope ? [`--scope=${scope}`] : [];
-  // Measure the RUN's project, not process.cwd(): a session started in $HOME
-  // (or any parent) would otherwise measure everything under it — 960 phantom
-  // findings from site-packages, on a repo that is actually healthy.
-  return (await runHealth(runRoot(), args)) as HealthResult;
+  // Measure the project the RUN is about, not process.cwd() and not the session
+  // cwd's git root: a session started in $HOME (which is itself a repo here) would
+  // otherwise measure every checkout underneath it.
+  return (await runHealth(await measureRoot(), args)) as HealthResult;
 }
 
 /**

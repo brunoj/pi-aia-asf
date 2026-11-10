@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — the health gate measured the wrong project
+
+`runRoot()` is the git root of the session's cwd. That is right for where run state
+lives and wrong for what to measure, and a session launched from a home directory that
+is itself a git repo (common: `pi` started from $HOME with checkouts underneath) had
+every health gate measure the parent. It did: `asf_health` reported 363 model findings
+from an unrelated project checked out under $HOME, and eslint, madge and jscpd each
+timed out at 120s scanning a tree nobody was working in — a verdict of NOT healthy on a
+repository that is, in fact, healthy.
+
+A gate that measures the wrong directory is worse than no gate: it blocks on findings
+in code the run must not touch, or waves through the one project that is actually
+unhealthy. `measureRoot()` now answers from what the run already knows — the git root of
+the most recently touched file — and is used by the three paths that measure
+(`asf_health`, `/asf health`, `/asf verify` Gate 8). It is deliberately **not** used to
+locate state: a root that moved mid-run would orphan the run's own ledger, so
+`runRoot()` still follows the session for that.
+
+A touched path outside the workspace (a scratch dir, an unrelated checkout) does not
+move the measurement either — the session root is the safe answer. `test/test-measure-root.mjs`
+pins both on throwaway repos rather than this machine's $HOME, and both guards are
+mutation-caught.
+
 ## [0.17.11] - 2026-11-10
 
 ### Added — the coverage invariant is checkable from the installed package

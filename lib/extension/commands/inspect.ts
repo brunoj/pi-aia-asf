@@ -7,7 +7,7 @@ import { projectName, runRoot } from "../paths.ts";
 import { loadState } from "../state.ts";
 import { ledger, authority, gateStats } from "../gate-state.ts";
 import { runtime } from "../runtime.ts";
-import { cardFor, collectMeasurements, extensionDir } from "../run.ts";
+import { cardFor, collectMeasurements, extensionDir, measureRoot } from "../run.ts";
 import { renderLedger } from "../../gates/ledger.mjs";
 import { renderAuthority } from "../../gates/authority.mjs";
 import { renderCompletionGate } from "../../gates/settle.mjs";
@@ -41,7 +41,7 @@ export async function cmdStatus(): Promise<string> {
 export async function cmdHealth(args: string[]): Promise<string> {
   const { runHealth } = await import("../../code-health/index.mjs");
   const { recordHealthVerdict, recordLine } = await import("../health-record.ts");
-  const res = await runHealth(runRoot(), args.slice(1));
+  const res = await runHealth(await measureRoot(), args.slice(1));
   // The command records what it measured. Before this, only the asf_health TOOL
   // recorded: a human could run /asf health, read HEALTHY, and leave the
   // completion gate's health gap open with no trace that anything was measured.

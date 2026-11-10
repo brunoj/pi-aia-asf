@@ -4,16 +4,16 @@
  */
 
 import { execFileSync } from "node:child_process";
+import { runRoot, projectName } from "./paths.ts";
 import { fileURLToPath } from "node:url";
 import { dirname } from "node:path";
-import { runRoot } from "./paths.ts";
+import { projectRoot as projectRootOf } from "../project.mjs";
 import { ensureHome } from "../home.mjs";
 import { cpus, loadavg } from "node:os";
 import { renderRunCard, cardSummary, CARD_CEILING_BYTES } from "../run-card.mjs";
 import { ledger, suiteRuns, gateStats } from "./gate-state.ts";
 import { appendEvidence } from "./evidence.ts";
 import { loadState, saveState } from "./state.ts";
-import { projectName } from "./paths.ts";
 import { runtime } from "./runtime.ts";
 import { __resetRefusals } from "../gates/refusals.mjs";
 import { cardIndex, registerAt } from "../decisions/consult.mjs";
@@ -116,6 +116,43 @@ export async function openAutoRun(trigger: string, path: string | null): Promise
   appendEvidence({ kind: "run-open", runId: state.runId, auto: true, trigger, project });
   runtime.pendingCard = { text: cardFor(state), reason: "activation" };
   return state;
+}
+
+/**
+ * The project the gates should MEASURE.
+ *
+ * `runRoot()` is the git root of the session's cwd, which is right for where state
+ * lives and wrong for what to measure: a session started in a parent repository
+ * (a home directory that is itself a git repo is the common case) would have every
+ * gate measure that parent. It did — `asf_health` reported 363 model findings from an
+ * unrelated project checked out underneath $HOME, and every measurement tool then
+ * timed out scanning a tree nobody was working in. A gate that measures the wrong
+ * directory is worse than no gate: it blocks on findings in code the run must not
+ * touch, or waves through the one project that is actually unhealthy.
+ *
+ * The run already knows what it changed, so the answer is taken from there: the git
+ * root of the most recently touched file wins. It is deliberately NOT used to locate
+ * state — a root that moved mid-run would orphan the run's own ledger — only to
+ * decide what a measurement looks at.
+ */
+export async function measureRoot(): Promise<string> {
+  const fallback = runRoot();
+  try {
+    const state = await loadState(projectName());
+    const touched = (state?.current?.filesTouched || []) as string[];
+    for (let i = touched.length - 1; i >= 0; i--) {
+      const f = touched[i];
+      if (!f || !f.includes("/")) continue;
+      const root = projectRootOf(dirname(f));
+      // Only a root that CONTAINS the session root counts as a better answer: a
+      // stray touched path outside the workspace must not drag the measurement to
+      // someone's scratch directory.
+      if (root && (root === fallback || root.startsWith(fallback + "/"))) return root;
+    }
+  } catch {
+    /* measurement falls back to the session root; a broken guess is worse than none */
+  }
+  return fallback;
 }
 
 /** Where this extension is installed — the declaration file ships beside it. */
