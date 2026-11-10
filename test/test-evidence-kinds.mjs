@@ -22,6 +22,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { ENTRY_KINDS, createLedger, validateEntry } from "../lib/gates/ledger.mjs";
+import { evidenceCoverage, coverageGap } from "../lib/gates/evidence-coverage.mjs";
 import {
   verifyGap, naGap, browserDriven, placeholderReason, OBSERVATION_TOOLS, verifyEntry, naEntry,
 } from "../lib/gates/browser-evidence.mjs";
@@ -94,9 +95,12 @@ console.log("=== 2. the ledger still refuses what it always refused ===");
 
 console.log("=== 3. every kind a gate demands has a producer in the shipped package ===");
 {
-  // The kinds that actually BLOCK a run: the completion gate's web rule and the
-  // delivery report. A kind nobody requires is dead weight; a kind required with no
-  // producer is an unclosable gap, which is the bug this whole suite exists to stop.
+  // The invariant lives in lib/gates/evidence-coverage.mjs so the release check and a
+  // running session can ask the same question. This suite therefore does two things:
+  // it asserts the answer, and it asserts that the shipped module and an independent
+  // derivation here agree — otherwise a bug in the shipped module would simply be
+  // agreed with instead of caught.
+  const coverage = evidenceCoverage(ROOT, ENTRY_KINDS);
   const ledgerSrc = read("lib/gates/ledger.mjs");
   const settleSrc = read("lib/gates/settle.mjs");
   const required = new Set(["suite-run", "health-run"]);
@@ -106,23 +110,55 @@ console.log("=== 3. every kind a gate demands has a producer in the shipped pack
     if (ENTRY_KINDS.includes(k) && new RegExp(`(has|missing|latest|kind ===)[^\\n]*"${k}"`).test(`${ledgerSrc}\n${settleSrc}`)) required.add(k);
   }
   chk("the required set is derived, not hand-waved", required.has("browser-verify") && required.has("health-run"), [...required].join(","));
+  chk("the shipped module derives the same required set", [...required].sort().join(",") === [...coverage.required].sort().join(","), coverage.required.join(","));
+  chk("it looked at real source, not an empty directory", coverage.files > 20, `${coverage.files} files`);
 
-  // Producers: any shipped file that CREATES the entry. ledger.mjs only defines,
-  // validates and renders, so it never counts as a producer of its own kinds.
-  const files = [...walk("lib"), "index.ts"].filter((f) => !f.endsWith("gates/ledger.mjs"));
-  const sources = files.map((f) => ({ f, src: read(f) }));
-  const producersOf = (kind) => sources.filter(({ src }) => new RegExp(`kind:\\s*"${kind}"`).test(src)).map(({ f }) => f);
-
-  const orphans = [];
   for (const kind of ENTRY_KINDS) {
-    const where = producersOf(kind);
-    if (!where.length) orphans.push(kind);
+    const where = coverage.producers[kind] || [];
     chk(`producer for "${kind}"`, where.length > 0, where.join(",") || "NONE — this kind can never be recorded");
   }
-  chk("no ledger kind is an orphan", orphans.length === 0, orphans.join(","));
+  chk("no ledger kind is an orphan", coverage.orphans.length === 0, coverage.orphans.join(","));
+  chk("no REQUIRED kind is an orphan (the gate-loop bug, structurally)", coverage.requiredOrphans.length === 0, coverage.requiredOrphans.join(","));
+  chk("a sound install reports no gap", coverageGap(coverage) === null, JSON.stringify(coverageGap(coverage)));
 
-  const requiredOrphans = [...required].filter((k) => !producersOf(k).length);
-  chk("no REQUIRED kind is an orphan (the gate-loop bug, structurally)", requiredOrphans.length === 0, requiredOrphans.join(","));
+  // The failure mode has to be reachable or the check is decoration: a required kind
+  // with no producer must come back as a gap that says no run can close on it.
+  const broken = coverageGap({ ...coverage, requiredOrphans: ["browser-verify"] });
+  chk("a required kind with no producer IS a gap", !!broken && /no run can close on it/.test(broken.gap + broken.remedy), JSON.stringify(broken));
+  const dead = coverageGap({ ...coverage, orphans: ["something-dead"], requiredOrphans: [] });
+  chk("an unrequired orphan is reported, not blocking", !!dead && /dead weight/.test(dead.remedy), JSON.stringify(dead));
+}
+
+console.log("=== 3b. the coverage checker really can say 'no producer' ===");
+{
+  // A checker that always answers "yes, it has a producer" passes every positive
+  // assertion above — three mutations of evidence-coverage.mjs did exactly that, and
+  // the suite called them green. So the checker is tested against fixtures where the
+  // answer is known to be NO: a kind nothing writes, and a kind only the ledger itself
+  // mentions (which must not count — the ledger cannot certify its own kinds).
+  const fix = fs.mkdtempSync(path.join(os.tmpdir(), "asf-cov-"));
+  const put = (rel, text) => {
+    const abs = path.join(fix, rel);
+    fs.mkdirSync(path.dirname(abs), { recursive: true });
+    fs.writeFileSync(abs, text);
+  };
+  put("package.json", '{"name":"fixture"}');
+  put("index.ts", 'export default function activate() {}\n');
+  put("lib/gates/ledger.mjs", 'export const ENTRY_KINDS = ["suite-run","health-run","browser-verify","orphan-kind"];\nconst RENDERERS = { "suite-run": 1, "health-run": 1, "browser-verify": 1, "orphan-kind": 1 };\nconst define = (k) => ({ kind: "browser-verify" });\n');
+  put("lib/gates/settle.mjs", 'if (ledger.has("suite-run")) {}\nif (ledger.has("health-run")) {}\nif (ledger.has("browser-verify")) {}\n');
+  // suite-run and health-run genuinely produced; browser-verify produced ONLY by the
+  // ledger (must not count); orphan-kind produced nowhere at all.
+  put("lib/extension/handlers/tool-result.ts", 'append({ kind: "suite-run", command: "x" });\nappend({ kind: "health-run", scanned: 1 });\n');
+
+  const cov = evidenceCoverage(fix, ["suite-run", "health-run", "browser-verify", "orphan-kind"]);
+  chk("a kind produced nowhere IS reported", cov.orphans.includes("orphan-kind"), cov.orphans.join(","));
+  chk("and the ledger mentioning its own kind does not count as producing it",
+    cov.orphans.includes("browser-verify"), `orphans=${cov.orphans.join(",")} producers=${JSON.stringify(cov.producers["browser-verify"])}`);
+  chk("a genuinely produced kind is NOT falsely reported", !cov.orphans.includes("suite-run") && !cov.orphans.includes("health-run"), cov.orphans.join(","));
+  chk("a required kind with no producer lands in requiredOrphans", cov.requiredOrphans.includes("browser-verify"), cov.requiredOrphans.join(","));
+  chk("an unrequired orphan stays out of requiredOrphans", !cov.requiredOrphans.includes("orphan-kind"), cov.requiredOrphans.join(","));
+  chk("and the gap says no run can close on it", /no run can close on it/.test(JSON.stringify(coverageGap(cov))), JSON.stringify(coverageGap(cov)));
+  fs.rmSync(fix, { recursive: true, force: true });
 }
 
 console.log("=== 4. the tools that produce them are registered, not merely defined ===");

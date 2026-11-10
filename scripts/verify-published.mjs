@@ -22,7 +22,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const REPO = dirname(dirname(fileURLToPath(import.meta.url)));
 const pkg = JSON.parse(readFileSync(join(REPO, "package.json"), "utf8"));
@@ -163,6 +163,32 @@ try {
 } catch {}
 check("the installed extension imports cleanly", run.status === 0 && !!loaded, (run.stderr || run.stdout || "").slice(-300));
 check("its default export is the activate function pi calls", loaded?.type === "function", JSON.stringify(loaded));
+
+// ---------------------------------------------------------------------------
+console.log("\n── 4 — the installed copy can produce every kind its gates demand ─");
+// ---------------------------------------------------------------------------
+// The test directory is not shipped, so this is the only place the invariant "every
+// evidence kind a gate requires has something in the package that can record it" can
+// be checked against what people actually install. It is the gate-loop bug — a run
+// steered at evidence its own hands cannot produce — and a broken tarball reproduces
+// it for every user while the repository stays green.
+try {
+  const { ENTRY_KINDS: shippedKinds } = await import(pathToFileURL(join(pkgDir, "lib", "gates", "ledger.mjs")).href);
+  const { evidenceCoverage } = await import(pathToFileURL(join(pkgDir, "lib", "gates", "evidence-coverage.mjs")).href);
+  const cov = evidenceCoverage(pkgDir, shippedKinds);
+  check("the installed ledger's kinds are all known", cov.kinds.length > 0, `${cov.kinds.length} kinds`);
+  check("the installed package has real source to inspect", cov.files > 20, `${cov.files} files`);
+  check(
+    "no kind the installed gates REQUIRE is unproducible",
+    cov.requiredOrphans.length === 0,
+    `${cov.requiredOrphans.join(", ")} — a run would be steered at evidence it can never record`,
+  );
+  check("no shipped ledger kind is an orphan", cov.orphans.length === 0, cov.orphans.join(", ") || "dead weight");
+} catch (e) {
+  // A missing module here is the same failure as an unproducible kind, not a reason to
+  // report nothing found: "could not check" must never read as "checked and clean".
+  check("the installed coverage check could run", false, String(e && e.message || e));
+}
 
 finish();
 

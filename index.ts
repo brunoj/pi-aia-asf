@@ -19,6 +19,7 @@ import { setPiRef } from "./lib/extension/pi-ref.ts";
 import { registerHealthTool } from "./lib/extension/tools/health.ts";
 import { registerDecisionsTool } from "./lib/extension/tools/decisions.ts";
 import { registerBrowserTools } from "./lib/extension/tools/browser.ts";
+import { registerEvidenceCheckTool } from "./lib/extension/tools/evidence-check.ts";
 import { registerCommands } from "./lib/extension/commands/index.ts";
 import { registerToolCallHandler } from "./lib/extension/handlers/tool-call.ts";
 import { registerToolResultHandler } from "./lib/extension/handlers/tool-result.ts";
@@ -32,6 +33,7 @@ export default function register(pi: ExtensionAPI): void {
   registerHealthTool(pi);
   registerDecisionsTool(pi);
   registerBrowserTools(pi);
+  registerEvidenceCheckTool(pi);
   registerCommands(pi);
   registerToolCallHandler(pi);
   registerToolResultHandler(pi);

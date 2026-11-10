@@ -48,7 +48,7 @@ function project(prefix, { git = false } = {}) {
   };
 }
 
-export async function run({ events, invokeCommand }) {
+export async function run({ events, invokeCommand, loadTs }) {
   const on = (ev) => events.filter((e) => e.ev === ev).map((e) => e.fn);
   const toolCall = async (toolName, input, id = `tc-${Math.random()}`) => {
     let out;
@@ -739,6 +739,45 @@ export async function run({ events, invokeCommand }) {
     // The tools exist because the gate demands this evidence; the ledger rule itself
     // is pinned in test-evidence-kinds.mjs, so here the question is only whether an
     // agent can actually reach it — which the two executions above just demonstrated.
+
+    // And when the evidence a gate demands turns out to be unproducible, the agent
+    // needs a way to find that out — otherwise it is steered forever at a gap that was
+    // never closable from inside, which is the loop this whole line of work exists to
+    // end. test/ is not shipped, so this tool is how an install can be checked at all.
+    const cov = tools.find((t) => t.name === "asf_evidence_check");
+    chk("asf_evidence_check is registered as an AGENT TOOL", !!cov, `tools=${tools.map((t) => t.name).join(",")}`);
+    if (cov) {
+      const all = await cov.execute("tc-cov-1", {});
+      const allText = (all?.content || []).map((c) => c.text).join(" ");
+      chk("a sound install is reported as sound", all?.details?.ok === true && /is sound/.test(allText), allText.slice(0, 140));
+      chk("and it names the kinds the gates require", /browser-verify/.test((all?.details?.requiredList || []).join(",")), JSON.stringify(all?.details?.requiredList));
+      const one = await cov.execute("tc-cov-2", { kind: "browser-verify" });
+      chk("asking about one kind names its producer", /produced by/.test((one?.content || []).map((c) => c.text).join(" ")), (one?.content || []).map((c) => c.text).join(" ").slice(0, 140));
+      const bogus = await cov.execute("tc-cov-3", { kind: "not-a-kind" });
+      chk("a kind the ledger does not know is said so, not reported as unproducible", /not a ledger kind/.test((bogus?.content || []).map((c) => c.text).join(" ")), (bogus?.content || []).map((c) => c.text).join(" ").slice(0, 120));
+
+      // The two branches no session hits on a good day, and which therefore had no
+      // coverage at all: a BROKEN install, and a check that could not run. Both were
+      // mutations that the suite happily agreed with — a tool that reports "sound" for
+      // a broken install, or "ok" for a check that threw, is worse than no tool.
+      const brokenCov = {
+        kinds: ["suite-run", "health-run", "browser-verify"],
+        required: ["suite-run", "health-run", "browser-verify"],
+        producers: { "suite-run": ["h.ts"], "health-run": ["h.ts"], "browser-verify": [] },
+        orphans: ["browser-verify"],
+        requiredOrphans: ["browser-verify"],
+        files: 73,
+      };
+      const brokenGap = { gap: "the completion gate requires evidence of kind browser-verify, but nothing can record it", remedy: "no run can close on it — this is a broken ASF install" };
+      const { reportAll, reportFailure, reportKind } = await loadTs("lib/extension/tools/evidence-check.ts");
+      const brokenRep = reportAll(brokenCov, brokenGap, "/opt/asf");
+      chk("a broken install is NOT reported as sound", brokenRep.details.ok === false && /broken ASF install/.test(brokenRep.content[0].text), brokenRep.content[0].text.slice(0, 140));
+      const threwRep = reportFailure("Cannot find module './ledger.mjs'");
+      chk("a check that threw is NOT reported as passing", threwRep.details.ok === false && /could not be checked/.test(threwRep.content[0].text), threwRep.content[0].text.slice(0, 120));
+      chk("and it says why, so the user is not told to retry blindly", /Cannot find module/.test(threwRep.content[0].text), threwRep.content[0].text.slice(0, 120));
+      const noProducer = reportKind({ ...brokenCov, kinds: ["browser-verify"], producers: { "browser-verify": [] }, required: ["browser-verify"] }, "browser-verify");
+      chk("asking about an unproducible required kind says no run can close on it", noProducer.details.ok === false && /no run can close on it/.test(noProducer.content[0].text), noProducer.content[0].text.slice(0, 140));
+    }
     bp.cleanup();
   }
 

@@ -166,5 +166,34 @@ installs anything.
 3. **The gate is a floor, not a ceiling.** Passing thresholds does not mean
    the code is good — 06c rules still apply.
 4. **Never disable the gate to ship.** If a metric is genuinely inapplicable,
-   disable that metric in `.asf-code-health.json` with a comment in the
-   commit message, not the whole gate.
+   disable that metric in `.asf/code-health.json` (the old root
+   `.asf-code-health.json` is still read, so projects configured before the move
+   keep their thresholds) with a comment in the commit message, not the whole gate.
+
+## When the gate itself is the problem: `asf_evidence_check`
+
+Every rule above has the same shape: the gate demands evidence, and there is an agent
+action that produces it. When that symmetry breaks, the run does not fail — it is
+steered, and steered, and steered, at a gap its own hands cannot close. That is the
+2026-11-07 loop, and it has reappeared three times in different clothes: a health
+verdict only a slash command could record, browser verification no tool could write, a
+delivery report rendering sections nothing ever produced.
+
+So the symmetry is now checked rather than hoped for. `asf_evidence_check` reads
+ASF's own installed files and answers one question: does every evidence kind a gate
+requires have something in the package that can record it?
+
+```
+asf_evidence_check                       # whole picture: sound, or broken and how
+asf_evidence_check { kind: "browser-verify" }   # who records this kind, or nobody
+```
+
+**If it reports an unproducible required kind, stop trying to close the gap.** That is
+a broken install, not unfinished work — no amount of effort produces evidence nothing
+in the package can write. Say so, and say what it named.
+
+The same invariant is asserted against the repository in
+`test/test-evidence-kinds.mjs`, and against the copy npm actually serves in
+`scripts/verify-published.mjs` — the test directory is not shipped, so without that
+last one a broken tarball would reproduce the loop for every user while the repo
+stayed green.

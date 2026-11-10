@@ -60,6 +60,11 @@ const mod = await jiti.import(path.join(extDir, 'index.ts'));
 const factory = mod.default || mod;
 await factory(api);
 
+// Suites are plain .mjs and cannot import ASF's .ts modules directly (node has no TS
+// parser); only this harness has jiti. Hand the loader over rather than making each
+// suite spin up its own, so a suite can exercise the extension's own helpers.
+const loadTs = (rel) => jiti.import(path.isAbsolute(rel) ? rel : path.join(extDir, rel));
+
 // Run the test file with access to the captured registrations
 const test = await import(path.resolve(testFile));
 // How a suite says it failed. Two shapes are honoured, and the difference matters:
@@ -73,7 +78,7 @@ const test = await import(path.resolve(testFile));
 let verdict;
 if (typeof test.run === 'function') {
   globalThis.__tools = tools;
-  verdict = await test.run({ tools, commands, events, api, extDir, invokeCommand });
+  verdict = await test.run({ tools, commands, events, api, extDir, invokeCommand, loadTs });
 } else if (typeof test.default === 'boolean') {
   verdict = test.default;
 } else if (typeof test.ok === 'boolean') {

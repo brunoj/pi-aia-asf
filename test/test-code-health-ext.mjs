@@ -97,6 +97,40 @@ export async function run({ commands, extDir, invokeCommand }) {
     for (const d of tmpDirs) fs.rmSync(d, { recursive: true, force: true });
   }
 
+  console.log("=== health config honours the .asf/ home ===");
+  {
+    // "Everything ASF authors lives under .asf/" is an approved requirement, and this
+    // config was the last ASF file still written to the project root. A behaviour no
+    // test reads is a behaviour that silently reverts, so both the new location and
+    // the legacy fallback are pinned — the fallback matters because a project that
+    // already has thresholds set must not wake up on defaults after an upgrade.
+    const { loadConfig } = await import("../lib/code-health/config.mjs");
+    const modern = makeProject({ ".asf/code-health.json": JSON.stringify({ module: { maxFileLines: { enabled: true, max: 111 } } }) });
+    const mCfg = await loadConfig(modern);
+    chk("the health config is read from .asf/code-health.json", mCfg.module.maxFileLines.max === 111, `max=${mCfg.module.maxFileLines.max}`);
+
+    const legacy = makeProject({ ".asf-code-health.json": JSON.stringify({ module: { maxFileLines: { enabled: true, max: 222 } } }) });
+    const lCfg = await loadConfig(legacy);
+    chk("a project configured before the move keeps its thresholds", lCfg.module.maxFileLines.max === 222, `max=${lCfg.module.maxFileLines.max}`);
+
+    const both = makeProject({
+      ".asf/code-health.json": JSON.stringify({ module: { maxFileLines: { enabled: true, max: 333 } } }),
+      ".asf-code-health.json": JSON.stringify({ module: { maxFileLines: { enabled: true, max: 444 } } }),
+    });
+    const bCfg = await loadConfig(both);
+    chk("the .asf/ copy wins when both exist", bCfg.module.maxFileLines.max === 333, `max=${bCfg.module.maxFileLines.max}`);
+
+    const none = makeProject({ "a.mjs": "export const a = 1;\n" });
+    const nCfg = await loadConfig(none);
+    chk("no config file still yields the full defaults", nCfg.module.maxFileLines.max === 300 && nCfg.function.complexity.max === 20, `${nCfg.module.maxFileLines.max}/${nCfg.function.complexity.max}`);
+
+    const broken = makeProject({ ".asf/code-health.json": "{not json" });
+    const xCfg = await loadConfig(broken);
+    chk("an unreadable config falls back to defaults rather than crashing the gate", xCfg.module.maxFileLines.max === 300, `${xCfg.module.maxFileLines.max}`);
+
+    for (const d of [modern, legacy, both, none, broken]) fs.rmSync(d, { recursive: true, force: true });
+  }
+
   console.log(`\n${pass}/${pass + fail} checks passed`);
   if (fail > 0) process.exit(1);
 }

@@ -7,11 +7,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.17.10] - 2026-11-10
+## [0.17.11] - 2026-11-10
 
-### Added
+### Added — the coverage invariant is checkable from the installed package
 
-- (describe changes for 0.17.10)
+`test/test-evidence-kinds.mjs` asserts that every evidence kind a gate requires has a
+producer, but `test/` is not shipped — so a broken or half-updated install reproduced
+the one bug that suite exists to catch, and the session inside it had no way to find
+out. It could only be steered, at the same gap, forever. Three callers now ask the one
+question, against one definition in `lib/gates/evidence-coverage.mjs`:
+
+- `asf_evidence_check {kind?}` — the agent's own check. An unproducible **required**
+  kind is reported as a broken install rather than as work to keep attempting, because
+  no amount of effort records evidence nothing in the package can write.
+- `scripts/verify-published.mjs` — a fourth release section, run against the copy npm
+  just installed. A tarball missing a producer now fails the release instead of
+  shipping the loop to every user while the repository stayed green. A section that
+  throws is a failed check, never a silent pass.
+- `test/test-evidence-kinds.mjs` — asserts the answer, and asserts the shipped module
+  derives the same required set an independent derivation in the test does.
+
+### Fixed — the coverage checker could not say "no"
+
+Writing the negatives proved it: five mutations of the new module initially passed the
+suite, because every assertion asked only whether a producer was **found**. A checker
+whose regex matches everything, or that counts the ledger as the producer of its own
+kinds, is invisible to a suite like that — and `requiredOrphans: []` was invisible too.
+It is now tested against fixture packages where the answer is known to be no: a kind
+nothing writes, and a kind only the ledger mentions. The tool's two paths no session
+hits on a good day (broken install, check that threw) were untested for the same reason
+and are now driven directly.
+
+### Changed — the code-health config lives under `.asf/`
+
+`.asf/code-health.json` is now read first, with the root `.asf-code-health.json` still
+honoured so a project configured before the move does not wake up on defaults after an
+upgrade. This was the last ASF-authored file still written to the project root, and
+"everything ASF authors lives under `.asf/`" is one decision with one table of names:
+the path now comes from `FILES` in `lib/home.mjs` rather than a literal in the reader,
+which is how a file ends up written in one place and read from another.
+
+### Fixed — the shipped CHANGELOG said nothing
+
+The 0.17.10 section was the release script's untouched placeholder, twice over: an
+empty `### Added` above a second heading for the same version. `CHANGELOG.md` ships in
+the tarball, so that is what a user reads. `test/test-antipatterns.mjs` now asserts the
+shipped version has a section, that it is not the placeholder, that it has real prose,
+and that no version is listed twice — making "Vague commits or CHANGELOG placeholders"
+an enforced anti-pattern rather than a listed one.
+
+Also: `test/harness.mjs` passes a jiti loader to suites, since a `.mjs` suite cannot
+import ASF's own `.ts` modules and each suite spinning up its own loader is how two
+different loaders start disagreeing; `lib/code-health/tools.d.mts` added (an imported
+`.mjs` used from `.ts` needs a declaration or typecheck fails).
 
 ## [0.17.10] - 2026-11-10
 

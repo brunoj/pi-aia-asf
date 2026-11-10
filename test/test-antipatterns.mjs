@@ -63,4 +63,19 @@ export async function run({ extDir }) {
   chk("the floor carries the delegation entry", skill.includes("parallel subagents that touch the same file"));
   chk("the floor carries the fabricated-review entry", skill.includes("fabricated compliance"));
   chk("the floor carries the completeness entry", skill.includes("Declaring done while specs are still"));
+
+  // "Vague commits or CHANGELOG placeholders" is a listed anti-pattern, and for two
+  // releases it was listed while the shipped CHANGELOG's own entry was the release
+  // script's untouched placeholder. A rule nobody checks is a sign, not a guard.
+  console.log("=== 5. the version we ship has something to say about itself ===");
+  const version = JSON.parse(fs.readFileSync(path.join(extDir, "package.json"), "utf8")).version;
+  const log = fs.readFileSync(path.join(extDir, "CHANGELOG.md"), "utf8");
+  const section = log.split("\n").slice(log.split("\n").findIndex((l) => l.startsWith(`## [${version}]`)) + 1)
+    .join("\n").split(/^## \[/m)[0];
+  chk(`CHANGELOG has a section for the shipped ${version}`, log.includes(`## [${version}]`));
+  chk("it is not the release script's placeholder", !/describe changes for/.test(section));
+  const body = section.split("\n").filter((l) => l.trim() && !l.startsWith("###") && !l.startsWith("#")).join(" ");
+  chk("it says what actually changed", body.length > 120, `${body.length} chars of prose`);
+  chk("no version is listed twice", log.split("\n").filter((l) => /^## \[\d/.test(l)).length ===
+    new Set(log.split("\n").filter((l) => /^## \[\d/.test(l)).map((l) => l.split("]")[0])).size);
 }
