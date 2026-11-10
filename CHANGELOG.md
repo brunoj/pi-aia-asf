@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.13] - 2026-11-10
+
 ### Changed — no scale means small (PO policy)
 
 PO decision: "If no scale, assume small." `currentScale()` used to judge a run with no
