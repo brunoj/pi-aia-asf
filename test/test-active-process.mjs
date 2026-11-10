@@ -642,7 +642,12 @@ export async function run({ events, invokeCommand, loadTs }) {
     // the machine-local directory; this process has NEVER seen it. The run is written
     // straight to the legacy path and nothing is opened here, so the in-process run
     // mirror cannot be what brings it back — if the run survives, adoption did.
-    const legacyDir = path.join(os.homedir(), ".pi", "agent", "skills", "aia-asf", "projects", lp2.key);
+    // The legacy path comes from ASF, not from the test: under the harness it is
+    // redirected with the rest of the state tree, so this fixture can never land in
+    // the developer's real ~/.pi (a failed run used to leave it there for good).
+    const { legacyStateFileFor } = await loadTs("lib/extension/paths.ts");
+    const legacyDir = path.dirname(legacyStateFileFor(lp2.key));
+    chk("the legacy fixture is isolated from the developer's real state", !legacyDir.startsWith(path.join(os.homedir(), ".pi")), legacyDir);
     fs.mkdirSync(legacyDir, { recursive: true });
     const legacyRun = {
       current: {

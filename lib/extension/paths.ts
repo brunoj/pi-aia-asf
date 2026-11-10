@@ -43,9 +43,19 @@ export function stateFileFor(project: string): string {
   return join(homeStateDir(runRoot(), project), "state.json");
 }
 
-/** The machine-local path an older ASF used. Read-only; never written. */
+/**
+ * The machine-local path an older ASF used. Read-only; never written by ASF.
+ *
+ * Under `ASF_STATE_ROOT` it moves too, to `<root>/legacy/`. A suite that models the
+ * upgrade case must WRITE a legacy run to prove adoption, and it was doing that into
+ * the developer's real `~/.pi/agent/skills/aia-asf/projects/` — a timed-out or failed
+ * run of that suite left `tmp-asf-active-legacy-state-*` there for good. Redirecting
+ * only the new layout left the old one as a back door into real state.
+ */
 export function legacyStateFileFor(project: string): string {
-  return join(STATE_DIR, project, "state.json");
+  const override = process.env.ASF_STATE_ROOT;
+  const base = typeof override === "string" && override.trim() ? join(override, "legacy") : STATE_DIR;
+  return join(base, project, "state.json");
 }
 
 /**

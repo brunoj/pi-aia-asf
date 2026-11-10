@@ -127,15 +127,10 @@ Turn the intake answers + research into the authoritative spec set.
 > stability, ask the `references/06f-stability.md` questions about every
 > external call in the design.
 
-Challenge the plan like a hostile reviewer before committing to it. For each spec and the overall design, ask and resolve:
-
-- **Edge cases** — empty input, zero users, max load, missing data, concurrency
-- **Failure modes** — what breaks, and how do we detect/recover?
-- **Security** — auth, injection, data exposure, abuse
-- **Maintainability** — will this be understandable in 6 months? who maintains it?
-- **Dependencies** — are they maintained? license? size? alternatives?
-- **Scope** — is anything here actually unnecessary? (cut it)
-- **Feasibility** — is the SOTA research consistent with the specs?
+Challenge the plan like a hostile reviewer before committing to it. For each spec and
+the overall design, run the lens checklist in `references/04-adversarial.md` — edge
+cases, failure modes, security, maintainability, dependencies, scope (cut what need not
+exist), feasibility — and resolve each one.
 
 For each finding: either capture a new spec, refine an existing one (supersede), or record the decision to accept the risk. **Ask the user about anything that changes scope.**
 
@@ -147,13 +142,12 @@ and treat a reviewer whose citations do not resolve as `not run` rather than cle
 mechanics, budget and the A/B rule: `references/04-adversarial.md`.
 
 **Gate 4** (large only): the findings and resolutions go in a file
-(`review-report.md`); chat carries the path, the Blocker/Major/Nit counts and the
-reviewer status table — not the report body. Get the user's confirmation on what remains.
+(`review-report.md`). Get the user's confirmation on what remains.
 
 **Artifacts, not walls of text (all gates).** Plans, spec trees and review reports are
-written to files and named by path; the chat shows the path and the counts. A large
-document pasted into chat is paid on every turn afterwards, and it cannot be handed to a
-fresh-context reviewer anyway — only a file can.
+written to files and named by path; chat carries the path, the counts and the reviewer
+status table — not the body. A large document pasted into chat is paid on every turn
+afterwards, and it cannot be handed to a fresh-context reviewer anyway — only a file can.
 
 ---
 
@@ -164,28 +158,14 @@ fresh-context reviewer anyway — only a file can.
 Write `PLAN.md` in the project root (repo root, or cwd if no repo). **Present it as an
 artifact**: write the file, tell the user the path and the open decisions; do not paste the
 plan into chat for approval — the reviewer lenses of Phase 4 read that same file, and a
-copy in the transcript is paid for twice. Structure:
+copy in the transcript is paid for twice.
 
-```markdown
-# <Project> — Plan
-
-## Goal
-## Context
-## Approach (from research, cited)
-## Decisions (ADRs — one per significant decision)
-## Quality requirements (ISO 25010 scenarios)
-## Architecture / Design
-## Architecture evaluation (ATAM-lite)
-## Views (context / runtime / deployment — optional)
-## Milestones (M1..Mn with exit criteria)
-## Task list (per milestone, checkboxes)
-## Dependencies (with licenses)
-## Risks & mitigations (from adversarial analysis)
-## Definition of done (tests, deploy, release)
-```
-
-The full template with examples is in `references/05-plan.md` — read it before
-writing the plan.
+Its structure is the template in `references/05-plan.md` — Goal through Definition of
+done, including `## Decisions (ADRs — one per significant decision)`, Quality
+requirements (ISO 25010 scenarios), an ATAM-lite architecture evaluation, Milestones
+with exit criteria and a checkbox Task list per milestone. **Read that reference before
+writing the plan** — it carries the full template, the examples and the P## sections the
+Phase 4 lenses look for.
 
 Keep the plan **implementation-ready**: any competent engineer (or agent) can execute the task list without re-deriving decisions.
 
@@ -226,6 +206,7 @@ the gate condition; the standard lives in the reference named on each line:
 6. **Bounded waits — ALWAYS (06b Rule 15)** — every call that waits on the system gets an explicit hard timeout sized to a stated expected duration; absolute ceiling 30 min (1800s), waivable only for a **single run** stated beforehand with a reason, and the waiver **does not persist** — it resets immediately after that run; hitting the ceiling is a bug signal to diagnose, not patience. A 50,000-second hang is a failure to investigate.
 7. **Let pi-vigilant do its job** — when it asks for `update_spec_status` with evidence, provide it.
 8. **CHANGELOG discipline** — every user-visible change gets an entry saying what changed; no placeholder text.
+9. **The loop runs to resolution; the ask goes where the answer lives** — keep going until the work is resolved; stop for input only when ASF genuinely cannot supply it. Then route the question through the context's own channel: with a work item claimed, park it there (`bmx_request_input`, or the tracker's needs-input tool) and continue with everything that does not depend on the answer — never block a ticket session on a CLI question nobody is watching. With no such channel, ask once in the conversation and keep going.
 9. **Challenge approved designs (M4)** — a literal reading that creates product tension is resolved with the user *before* implementing, never implemented blindly and called delivered.
 10. **Trace before claiming delivered (M5)** — the delivery log is a claim, the code is the evidence: trace the code path, confirm a surface consumes its output, confirm the operator-facing test passes.
 11. **No stubs, no fake data, no invented facts** — finish it or state the discrepancy plainly (06i).

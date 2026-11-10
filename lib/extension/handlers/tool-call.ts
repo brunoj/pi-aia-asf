@@ -29,6 +29,8 @@ import { appendEvidence, queueSteer, reportGateError } from "../evidence.ts";
 import { gateStats, pendingSuiteRuns, pendingCleanRoom, suiteRuns, recordVerdict } from "../gate-state.ts";
 import { authority } from "../gate-state.ts";
 import { runtime, BLIND_EDIT_NUDGE_AFTER } from "../runtime.ts";
+import { routeAsk } from "../../gates/input-channel.mjs";
+import { channelFor } from "../channel.ts";
 
 
 /** P6: a long blind-editing stretch gets one steer, never a block. */
@@ -142,14 +144,20 @@ function checkDemotion(pi: ExtensionAPI, gate: string, config: Record<string, un
 }
 
 /** P3 second rung: the refusal carries the rule itself, not just the veto. */
-function refusalReason(res: Record<string, unknown>, park: { question: string } | undefined): string {
+function refusalReason(res: Record<string, unknown>, park: { question: string } | undefined, channel?: unknown): string {
   const ruleText = res.ruleText as string | null | undefined;
   const stage = res.refusalStage as number | undefined;
   const base = String(res.reason || "");
   if (ruleText) {
     return `${base}\n\nThis is the ${stage === 2 ? "second" : `${stage}th`} identical refusal — the rule, so it sticks: ${ruleText}`;
   }
-  if (park) return `${base}\n\nParked for the PO: ${park.question} Continue with other work meanwhile; only this action waits.`;
+  if (park) {
+    // The third refusal is a stop, so it must name the channel that unblocks it:
+    // a claimed ticket gets parked where the PO reads, not asked in a CLI nobody
+    // is watching. Same rule as the completion gate's park, one shared renderer.
+    const ask = channel ? routeAsk(park.question, channel as never) : `Parked for the PO: ${park.question}`;
+    return `${base}\n\n${ask} Only this action waits.`;
+  }
   return base;
 }
 
@@ -164,7 +172,9 @@ async function handleBlock({ pi, res, park, config }: Refusal): Promise<{ block:
   const gate = res.rule || "unknown";
   appendEvidence({ kind: "gate-block", gate, rule: res.rule || gate, reason: String(res.reason || "").slice(0, 400) });
   checkDemotion(pi, gate, config);
-  return { block: true, reason: refusalReason(res, park) };
+  // Same adapter the completion gate's park uses — one rule, one resolution.
+  const channel = park ? channelFor(pi as unknown as Parameters<typeof channelFor>[0]) : undefined;
+  return { block: true, reason: refusalReason(res, park, channel) };
 }
 
 /**

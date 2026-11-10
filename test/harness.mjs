@@ -43,7 +43,14 @@ const api = {
   on: (ev, fn) => { events.push({ ev, fn }); },
   sendMessage: async () => {},
   getConfig: () => ({}),
+  // pi's ExtensionAPI.getAllTools(): every configured tool, not just ASF's own. A
+  // real session also has tools other extensions registered (bmx_request_input,
+  // browser_*, …); suites add those through `hostTools` to model that session.
+  getAllTools: () => [...tools.map((t) => ({ name: t.name })), ...hostTools.map((name) => ({ name }))],
 };
+// Tools another extension registered in the session being modelled. Mutable on
+// purpose: a suite pushes `bmx_request_input` to model a Betamaxx session.
+const hostTools = [];
 
 // Invoke a registered command the way pi does: args as one string, handler returns
 // void, and everything it wants the user to see arrives through ctx.ui.notify().
@@ -91,7 +98,7 @@ const test = await import(path.resolve(testFile));
 let verdict;
 if (typeof test.run === 'function') {
   globalThis.__tools = tools;
-  verdict = await test.run({ tools, commands, events, api, extDir, invokeCommand, loadTs });
+  verdict = await test.run({ tools, commands, events, api, extDir, invokeCommand, loadTs, hostTools });
 } else if (typeof test.default === 'boolean') {
   verdict = test.default;
 } else if (typeof test.ok === 'boolean') {

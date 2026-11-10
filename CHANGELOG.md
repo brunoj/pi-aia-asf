@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — a required question goes where the answer actually lives
+
+PO policy: a long loop runs until the work is resolved, and stops for input only when
+ASF genuinely cannot supply it — and when it does stop, the ask is *context aware*. The
+completion gate's park and the third identical refusal previously said "ask the PO
+through the project's input channel", which in a live ticket session means a question
+in a CLI nobody is watching while the ticket system has a needs-input queue built for
+exactly that. `lib/gates/input-channel.mjs` now resolves the channel from what the
+session actually has — the items it claimed (the tracked-work observer already knows)
+and the tools the host reports via `getAllTools()` — and both park sites render their
+message through it. With a work item claimed and a park tool registered the agent is
+told to call *that* tool on *that* item and keep going; with no such channel it is
+told to ask once in the conversation and keep going. Nothing is hard-coded to
+Betamaxx: the park tool is found with the same `gate.tracked.park` matcher tracked work
+already uses, so a Linear or Jira project is routed by its own tool, and a missing
+integration says so instead of naming a tool that is not installed. A tool that parks
+for a verdict (`flag_review`) is never the ask channel — routing a question through it
+would tell the PO the work is invalid when it is merely blocked.
+
+Also fixed, found while wiring it: `bmx_flag_review` was missing from the park matcher,
+so an agent that legitimately flagged a ticket ("this claim is not a real issue") was
+still counted as having work dangling and was steered to park it — a false alarm on a
+disposition it had already taken, and the one steer no amount of extra work satisfies.
+
+### Added — a release must prove the copy that runs is the copy it published
+
+`scripts/install-local.mjs`, run as the last gate of `npm run release`: it installs the
+just-published version into the live pi extension directory and compares the installed
+tree against the registry tarball file-by-file by sha256.
+
+This gap cost a whole release cycle. 0.18.0 passed typecheck, the full suite, the
+"publish landed" poll and the published-artifact load test — and this machine kept
+running 0.17.13, because `~/.pi/agent/npm/package.json` pinned `^0.17.13` and a caret
+on a `0.x` version does not span a minor. Every gate read the registry or the working
+tree; none read the copy pi actually loads, so fixes believed installed and verified
+were not installed at all. Version equality alone would still pass a hand-patched or
+partially installed copy, which is why the check compares bytes.
+
+
 ## [0.18.0] - 2026-11-10
 
 ### Added — a run can be completed, and tests can no longer corrupt one

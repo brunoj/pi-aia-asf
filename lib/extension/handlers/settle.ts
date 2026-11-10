@@ -28,6 +28,8 @@ import { decisionGaps, touchedGoverned, reopensNow } from "../../gates/decisions
 import { matchesAny } from "../../decisions/glob.mjs";
 import { registerAt, relativeTo } from "../../decisions/consult.mjs";
 import { readProjectConfig } from "../../gates/config.mjs";
+import { routeAsk } from "../../gates/input-channel.mjs";
+import { channelFor } from "../channel.ts";
 import { runRoot } from "../paths.ts";
 import type { AsfState, ProjectStateFile } from "../types.ts";
 
@@ -79,10 +81,12 @@ interface SettleContext {
   file: ProjectStateFile;
   state: AsfState;
   entries: Entry[];
+  /** The host, so a park can ask what tools exist instead of assuming them. */
+  pi?: ExtensionAPI;
 }
 
 async function handlePark(ctx: SettleContext, parkRequest: { reason: string; question: string }): Promise<SettleResult> {
-  const { project, file, state, entries } = ctx;
+  const { project, file, state, entries, pi } = ctx;
   const park = parkRequest;
   const parkKey = `${state.runId || "run"}|${park.reason}`;
   const already = parkedAlready.has(parkKey);
@@ -90,12 +94,13 @@ async function handlePark(ctx: SettleContext, parkRequest: { reason: string; que
     appendEvidence({ kind: "park-suppressed", reason: park.reason });
   } else {
     parkedAlready.add(parkKey);
+    const channel = channelFor(pi as unknown as Parameters<typeof channelFor>[0]);
     entries.push({
       type: "custom_message",
       customType: "asf-park",
-      content: `ASF: this needs input ASF cannot supply — ${park.question}\nAsk the PO through the project's input channel (for ticket work: park the ticket), then continue with anything that does not depend on it.`,
+      content: `ASF: this needs input ASF cannot supply — ${park.question}\n${routeAsk(park.question, channel)}`,
       display: true,
-      details: { park },
+      details: { park, channel },
     });
   }
   state.parked = { reason: park.reason, question: park.question, at: new Date().toISOString() };
@@ -271,7 +276,7 @@ export function registerSettleHandler(pi: ExtensionAPI): void {
         }
         return noRunResult(project, entries, priorCount) as never;
       }
-      return (await judgeAndSettle({ project, file, state, entries }, priorCount)) as never;
+      return (await judgeAndSettle({ project, file, state, entries, pi }, priorCount)) as never;
     } catch (e) {
       return gateErrorResult(e) as never;
     }

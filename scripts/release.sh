@@ -132,6 +132,20 @@ if [ "${BMX_SKIP_PUBLISHED_VERIFY:-}" != "1" ]; then
   }
 fi
 
+# Gate: the copy that RUNS. The published-artifact gate loads the tarball in a
+# throwaway prefix, which proves the registry is fine and says nothing about this
+# machine — 0.18.0 passed every gate above while this box kept running 0.17.13,
+# because the local pin was ^0.17.13 and a caret on 0.x never spans a minor. This
+# installs the released version into the live pi extension dir and compares it to the
+# registry byte-for-byte, so "released" can no longer mean "published somewhere".
+if [ "${BMX_SKIP_LOCAL_INSTALL:-}" != "1" ]; then
+  echo "── gate: local install matches the release ───────────────"
+  node scripts/install-local.mjs "${NEW_VERSION#v}" || {
+    echo "release INCOMPLETE: ${NEW_VERSION} is published but the extension pi actually loads is not it" >&2
+    exit 1
+  }
+fi
+
 echo ""
 echo "✅ Released $OLD_VERSION → $NEW_VERSION"
 echo "   Tag:   $NEW_VERSION"
