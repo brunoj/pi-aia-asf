@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.12] - 2026-11-10
+
 ### Fixed — the health gate measured the wrong project
 
 `runRoot()` is the git root of the session's cwd. That is right for where run state
