@@ -198,29 +198,32 @@ function mergeHistory(incoming: ProjectStateFile, onDisk: ProjectStateFile | nul
   incoming.history = list.slice(-MAX_HISTORY);
 }
 
-export function mergeMonotonic(incoming: ProjectStateFile, onDisk: ProjectStateFile | null): ProjectStateFile {
-  // History is merged on EVERY path, including the one-sided ones below: a run closed by
-  // one session must not be erased by another session that still holds the run open, and
-  // must not be able to land twice.
-  mergeHistory(incoming, onDisk);
-  // A CLOSE IS MONOTONIC. A run that has been archived stays closed, whoever wrote the
-  // file last: without this, a session holding a copy loaded before the close writes its
-  // stale `current` back and the run is open again — observed live as a run closed at
-  // 01:19, closed again at 01:21, and still open afterwards, so the next work was judged
-  // against a run that had already been settled. The tombstone is the runId, so a NEW run
-  // (new id) is never affected.
+/**
+ * Which run, if any, `current` may hold after a merge.
+ *
+ * A CLOSE IS MONOTONIC. A run that has been archived stays closed, whoever wrote the file
+ * last: without this, a session holding a copy loaded before the close writes its stale
+ * `current` back and the run is open again — observed live as a run closed at 01:19,
+ * closed again at 01:21, and still open afterwards, so the next work was judged against a
+ * run that had already been settled. The tombstone is the runId, so a NEW run (new id) is
+ * never affected.
+ *
+ * ...and so is an OPEN one. A writer that loaded the file before the run existed has no
+ * `current` at all, and its save used to take the open run off disk for everybody else;
+ * only the mirror in the session that opened it could put it back, so a run survived
+ * exactly as long as the process that started it. A writer may clear `current` by closing
+ * a run (the tombstone), never by having never known about it.
+ */
+function resolveCurrent(incoming: ProjectStateFile, onDisk: ProjectStateFile | null): void {
+  const opened = onDisk?.current;
   const closed = [...new Set([...closedOf(incoming), ...closedOf(onDisk)])].slice(-MAX_HISTORY);
   incoming.closedRuns = closed;
   if (incoming.current?.runId && closed.includes(incoming.current.runId)) incoming.current = null;
-  const a = incoming.current;
-  const b = onDisk?.current;
-  // Both sides are sanitized: the on-disk copy can be hand-edited or written by
-  // an older version, and spreading a non-array field here threw inside the
-  // settle handler — which then settled the run silently (a gate bypass).
-  sanitizeSteerFields(a);
-  sanitizeSteerFields(b);
-  if (!a || !b) return incoming;
-  if (a.runId !== b.runId) return incoming; // a different run: no merge
+  if (!incoming.current && opened?.runId && !closed.includes(opened.runId)) incoming.current = JSON.parse(JSON.stringify(opened));
+}
+
+/** The fields the completion gate reads, merged so an older copy can never undo a newer fact. */
+function mergeRunFields(a: AsfState, b: AsfState): void {
   a.steers = Math.max(Number(a.steers) || 0, Number(b.steers) || 0);
   a.seenSteers = [...new Set([...(a.seenSteers || []), ...(b.seenSteers || [])])].filter((x) => typeof x === "string" && x.trim()).slice(-50);
   // Chronological: the on-disk list is older, the incoming one carries the new
@@ -231,6 +234,24 @@ export function mergeMonotonic(incoming: ProjectStateFile, onDisk: ProjectStateF
   a.filesTouched = touched.slice(-10);
   if (typeof b.lastMutationAt === "number") a.lastMutationAt = Math.max(Number(a.lastMutationAt) || 0, b.lastMutationAt);
   if (!a.parked && b.parked) a.parked = b.parked;
+}
+
+export function mergeMonotonic(incoming: ProjectStateFile, onDisk: ProjectStateFile | null): ProjectStateFile {
+  // History is merged on EVERY path, including the one-sided ones below: a run closed by
+  // one session must not be erased by another session that still holds the run open, and
+  // must not be able to land twice.
+  mergeHistory(incoming, onDisk);
+  resolveCurrent(incoming, onDisk);
+  const a = incoming.current;
+  const b = onDisk?.current;
+  // Both sides are sanitized: the on-disk copy can be hand-edited or written by
+  // an older version, and spreading a non-array field here threw inside the
+  // settle handler — which then settled the run silently (a gate bypass).
+  sanitizeSteerFields(a);
+  sanitizeSteerFields(b);
+  if (!a || !b) return incoming;
+  if (a.runId !== b.runId) return incoming; // a different run: no merge
+  mergeRunFields(a, b);
   return incoming;
 }
 

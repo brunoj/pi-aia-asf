@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.20.3] - 2026-11-11
+
+### Fixed — an open run could be erased by a session that never had it
+The 0.20.2 fix made a close survive a stale writer. The opposite direction was still open,
+and it is the half that loses work: a session that loaded the state file *before* a run
+existed holds no `current`, and its next save wrote that emptiness over the open run for
+everybody else. Only the in-process mirror in the session that opened the run could put it
+back — so a run survived exactly as long as the session that started it, and a project
+left with an open run in one process and none on disk. `mergeMonotonic` now treats
+openness as monotonic too: a writer may clear `current` by closing a run (the tombstone),
+never by having never known about it. `/asf abort`, the settle gate and `asf_run_complete`
+all close through `archiveRun`, so a deliberate close still clears.
+
+`mergeMonotonic` had reached cyclomatic complexity 25 while acquiring these rules; the
+monotonic decisions and the gate's field merge are now named helpers (`resolveCurrent`,
+`mergeRunFields`) rather than one long function, and the health gate is back to 0 violations.
+
 ## [0.20.2] - 2026-11-11
 
 ### Fixed — a closed run could be opened again

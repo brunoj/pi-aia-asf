@@ -46,6 +46,20 @@ export async function run({ loadTs }) {
     chk("an open run survives a merge untouched", kept.current?.runId === "run-X", JSON.stringify(kept.current?.runId));
     chk("nothing was tombstoned for a run that is still open", !(kept.closedRuns || []).includes("run-X"), JSON.stringify(kept.closedRuns));
 
+    console.log("=== 2b. a writer that never had the run cannot erase it ===");
+    // Session B loaded the file BEFORE session A opened the run, so B has no `current`
+    // at all. Its save must not take the open run away from disk.
+    const erased = mergeMonotonic(
+      { current: null, history: [], closedRuns: [] },
+      { current: JSON.parse(JSON.stringify(runX)), history: [], closedRuns: [] },
+    );
+    chk("NEGATIVE: a writer with no run does not delete the open run", erased.current?.runId === "run-X", JSON.stringify(erased.current?.runId));
+    const deliberate = mergeMonotonic(
+      { current: null, history: [JSON.parse(JSON.stringify(closedX))], closedRuns: ["run-X"] },
+      { current: JSON.parse(JSON.stringify(runX)), history: [], closedRuns: [] },
+    );
+    chk("but a writer that CLOSED it still closes it", deliberate.current === null, JSON.stringify(deliberate.current));
+
     console.log("=== 3. the NEXT run is judged separately ===");
     const runY = { ...runX, runId: "run-Y", startedAt: "2026-01-02T00:00:00.000Z", filesTouched: [path.join(dir, "b.ts")] };
     const next = mergeMonotonic(

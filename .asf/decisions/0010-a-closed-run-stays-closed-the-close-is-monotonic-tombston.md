@@ -2,7 +2,7 @@
 id: ADR-0010
 status: accepted
 title: "A closed run stays closed: the close is monotonic, tombstoned by runId"
-decision: "A run that has been archived stays closed: `archiveRun` tombstones the runId in `closedRuns`, `mergeMonotonic` refuses to write a tombstoned run back as `current`, and `restoreFromMirror` restores only runs that were never closed. A close is a monotonic fact, not a field that the last writer wins."
+decision: "Whether a run is open or closed is a monotonic fact, not a field the last writer wins: `archiveRun` tombstones the runId in `closedRuns`, `mergeMonotonic` refuses to resurrect a tombstoned run and refuses to let a writer that never had the run erase an open one, and `restoreFromMirror` restores only runs nothing recorded closing."
 decided: 2026-11-11
 applies_to: [lib/extension/state.ts#mergeMonotonic, lib/extension/state.ts#restoreFromMirror, test/test-two-writer.mjs]
 tags: [run-lifecycle, state, concurrency, settle]
@@ -35,7 +35,11 @@ Two mechanisms caused it, and they pull in opposite directions:
 
 - `mergeMonotonic` merged the fields the gate depends on (`steers`, `seenSteers`,
   `filesTouched`) but returned `incoming` wholesale whenever one side had no `current`.
-  A session holding a copy loaded before the close wrote its stale open run straight back.
+  That cut both ways, and both were observed: a session holding a copy loaded before the
+  close wrote its stale open run straight back, and a session that had loaded the file
+  *before the run existed* saved its empty `current` and took the open run off disk for
+  everybody else — where only the mirror in the process that opened it could put it back.
+  A run therefore survived exactly as long as the session that started it.
 - `runMirror` exists to survive state vanishing **outside** ASF (a hand-delete, a cleared
   directory) and restores `current` whenever the file has none. It could not tell an
   external deletion from a close ASF had just performed, so it restored exactly what the
@@ -70,7 +74,9 @@ disappearance is recorded, because there is no tombstone for it.
 The tombstone list is bounded (last 20 closes), on write and on merge, so a long-lived
 project key cannot grow the state file through it.
 
-This closes the loss/duplication half of the multi-writer problem. It does not make
-concurrent sessions agree on a single view of an *open* run — two writers still each see
-their own `filesTouched` until one saves — which is what the deferred concurrency work is
-for.
+A run that is open stays open and a run that is closed stays closed, whichever session
+writes last, and both directions are tests (`test/test-two-writer.mjs`, 21 checks) rather
+than incident reports. What this does NOT claim: concurrent sessions still each see their
+own `filesTouched` until one of them saves, so the *view* of an open run is eventually
+consistent rather than immediately shared. That remains the open part of the multi-writer
+problem.
