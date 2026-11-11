@@ -72,3 +72,62 @@ export async function run({ extDir }) {
     fs.rmSync(tmp, { recursive: true, force: true });
   }
 }
+
+// ─── proposals must be backed by counted evidence (spc-1793872167441-28764) ───
+//
+// A proposal without a measurement is speculation, and the rule that forbids it was for
+// years a sentence in a document nothing checked. This makes it a claim that can fail:
+// every `### P<n>` in the research doc must carry a `*Tested:*` line, and that line must
+// contain a number — "counted" evidence, not an adjective.
+/** The section that carries the proposals, up to the next `##` heading. */
+function proposalSection(md) {
+  const lines = md.split(/\r?\n/);
+  const out = [];
+  let inSection = false;
+  for (const line of lines) {
+    if (/^## /.test(line)) { inSection = /^## .*Proposals/i.test(line); continue; }
+    if (inSection) out.push(line);
+  }
+  return out.join("\n");
+}
+
+function untestedProposals(md) {
+  const lines = proposalSection(md).split(/\r?\n/);
+  const out = [];
+  let current = null;
+  let tested = false;
+  let counted = false;
+  let counting = false;
+  const flush = () => {
+    if (current && !(tested && counted)) out.push(current);
+    current = null; tested = false; counted = false; counting = false;
+  };
+  for (const line of lines) {
+    const head = /^### (P\d+)\b/.exec(line);
+    if (head) { flush(); current = head[1]; continue; }
+    if (current && /\*Tested:\*/.test(line)) { tested = true; counting = true; if (/\d/.test(line)) counted = true; continue; }
+    // The Tested block is the paragraph it starts: a wrapped line still counts, but the
+    // block ENDS at the blank line, so digits in unrelated prose below cannot buy a pass.
+    if (current && counting) {
+      if (!line.trim()) { counting = false; continue; }
+      if (/^#{1,4} |^-{3,}/.test(line)) { counting = false; continue; }
+      if (/\d/.test(line)) counted = true;
+    }
+  }
+  flush();
+  return out;
+}
+
+{
+  const file = path.join(path.dirname(new URL(import.meta.url).pathname), "..", "RESEARCH-trace-improvements.md");
+  const md = fs.existsSync(file) ? fs.readFileSync(file, "utf8") : "";
+  const proposals = (proposalSection(md).match(/^### P\d+/gm) || []).length;
+  chk("the trace-evidence research doc exists and carries proposals", proposals >= 4, `${proposals} proposals`);
+  chk("every proposal is backed by a counted measurement", untestedProposals(md).length === 0, JSON.stringify(untestedProposals(md)));
+
+  // Negative control: drop one proposal's measurement and the check must name it.
+  const stripped = md.replace(/\*Tested:\*[^\n]*(\n[^\n]*)*\n\n/, "*Tested:* measured against the traces.\n\n");
+  chk("NEGATIVE: a measurement with no number in it is not counted evidence", untestedProposals(stripped).length === 1, JSON.stringify(untestedProposals(stripped)));
+  const removed = md.replace(/\*Tested:\*[^\n]*\n/, "");
+  chk("NEGATIVE: a proposal with no Tested line at all is reported", untestedProposals(removed).length >= 1, JSON.stringify(untestedProposals(removed).slice(0, 2)));
+}
