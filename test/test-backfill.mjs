@@ -326,6 +326,34 @@ export async function run({ events, invokeCommand }) {
     chk("a second bootstrap pass offers only what is still uncovered",
       /record\(s\)/.test(boot2) && !/package\.json/.test(listed) && /src\/a\.ts/.test(listed), boot2.slice(0, 110));
 
+    console.log("=== 5b. a scratch write outside the project is not 'code in this project' ===");
+    // The false positive that fired for real: a session whose workspace is a non-repo
+    // directory (/home/x) wrote a scratch file under /tmp, the root fell back to the
+    // session root, and the agent was offered a register for $HOME — complete with
+    // ADRs to "adopt" from an unrelated checkout that happened to live under it.
+    const sc = project("scratch");
+    sc.enter();
+    try {
+      for (const fn of on("session_start")) await fn({}, { getModel: () => ({ contextWindow: 200_000 }) });
+      sc.write("package.json", JSON.stringify({ name: "y", dependencies: { zod: "3" } }));
+      const outside = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "asf-bf-outside-")));
+      const scratchFile = path.join(outside, "v.ts");
+      fs.writeFileSync(scratchFile, "export const v = 1;\n");
+      await toolCall("write", { path: scratchFile, content: "export const v = 1;\n" });
+      const so = await settleAll();
+      chk("NEGATIVE: a write OUTSIDE the project does not offer a register for the session root",
+        !/no decision register/.test(so.steers), so.steers.slice(0, 100) || "(no steer)");
+      // And it must not SPEND the run's one offer: a write that really is in the
+      // project still has to get it.
+      await touch(sc, "src/a.ts", "export const a = 1;\n");
+      const sn = await settleAll();
+      chk("and the scratch write did not spend the offer a real source write still gets",
+        /no decision register/.test(sn.steers), sn.steers.slice(0, 100) || "(no steer)");
+      fs.rmSync(outside, { recursive: true, force: true });
+    } finally {
+      sc.cleanup();
+    }
+
     console.log("=== 6. a new run gets its own offer ===");
     const r = project("second-run");
     r.enter();

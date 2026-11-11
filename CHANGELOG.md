@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.20.5] - 2026-11-11
+
+### Fixed — a scratch write offered a decision register for the wrong directory
+The backfill offer says "this project has no decision register, and this run is changing
+code in it". It fired after a write to a scratch file under `/tmp` from a session whose
+workspace is a non-repo home directory: the file belonged to no project, the root fell
+back to the session workspace, and the agent was told to "adopt" five ADRs from an
+unrelated checkout that happened to live under `$HOME`. The offer now requires the
+written file to live inside the project it describes, and a write outside it no longer
+spends the run's one offer — a real source write later in the run still gets it.
+`test-backfill.mjs` gains both checks (65/65); removing the guard, or moving it after the
+offer is spent, each fails one.
+
 ## [0.20.4] - 2026-11-11
 
 ### Fixed — project artifacts resolved against the session workspace, not the project

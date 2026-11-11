@@ -14,6 +14,7 @@
  * is reported by the register's own checks, never by breaking the tool call.
  */
 import { registerAt, unreadGoverning, citedIds } from "../../decisions/consult.mjs";
+import { resolve as abspath } from "node:path";
 import { matchesAny } from "../../decisions/glob.mjs";
 import { runRoot } from "../paths.ts";
 import { runtime } from "../runtime.ts";
@@ -80,8 +81,13 @@ function noteCitations(toolName: string, input: Input, records: DecisionRecord[]
  * attached and a ceiling on the records — a gap saying "go analyse the repo" with no end
  * would be a run that never closes. ASF reports; only the agent writes a record.
  */
-function offerBackfill({ target, root, records, config }: { target: string | null; root: string; records: DecisionRecord[]; config: Record<string, unknown> }): void {
+function offerBackfill({ target, root, records, config }: { target: string | null; root: string | null; records: DecisionRecord[]; config: Record<string, unknown> }): void {
   if (!target || runtime.backfillOffered || !SOURCE.test(target)) return;
+  // The offer asserts "this run is changing code in THIS project", so the file being
+  // changed has to live inside the project being described. A write to a scratch file
+  // (/tmp/x.mjs) from a session whose workspace is a non-repo $HOME resolved to that
+  // $HOME, and the agent was told to adopt ADRs from an unrelated checkout under it.
+  if (!root || !abspath(target).startsWith(abspath(root) + "/")) return;
   runtime.backfillOffered = true;
   if (records.length > 0 || !hasSource(root)) return;
   const cfg = config || {};
