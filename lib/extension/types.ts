@@ -86,6 +86,9 @@ export interface SpecItem {
 
 export interface ProjectStateFile {
   current: AsfState | null;
+  /** runIds this project has archived. A close is monotonic: a run listed here cannot be
+   *  written back as `current` by a session that loaded the state before the close. */
+  closedRuns?: string[];
   /** Completed runs, oldest first. `runId` identifies the run; `by` says what closed it
    *  (`auto`, `asf_run_complete`, `phase-none`). Written only through `archiveRun`. */
   history: Array<{ runId?: string | null; workType: string; phase: AsfPhase | string; startedAt: string; endedAt: string; by?: string }>;

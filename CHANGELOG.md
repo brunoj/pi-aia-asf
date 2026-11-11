@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.20.2] - 2026-11-11
+
+### Fixed — a closed run could be opened again
+Two sessions on one project key left the same run archived to `history` twice and still
+present in `current`: the run had been settled, resurrected, and settled again, so the
+work that followed was judged against a run the completion gate had already closed. A
+close is now a monotonic fact. `archiveRun` tombstones the closed `runId`; `mergeMonotonic`
+refuses to write a tombstoned run back as `current`, instead of returning the incoming
+copy wholesale whenever one side had no run; and `restoreFromMirror` restores a run only
+when nothing recorded its close — which is what separates state that vanished outside ASF
+(from the mirror's protection) from a run the gate just settled (which stays closed).
+The tombstone list is bounded on both the write and the merge path.
+
+The mirror's original job is untouched: a run deleted outside ASF is still restored, with
+the disappearance recorded and the steer that says so — there is simply no tombstone for
+it. Two new suites make the interleaving a test rather than an incident report.
+
 ## [0.20.1] - 2026-11-11
 
 ### Fixed — one run could be archived to history twice

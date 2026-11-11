@@ -69,6 +69,14 @@ export async function loadState(project: string): Promise<ProjectStateFile> {
 export async function restoreFromMirror(project: string, data: ProjectStateFile, how: string): Promise<ProjectStateFile> {
   const mirrored = runMirror.get(project);
   if (!mirrored) return data;
+  // A run ASF itself CLOSED stays closed. The mirror exists for the opposite case — state
+  // that vanished OUTSIDE ASF (a hand-delete, a cleared dir) — and without this check the
+  // same mirror resurrects a run the settle gate already settled, which is how one run
+  // ended up open again after being archived. The tombstone is what tells the two apart.
+  if (mirrored.runId && closedOf(data).includes(mirrored.runId)) {
+    runMirror.delete(project);
+    return data;
+  }
   data.current = JSON.parse(JSON.stringify(mirrored));
   try {
     await saveState(project, data);
@@ -165,9 +173,19 @@ export function archiveRun(file: ProjectStateFile, state: AsfState | null | unde
   };
   const key = historyKey(entry);
   const list = Array.isArray(file.history) ? file.history : [];
+  const id = entry.runId;
+  // The tombstone is written even for a duplicate close: what matters is that this run
+  // has closed, not how many times somebody noticed.
+  if (id) file.closedRuns = [...new Set([...closedOf(file), id])].slice(-MAX_HISTORY);
   if (list.some((h) => historyKey(h) === key)) return { duplicate: true };
   file.history = [...list, entry].slice(-MAX_HISTORY);
   return { duplicate: false };
+}
+
+/** Which runs this file records as closed. Defensive: the file can be hand-edited. */
+function closedOf(file: ProjectStateFile | null | undefined): string[] {
+  const list = file && Array.isArray(file.closedRuns) ? file.closedRuns : [];
+  return list.filter((x): x is string => typeof x === "string" && x.length > 0);
 }
 
 /** Union two histories by run identity — neither side may erase or duplicate the other's. */
@@ -185,6 +203,15 @@ export function mergeMonotonic(incoming: ProjectStateFile, onDisk: ProjectStateF
   // one session must not be erased by another session that still holds the run open, and
   // must not be able to land twice.
   mergeHistory(incoming, onDisk);
+  // A CLOSE IS MONOTONIC. A run that has been archived stays closed, whoever wrote the
+  // file last: without this, a session holding a copy loaded before the close writes its
+  // stale `current` back and the run is open again — observed live as a run closed at
+  // 01:19, closed again at 01:21, and still open afterwards, so the next work was judged
+  // against a run that had already been settled. The tombstone is the runId, so a NEW run
+  // (new id) is never affected.
+  const closed = [...new Set([...closedOf(incoming), ...closedOf(onDisk)])].slice(-MAX_HISTORY);
+  incoming.closedRuns = closed;
+  if (incoming.current?.runId && closed.includes(incoming.current.runId)) incoming.current = null;
   const a = incoming.current;
   const b = onDisk?.current;
   // Both sides are sanitized: the on-disk copy can be hand-edited or written by

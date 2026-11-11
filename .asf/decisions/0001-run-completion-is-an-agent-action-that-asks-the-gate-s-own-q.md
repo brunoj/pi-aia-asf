@@ -4,7 +4,7 @@ status: accepted
 title: "Run completion is an agent action that asks the gate's own question"
 decision: A run closes only through `closeRun`, reached either by the settle gate or by `asf_run_complete`, both calling the same `evaluateRun`; run history is written only through `archiveRun`, which is idempotent by run identity. An agent-requested close on an unfinished run is refused with the gaps listed.
 decided: 2026-11-10
-applies_to: [lib/extension/handlers/settle.ts, lib/extension/tools/run-complete.ts, lib/extension/state.ts#archiveRun, lib/extension/state.ts#mergeMonotonic, lib/extension/commands/session.ts#setPhase]
+applies_to: [lib/extension/handlers/settle.ts, lib/extension/tools/run-complete.ts, lib/extension/state.ts#archiveRun, lib/extension/commands/session.ts#setPhase]
 tags: [run-lifecycle, completion-gate, settle]
 from_spec: 
 user_instructed: ensure you properly complete and mark as completed every run, so you judge the next run separately again
