@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.20.4] - 2026-11-11
+
+### Fixed — project artifacts resolved against the session workspace, not the project
+A completion gate that cannot be satisfied is the worst kind of gate, and this one was
+unreachable: `validateTrace` resolved a spec's `testFile` against `runRoot()` — the
+directory pi happened to start in — so any session opened above the code it was changing
+looked for `<parent>/test/x.mjs`, never found it, and answered "spec(s) marked met this
+run without a trace" forever, however complete the trace was. The agent kept adding the
+trace; the gate kept refusing it. That was one symptom of a family, and the family is
+fixed here: the project's own `.asf/config.json`, Gate 5's `PLAN.md` and the config
+screen all read the session workspace too, so a session started in a parent checkout read
+the wrong config and refused a plan that existed. All of them now resolve through
+`measureRoot()`/`measureRootSync()` (ADR-0005, rewritten to state the rule for the whole
+family); run state deliberately stays at `runRoot()`.
+
+The reason this shipped at all is that the trace check had no test. `test-trace-gate.mjs`
+(15 checks) now drives the gate through real run state and makes the wrong-root case a
+first-class check rather than an afterthought, and `test-measure-root.mjs` gained the
+config, plan and config-screen consumers. Six mutations caught, including pinning
+`measureRootSync()` back to the session root and putting Gate 5 back on `runRoot()`.
+
+### Fixed — the spec store is redirected with everything else
+`specTaskFileFor` now honours `ASF_STATE_ROOT`. It had no override, so the only way to
+test the trace gate was to write specs into the developer's real `~/.pi` spec memory —
+which is what the suite had been doing, in direct violation of ADR-0002. The fixture now
+comes from ASF's own locator and a check asserts it cannot land under `~/.pi`.
+
 ## [0.20.3] - 2026-11-11
 
 ### Fixed — an open run could be erased by a session that never had it

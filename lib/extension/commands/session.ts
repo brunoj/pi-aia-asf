@@ -5,10 +5,10 @@
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { existsSync } from "node:fs";
 import type { AsfPhase, AsfScale, AsfState } from "../types.ts";
-import { projectName, runRoot } from "../paths.ts";
+import { projectName } from "../paths.ts";
 import { readPath } from "../../home.mjs";
 import { loadState, saveState, archiveRun } from "../state.ts";
-import { newRunId } from "../run.ts";
+import { measureRootFor, newRunId } from "../run.ts";
 import { __resetRefusals } from "../../gates/refusals.mjs";
 
 export interface PhaseChange {
@@ -65,10 +65,10 @@ export async function runApprove(): Promise<string> {
 
   // Home first, then the root: a task started under an older ASF keeps its plan
   // where it wrote it, and Gate 5 refuses on the same file it would approve.
-  const planPath = readPath(runRoot(), "plan");
+  const planPath = readPath(measureRootFor(state.current), "plan");
   if (!existsSync(planPath)) {
     return (
-      `No PLAN.md found in ${runRoot()} (looked for ${planPath}).\n` +
+      `No PLAN.md found in ${measureRootFor(state.current)} (looked for ${planPath}).\n` +
       "Gate 5 approves a written plan — write PLAN.md and present it to the user first."
     );
   }

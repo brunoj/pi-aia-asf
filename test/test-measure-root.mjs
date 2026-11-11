@@ -43,9 +43,17 @@ function makeTree() {
   return { root, parent: path.join(root, "parent"), child: path.join(root, "parent", "child") };
 }
 
-export async function run({ loadTs }) {
+export async function run({ loadTs, events, invokeCommand }) {
   let pass = 0, fail = 0;
   const chk = (n, c, d) => { console.log(`  ${c ? "PASS" : "FAIL"}  ${n}${d ? " — " + d : ""}`); c ? pass++ : fail++; };
+  const asfText = async (args) => {
+    const r = await invokeCommand("asf", args);
+    const list = r?.notices || (Array.isArray(r) ? r : []);
+    return list.map((n) => (typeof n === "string" ? n : n?.message || "")).join("\n");
+  };
+  const toolCall = async (n, i, id = `tc-${Math.random()}`) => {
+    for (const fn of events.filter((e) => e.ev === "tool_call").map((e) => e.fn)) await fn({ toolName: n, input: i, toolCallId: id });
+  };
   const { measureRoot, openAutoRun } = await loadTs("lib/extension/run.ts");
   const { runRoot } = await loadTs("lib/extension/paths.ts");
   const { __clearProjectCache } = await import("../lib/project.mjs");
@@ -111,6 +119,47 @@ export async function run({ loadTs }) {
     fs.rmSync(outside, { recursive: true, force: true });
 
     console.log(`\n${pass} passed, ${fail} failed`);
+    console.log("=== the project's OWN artifacts follow the code, not the session ===");
+    // One family, one root. The trace gate resolved a spec's testFile against
+    // runRoot(); the project config, Gate 5's PLAN.md and the config screen did the
+    // same to the project's own files — a session started above the code read the
+    // WRONG config and refused a PLAN.md that existed. Driven through the real
+    // registered graph (tool_call + the asf command), because a hand-imported module
+    // gets its own runtime and would prove nothing.
+    const { runApprove } = await loadTs("lib/extension/commands/session.ts");
+    fs.mkdirSync(path.join(t.parent, ".asf"), { recursive: true });
+    fs.mkdirSync(path.join(t.child, ".asf"), { recursive: true });
+    fs.writeFileSync(path.join(t.parent, ".asf", "config.json"), "{}\n");
+    fs.writeFileSync(path.join(t.child, ".asf", "config.json"), JSON.stringify({ not_a_real_gate: 5 }));
+    fs.writeFileSync(path.join(t.child, "PLAN.md"), "# plan\n");
+
+    await toolCall("edit", { path: path.join(t.child, "c.mjs") });
+    const inChild = await asfText("config --check");
+    chk("the config screen checks the config of the project under work",
+      /not_a_real_gate/.test(inChild), inChild.slice(0, 70));
+    chk("Gate 5 finds the PLAN.md that exists in the project under work",
+      !/No PLAN\.md found/.test(await runApprove()), (await runApprove()).slice(0, 60));
+
+    await toolCall("edit", { path: path.join(t.parent, "p.mjs") });
+    const inParent = await asfText("config --check");
+    chk("NEGATIVE: with the work in the parent, the child's bad config is not blamed on it",
+      /configuration is consistent/.test(inParent), inParent.slice(0, 70));
+    const planParent = await runApprove();
+    chk("NEGATIVE: and a missing plan is reported against the PARENT, not the child",
+      /No PLAN\.md found/.test(planParent) && !/child/.test(planParent), planParent.slice(0, 80));
+
+    // Nothing touched yet resolves at the session root: a config sitting in some other
+    // checkout cannot hijack a session that is not working there.
+    const fresh = fs.mkdtempSync(path.join(os.tmpdir(), "asf-mroot-idle-"));
+    execFileSync("git", ["init", "-q"], { cwd: fresh });
+    const prevFresh = process.cwd();
+    process.chdir(fresh);
+    __clearProjectCache();
+    const idle = await asfText("config --check");
+    chk("with nothing touched yet, the session root is the project", /configuration is consistent/.test(idle), idle.slice(0, 70));
+    process.chdir(prevFresh);
+    fs.rmSync(fresh, { recursive: true, force: true });
+
     return fail === 0;
   } finally {
     process.chdir(prev);

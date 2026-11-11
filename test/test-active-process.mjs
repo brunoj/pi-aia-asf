@@ -156,7 +156,13 @@ export async function run({ events, invokeCommand, loadTs }) {
     console.log("=== 5c. A7: a spec met in THIS run without a trace holds the run ===");
     {
       // pi-vigilant >= 0.9 writes the spec store under the same root key as ASF.
-      const specDir = path.join(os.homedir(), ".pi", "agent", "skills", "spec-memory", "projects", p.key);
+      // Derived from ASF's own locator, which honours ASF_STATE_ROOT: this fixture
+      // used to be written straight into the developer's real ~/.pi spec memory —
+      // the same pollution ADR-0002 forbids for run state.
+      const { specTaskFileFor } = await loadTs("lib/extension/specs.ts");
+      const specDir = path.dirname(specTaskFileFor(p.key));
+      chk("NEGATIVE: the spec fixture never lands in the developer's real ~/.pi",
+        !specDir.startsWith(path.join(os.homedir(), ".pi")), specDir);
       fs.mkdirSync(specDir, { recursive: true });
       try {
         await toolCall("edit", { path: path.join(p.root, "src", "spec.ts") });
@@ -361,7 +367,8 @@ export async function run({ events, invokeCommand, loadTs }) {
       // A REAL park: a standard-scale run whose only remaining gap is a
       // credential ASF cannot obtain. That is one of the four legitimate parks,
       // and it must be asked once, not on every settle.
-      const parkDir = path.join(os.homedir(), ".pi", "agent", "skills", "spec-memory", "projects", lp2.key);
+      const { specTaskFileFor: parkLocate } = await loadTs("lib/extension/specs.ts");
+      const parkDir = path.dirname(parkLocate(lp2.key));
       fs.mkdirSync(parkDir, { recursive: true });
       let parks = 0;
       try {

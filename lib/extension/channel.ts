@@ -12,13 +12,13 @@
  */
 import { readProjectConfig } from "../gates/config.mjs";
 import { resolveInputChannel } from "../gates/input-channel.mjs";
-import { runRoot } from "./paths.ts";
+import { measureRootSync } from "./run.ts";
 import { runtime } from "./runtime.ts";
 
 /** Project config for the matcher widening, or nothing if it cannot be read. */
 export function configFor(): Record<string, unknown> {
   try {
-    return readProjectConfig(runRoot()) || {};
+    return readProjectConfig(measureRootSync()) || {};
   } catch {
     return {};
   }

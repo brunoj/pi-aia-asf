@@ -3,11 +3,11 @@
  * Each answers a question with something measured, not something asserted.
  */
 
-import { projectName, runRoot } from "../paths.ts";
+import { projectName } from "../paths.ts";
 import { loadState } from "../state.ts";
 import { ledger, authority, gateStats } from "../gate-state.ts";
 import { runtime } from "../runtime.ts";
-import { cardFor, collectMeasurements, currentScale, extensionDir, measureRoot } from "../run.ts";
+import { cardFor, collectMeasurements, currentScale, extensionDir, measureRoot, measureRootSync } from "../run.ts";
 import { renderLedger } from "../../gates/ledger.mjs";
 import { renderAuthority } from "../../gates/authority.mjs";
 import { renderCompletionGate } from "../../gates/settle.mjs";
@@ -76,7 +76,9 @@ export function cmdRules(args: string[]): string {
 export function cmdConfig(args: string[]): string {
   const a = args.map((s) => s.trim()).filter(Boolean);
   const flag = (a[1] || "--get").toLowerCase();
-  const projectDir = runRoot();
+  // The config screen shows the config of the project under work, not of the
+  // directory pi was launched from.
+  const projectDir = measureRootSync();
   const measurements = collectMeasurements();
   if (flag === "--screen" || flag === "screen") {
     return screenModel({ projectDir, measurements })

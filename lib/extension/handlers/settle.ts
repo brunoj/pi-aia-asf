@@ -53,7 +53,11 @@ function drainSteers(prior: Entry[]): Entry[] {
 }
 
 /** A7: specs met during THIS run need a complete trace. */
-async function untracedMetSpecs(startedAt: string | undefined): Promise<string[]> {
+/**
+ * Exported for test/test-trace-gate.mjs: this is the gate's whole input, and it
+ * shipped untested — which is how it came to resolve testFile against the wrong root.
+ */
+export async function untracedMetSpecs(startedAt: string | undefined, root: string): Promise<string[]> {
   try {
     const runStart = Date.parse(startedAt || "") || 0;
     const specs = (await loadProjectSpecs()) || [];
@@ -63,7 +67,7 @@ async function untracedMetSpecs(startedAt: string | undefined): Promise<string[]
         const at = Date.parse(String((sp as { verifiedAt?: string }).verifiedAt || ""));
         return Number.isFinite(at) && at >= runStart;
       })
-      .filter((sp) => !validateTrace(sp).ok)
+      .filter((sp) => !validateTrace(sp, root).ok)
       .map((sp) => sp.id);
   } catch {
     /* spec memory unreadable: this item cannot be judged, the rest still is */
@@ -213,7 +217,9 @@ export async function evaluateRun(project: string, state: AsfState) {
   // Only a passing test that STARTED after the last source change validates it.
   const since = typeof state.lastMutationAt === "number" ? state.lastMutationAt : 0;
   const testRunRecorded = suiteRuns.some((r) => r.exitCode === 0 && (r.at ?? 0) >= since);
-  const untracedMet = await untracedMetSpecs(state.startedAt);
+  // Traces are checked against the project the run is about (the code the specs
+  // describe), not the directory pi happened to be started in.
+  const untracedMet = await untracedMetSpecs(state.startedAt, measureRootFor(state));
   // The in-process ledger is the authority; the file is a record that may be
   // stale, raced or hand-edited. max() means a counter can never go down.
   const mem = steerLedgerFor(`${project}|${state.runId || "run"}`);

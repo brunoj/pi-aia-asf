@@ -14,8 +14,8 @@ import { setPhase } from "./session.ts";
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 
 /** One met spec's trace, rendered so a FAIL row says exactly what is missing. */
-function renderTraceRow(spec: SpecItem): { ok: boolean; lines: string[] } {
-  const check = validateTrace(spec);
+function renderTraceRow(spec: SpecItem, root: string): { ok: boolean; lines: string[] } {
+  const check = validateTrace(spec, root);
   const lines = [`  [${check.ok ? "PASS" : "FAIL"}] ${spec.id}: ${check.reason}`];
   if (!check.ok || !spec.trace) return { ok: check.ok, lines };
   lines.push(`       outcome: ${spec.trace.outcome}`);
@@ -40,8 +40,11 @@ async function traceabilitySection(): Promise<string[]> {
   }
   const lines: string[] = [];
   let allOk = true;
+  // Same root the completion gate uses: a trace's testFile lives in the project the
+  // specs describe, which is not necessarily where pi was started.
+  const root = await measureRoot();
   for (const spec of metSpecs) {
-    const row = renderTraceRow(spec);
+    const row = renderTraceRow(spec, root);
     if (!row.ok) allOk = false;
     lines.push(...row.lines);
   }

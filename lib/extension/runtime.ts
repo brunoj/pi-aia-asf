@@ -66,6 +66,13 @@ export interface RuntimeState {
    */
   backfillOffered: boolean;
   /**
+   * The project the run is ABOUT, remembered in-process: the git root of the most
+   * recently touched file, or null before anything is touched. Every artifact that
+   * belongs to the CODE (its config, its PLAN.md, a trace's testFile) resolves
+   * against this rather than runRoot(), which is only where pi happened to start.
+   */
+  measureRoot: string | null;
+  /**
    * Every `browser_*` call the session made, as ASF observed it. This is what
    * makes browser verification evidence rather than a claim: the tool checks the
    * session actually drove a browser before it will record that it was verified.
@@ -94,5 +101,6 @@ export const runtime: RuntimeState = {
   decisionsRecorded: [],
   /** One backfill offer per run — an empty register is offered, never nagged about. */
   backfillOffered: false,
+  measureRoot: null,
   browserCalls: [],
 };

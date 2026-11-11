@@ -100,6 +100,7 @@ export async function openAutoRun(trigger: string, path: string | null): Promise
   // the "one offer per run" the comment promises would silently be one per session —
   // and a project opened twice would never hear about its missing register again.
   runtime.backfillOffered = false;
+  runtime.measureRoot = path ? projectOf(path, runRoot()) ?? null : null;
   const state: AsfState = {
     phase: "implementation",
     scale: "small",
@@ -191,6 +192,17 @@ export function measureRootFor(state: { filesTouched?: unknown } | null | undefi
     /* measurement falls back to the session root; a broken guess is worse than none */
   }
   return fallback;
+}
+
+/**
+ * The sync form of measureRoot(), for the places that read a project artifact on a
+ * path where an async state read does not belong (config reads happen on every tool
+ * call). It answers from what THIS session has touched; with nothing touched yet it
+ * is the session root, so a config sitting in some other checkout cannot hijack a
+ * session that is not working there.
+ */
+export function measureRootSync(): string {
+  return runtime.measureRoot || runRoot();
 }
 
 export async function measureRoot(): Promise<string> {
