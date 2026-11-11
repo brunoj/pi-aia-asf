@@ -142,6 +142,9 @@ references. Severity meanings are fixed across lenses so findings can be merged.
 **Critique first.** Reviewers lead with what is wrong, missing or risky. "Default to
 stress-testing: never agree by default" — agreement is a result of the audit, not a
 starting position, and unearned praise in a review report is noise that displaces signal.
+A report that found nothing must state **what it checked** (`checked: ["file:lines", …]`);
+a clean report with no scope is recorded as `not run`, because a review that left no
+evidence of having happened is indistinguishable from one that did not.
 
 **Convergence.** Each stage allows `maxReaudits` re-audits. At the cap, report the open
 items to the author, record them, and move on — an unbounded review loop is a cost bug,

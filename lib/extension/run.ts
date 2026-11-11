@@ -6,8 +6,8 @@
 import { execFileSync } from "node:child_process";
 import { runRoot, projectName } from "./paths.ts";
 import { fileURLToPath } from "node:url";
-import { dirname } from "node:path";
-import { projectRoot as projectRootOf } from "../project.mjs";
+import { dirname, isAbsolute, resolve } from "node:path";
+import { gitRoot } from "../project.mjs";
 import { ensureHome } from "../home.mjs";
 import { cpus, loadavg } from "node:os";
 import { renderRunCard, cardSummary, CARD_CEILING_BYTES } from "../run-card.mjs";
@@ -17,6 +17,7 @@ import { loadState, saveState } from "./state.ts";
 import { runtime } from "./runtime.ts";
 import { __resetRefusals } from "../gates/refusals.mjs";
 import { cardIndex, registerAt } from "../decisions/consult.mjs";
+import { hasSource } from "../decisions/backfill.mjs";
 import { readProjectConfig } from "../gates/config.mjs";
 import type { AsfState } from "./types.ts";
 
@@ -41,7 +42,12 @@ function decisionBlock(root: string): string {
       max: Number(cfg["gate.decisions.max_lines"]) || 3,
       bytes: Number(cfg["gate.decisions.max_bytes"]) || 600,
     });
-    if (!lines.length) return "";
+    if (!lines.length) {
+      // An empty register is not a defect, but it is invisible unless the card says so —
+      // and an agent that never sees it never backfills it. Offered, not demanded: the
+      // records have to be substantiated by whoever reads the code.
+      return hasSource(root) ? "\n(no decision register yet — asf_decisions action=bootstrap lists what to recover; 5 records is enough to start)" : "";
+    }
     return `\ndecisions in force:\n${lines.map((l) => `  ${l}`).join("\n")}\n  (asf_decisions action=get before changing governed code)`;
   } catch {
     // A broken register is reported by the register's own checks; it must never
@@ -76,7 +82,9 @@ export function cardFor(state: AsfState | null, nextStep?: string, remedy?: stri
     auto: state.auto,
     steers: state.steers,
   }).text;
-  return card + decisionBlock(runRoot());
+  // The register follows the code (ADR-0005): the card must show the register the
+  // tool writes and the settle floor reads, not the session workspace's.
+  return card + decisionBlock(measureRootFor(state));
 }
 
 /**
@@ -88,6 +96,10 @@ export async function openAutoRun(trigger: string, path: string | null): Promise
   const project = projectName();
   const file = await loadState(project);
   const now = new Date().toISOString();
+  // A new run gets its own backfill offer. The runtime is per-process, so without this
+  // the "one offer per run" the comment promises would silently be one per session —
+  // and a project opened twice would never hear about its missing register again.
+  runtime.backfillOffered = false;
   const state: AsfState = {
     phase: "implementation",
     scale: "small",
@@ -138,24 +150,56 @@ export async function openAutoRun(trigger: string, path: string | null): Promise
  * state — a root that moved mid-run would orphan the run's own ledger — only to
  * decide what a measurement looks at.
  */
-export async function measureRoot(): Promise<string> {
+/**
+ * The project a file belongs to — but only when that project is INSIDE the session
+ * workspace and is a real project root.
+ *
+ * `projectRoot(dir)` echoes `dir` back when git finds no repository, so a naive call
+ * with a file's directory returns that directory. Reading a register from
+ * `<src>/​.asf/decisions` then comes up empty and the run silently consults nothing —
+ * which is worse than reading the workspace register, because it looks like a project
+ * with no decisions. So a candidate that is merely the directory we asked about is
+ * rejected, and so is one that does not contain the file.
+ */
+export function projectOf(file: string, ws: string): string | null {
+  try {
+    const abs = isAbsolute(file) ? file : resolve(ws, file);
+    const cand = gitRoot(dirname(abs));
+    if (!cand) return null;
+    if (!(cand === ws || cand.startsWith(ws + "/"))) return null;
+    if (!abs.startsWith(cand + "/")) return null;
+    return cand;
+  } catch {
+    return null;
+  }
+}
+
+export function measureRootFor(state: { filesTouched?: unknown } | null | undefined): string {
   const fallback = runRoot();
   try {
-    const state = await loadState(projectName());
-    const touched = (state?.current?.filesTouched || []) as string[];
+    const touched = (Array.isArray(state?.filesTouched) ? state!.filesTouched : []) as string[];
     for (let i = touched.length - 1; i >= 0; i--) {
       const f = touched[i];
-      if (!f || !f.includes("/")) continue;
-      const root = projectRootOf(dirname(f));
+      if (typeof f !== "string" || !f.includes("/")) continue;
+      const root = projectOf(f, fallback);
       // Only a root that CONTAINS the session root counts as a better answer: a
       // stray touched path outside the workspace must not drag the measurement to
       // someone's scratch directory.
-      if (root && (root === fallback || root.startsWith(fallback + "/"))) return root;
+      if (root) return root;
     }
   } catch {
     /* measurement falls back to the session root; a broken guess is worse than none */
   }
   return fallback;
+}
+
+export async function measureRoot(): Promise<string> {
+  try {
+    const state = await loadState(projectName());
+    return measureRootFor(state?.current);
+  } catch {
+    return runRoot();
+  }
 }
 
 /** Where this extension is installed — the declaration file ships beside it. */

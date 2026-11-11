@@ -19,6 +19,7 @@ import { StringEnum } from "@earendil-works/pi-ai";
 import { Type } from "typebox";
 import { registerAt, addDecision, supersedeDecision, relativeTo } from "../../decisions/consult.mjs";
 import { matchesAny } from "../../decisions/glob.mjs";
+import { inventory, coverage, findForeignAdrs, hasSource } from "../../decisions/backfill.mjs";
 import { readProjectConfig } from "../../gates/config.mjs";
 import { runRoot, projectName } from "../paths.ts";
 import { measureRoot } from "../run.ts";
@@ -27,7 +28,7 @@ import { runtime } from "../runtime.ts";
 import { appendEvidence } from "../evidence.ts";
 import type { DecisionRecord } from "../../decisions/schema.d.mts";
 
-const ACTIONS = ["list", "get", "match", "record", "supersede", "check"] as const;
+const ACTIONS = ["list", "get", "match", "record", "supersede", "check", "bootstrap"] as const;
 
 const str = (v: unknown): string => (typeof v === "string" ? v : "");
 const arr = (v: unknown): string[] => (Array.isArray(v) ? v.map(String) : typeof v === "string" && v ? [v] : []);
@@ -84,6 +85,39 @@ function renderList(records: DecisionRecord[]): string {
   return records
     .map((r) => `${r.id} [${r.status}] ${r.decision}\n    governs: ${(r.applies_to || []).join(", ") || "—"}${r.superseded_by ? `\n    superseded by ${r.superseded_by}` : ""}`)
     .join("\n");
+}
+
+/**
+ * The backfill report: what a register would be recovered FROM, and what is still
+ * uncovered. A report, not a writer — `origin: backfill` requires `source: [..]` and
+ * `check` refuses a recovered record that cites nothing, so the only way to finish this
+ * is to read the places listed and write records that cite them.
+ */
+function bootstrapAction(root: string): ActionOut {
+  const { records } = registerAt(root, config(root));
+  if (records.length) {
+    const inv = inventory(root, { config: config(root) });
+    const { uncovered } = coverage(records, inv, matchesAny);
+    if (!uncovered.length) return { text: `register has ${records.length} record(s) and every candidate source is covered — nothing to backfill`, ok: true, count: records.length };
+    return {
+      text: `register has ${records.length} record(s); ${uncovered.length} candidate source(s) are not covered by any record's source[] or applies_to:\n${uncovered.slice(0, 12).map((u: { file: string; hint: string }) => `  - ${u.file} — ${u.hint}`).join("\n")}\n\nRecord what they show with action=record (origin: backfill, source: [the file you read]).`,
+      ok: true,
+      count: uncovered.length,
+    };
+  }
+  if (!hasSource(root)) return { text: "no source to recover decisions from — this project has no code for ASF to read decisions out of, so an empty register is honest", ok: true, count: 0 };
+  const cfg = config(root);
+  const foreign = findForeignAdrs(root, cfg);
+  const inv = inventory(root, { config: cfg });
+  if (!inv.length && !foreign.length) return { text: "no register and no candidate sources found — record decisions as you make them (action=record)", ok: true, count: 0 };
+  const rows = inv.slice(0, 15).map((i: { file: string; kind: string; hint: string }) => `  - [${i.kind}] ${i.file} — ${i.hint}`).join("\n");
+  return {
+    text: `no register. ${foreign.length} already-written ADR(s), ${inv.length} candidate source(s):\n${rows}\n\n` +
+      `Write the ones you can substantiate: action=record with origin: backfill and source: [the path you actually read]. ` +
+      `Adopt an existing ADR rather than duplicating it; where the reason is not documented write "not documented (recovered)" — never invent a rationale. Five is enough to start.`,
+    ok: true,
+    count: inv.length,
+  };
 }
 
 function renderProblems(problems: { severity: string; file?: string; field?: string; message: string }[]): string {
@@ -183,7 +217,7 @@ async function checkAction(root: string): Promise<ActionOut> {
  * a row here and not an edit inside a 50-line call.
  */
 const DECISION_PARAMS = {
-  action: StringEnum(ACTIONS, { description: "What to do." }),
+  action: StringEnum(ACTIONS, { description: "What to do. bootstrap reports what a register could be recovered from (it writes nothing)." }),
   id: Type.Optional(Type.String({ description: "Decision id (ADR-0007) for get/supersede." })),
   path: Type.Optional(Type.String({ description: "Project-relative file path for match." })),
   title: Type.Optional(Type.String({ description: "Short title; the rule belongs in it." })),
@@ -210,6 +244,7 @@ async function runAction(root: string, action: string, params: Record<string, un
   if (action === "record") return recordAction(root, params);
   if (action === "supersede") return supersedeAction(root, params);
   if (action === "check") return checkAction(root);
+  if (action === "bootstrap") return bootstrapAction(root);
   return listAction(root);
 }
 

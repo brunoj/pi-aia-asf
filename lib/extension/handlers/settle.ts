@@ -22,7 +22,7 @@ import { loadProjectSpecs, validateTrace } from "../specs.ts";
 import { appendEvidence } from "../evidence.ts";
 import { ledger, suiteRuns, pendingSteers, deliveredSteers } from "../gate-state.ts";
 import { steerLedgerFor, steerContinuationsAllowed, parkedAlready } from "../steer.ts";
-import { currentScale } from "../run.ts";
+import { currentScale, measureRootFor } from "../run.ts";
 import { runtime } from "../runtime.ts";
 import { decisionGaps, touchedGoverned, reopensNow } from "../../gates/decisions.mjs";
 import { matchesAny } from "../../decisions/glob.mjs";
@@ -30,7 +30,6 @@ import { registerAt, relativeTo } from "../../decisions/consult.mjs";
 import { readProjectConfig } from "../../gates/config.mjs";
 import { routeAsk } from "../../gates/input-channel.mjs";
 import { channelFor } from "../channel.ts";
-import { runRoot } from "../paths.ts";
 import type { AsfState, ProjectStateFile } from "../types.ts";
 
 type Entry = Record<string, unknown>;
@@ -175,10 +174,15 @@ function noRunResult(project: string, entries: Entry[], priorCount: number): Set
  */
 function decisionFacts(state: AsfState) {
   try {
-    const cfg = readProjectConfig(runRoot());
+    // The register follows the code (ADR-0005). Reading it at the session workspace
+    // meant a session started in a parent repo judged every run against an empty
+    // register while the tool wrote the real one under the project — a floor that
+    // could never fire.
+    const root = measureRootFor(state);
+    const cfg = readProjectConfig(root);
     if (cfg["gate.decisions.at_settle"] === false) return [];
-    const { records } = registerAt(runRoot(), cfg);
-    const touched = relativeTo(runRoot(), state.filesTouched || []);
+    const { records } = registerAt(root, cfg);
+    const touched = relativeTo(root, state.filesTouched || []);
     const governedTouched = touchedGoverned(touched, records, matchesAny);
     const ids = [...new Set(governedTouched.map((g: { id: string }) => g.id))];
     return decisionGaps({

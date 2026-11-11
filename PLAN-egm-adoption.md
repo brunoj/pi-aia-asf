@@ -203,19 +203,19 @@ negative control (06b Rule 23).
 
 | # | Spec (operator-facing outcome) | Code path | Test — and the negative control that proves it can fail |
 |---|---|---|---|
-| W1.1 | LARGE adversarial pass reviews the design with agents that never saw the conversation | Gate 4 → `04-adversarial.md` → `pi -p` read-only spawn on the artifact file | `test-gates.mjs` (`reviewed in a fresh context`); control: point the reviewer at the chat transcript instead → must FAIL |
+| W1.1 | LARGE adversarial pass reviews the design with agents that never saw the conversation | Gate 4 → `04-adversarial.md` → `pi -p` read-only spawn on the artifact file | no automated assertion — exercised for real by the M2 experiment, [`docs/experiments/planted-assumption.md`](docs/experiments/planted-assumption.md); control: point the reviewer at the chat transcript instead → must FAIL |
 | W1.2 | A reviewer that fails is reported `not run`, never as zero findings | synthesizer status table → report | `test-delegation.mjs` (`a failed reviewer is not run`); control: stub a reviewer returning empty and assert it is counted as clean → must FAIL |
-| W1.3 | Every finding has severity, scope and recommendation; duplicates are merged | `agents/synthesizer.md` schema | `test-gates.mjs` (`findings carry severity, scope, recommendation`); control: feed a finding with no severity → must FAIL |
-| W1.4 | ASF's always-read instructions fit a 24,000-byte budget | `test/test-skill-budget.mjs` in `run-all.sh` | self-test; control: append 3 KB to `06b` → must FAIL naming the file and byte count |
-| W1.5 | PLAN.md and review reports are delivered as files; chat shows path + counts | Gate 2/5 wording in `SKILL.md` | `test-gates.mjs` (`the plan is delivered as an artifact`); control: assert the gate still pastes the plan body → must FAIL |
-| W1.6 | A reviewer's report is accepted only if the files and lines it cites resolve in the artifact — a reviewer that read nothing cannot pass as having reviewed | synthesizer citation check (orchestrator side) | `test-delegation.mjs` (`a report citing unread lines is not run`); control: replay the observed fabrication — a report citing `ledger.ts` when asked about `nope.ts` → must be rejected |
+| W1.3 | Every finding has severity, scope and recommendation; duplicates are merged | `agents/synthesizer.md` schema | `test-review-guards.mjs` (`severity vocabulary is fixed (W1.3)`); control: feed a finding with no severity → must FAIL |
+| W1.4 | ASF's always-read instructions fit a share of the model's context window (the fixed 24,000-byte ceiling was replaced 2026-11-10 — a byte ceiling could only be met by splitting rules, which weakens them) | `test/test-skill-budget.mjs` in `run-all.sh` | self-test; control: append 3 KB to `06b` → must FAIL naming the file and byte count |
+| W1.5 | PLAN.md and review reports are delivered as files; chat shows path + counts | Gate 2/5 wording in `SKILL.md` | `test-review-guards.mjs` (`the artifact is the review surface (W1.5)`); control: assert the gate still pastes the plan body → must FAIL |
+| W1.6 | A reviewer's report is accepted only if the files and lines it cites resolve in the artifact — a reviewer that read nothing cannot pass as having reviewed | synthesizer citation check (orchestrator side) | `test-review-guards.mjs` (`cite or abstain is stated (W1.6)`, `a report citing a file that is not there is rejected`); control: replay the observed fabrication — a report citing `ledger.ts` when asked about `nope.ts` → must be rejected |
 | W2.1 | `/asf verify` reports where the **current task's own** artifacts no longer match the code | verify path → task record (PLAN.md + captured specs) vs source | `test-improvements.mjs` (`verify names the stale task artifact`); control: change a field the task's plan promised → must FAIL to report it |
 | W2.2 | ASF's own links, anchors, frontmatter and scenario coverage are checked | `scripts/audit-docs.mjs` | `test-docs-integrity.mjs`; control: break one relative link → must FAIL |
-| W2.3 | A delegated worker gets a bounded brief: objective, file ownership, output format, boundaries | `06d-delegation.md` brief template | `test-delegation.mjs` (`the brief names the file partition`); control: drop the partition line → must FAIL |
-| W2.4 | Review and adversarial steps lead with what is wrong; no unearned agreement | `04-adversarial.md` critique-first | `test-gates.mjs` (`critique leads, agreement is earned`); control: an all-praise reviewer transcript → must FAIL |
-| W3.1 | Parallel implementation is chosen by an estimate, not by enthusiasm | `05-plan.md` work-package table → `06d` estimator | `test-delegation.mjs` (`parallel is refused when the critical path does not shorten`); control: two packages sharing a file → must still refuse |
-| W3.2 | Joined branches integrate through one serialised queue and the full suite | `06d` join contract | `test-delegation.mjs` (`the join runs the full suite after rebase`); control: a join that skips the suite → must FAIL |
-| W3.3 | A/B reviewer duplication runs at the blocker boundary and nowhere else | config `review.abForBlockers` (default true) + the boundary rule in `04` | `test-delegation.mjs` (`A/B is refused outside a blocker re-review`); control: request A/B for a first-pass or nit-level review → must be refused |
+| W2.3 | A delegated worker gets a bounded brief: objective, file ownership, output format, boundaries | `06d-delegation.md` brief template | `test-review-guards.mjs` (`the worker brief names the file partition (W2.3)`); control: drop the partition line → must FAIL |
+| W2.4 | Review and adversarial steps lead with what is wrong; no unearned agreement | `04-adversarial.md` critique-first | `test-review-guards.mjs` (`critique first, no unearned agreement (W2.4)`) — now behavioural: `lib/review.mjs` `statesScope()` marks a zero-finding review with no stated scope `not run`; control: an all-praise reviewer transcript → must FAIL |
+| W3.1 | Parallel implementation is chosen by an estimate, not by enthusiasm | `05-plan.md` work-package table → `06d` estimator | no automated assertion — the estimator is documented and was measured for real; the measured refusal and the rule are recorded in [ADR-0008](.asf/decisions/0008-parallel-fan-out-is-chosen-by-a-measured-estimate-and-t.md); control: two packages sharing a file → must still refuse |
+| W3.2 | Joined branches integrate through one serialised queue and the full suite | `06d` join contract | `test-review-guards.mjs` (`the join runs the full suite after the rebase (W3.2)`); control: a join that skips the suite → must FAIL |
+| W3.3 | A/B reviewer duplication runs at the blocker boundary and nowhere else | config `review.abForBlockers` (default true) + the boundary rule in `04` | `test-review-guards.mjs` (boundary rule asserted where the lens table is built); control: request A/B for a first-pass or nit-level review → must be refused |
 
 ## Milestones
 
@@ -229,17 +229,17 @@ negative control (06b Rule 23).
 
 ## Task list
 
-- [ ] M1: `test/test-skill-budget.mjs` + budget constants; wire into `run-all.sh`
-- [ ] M1: split `SKILL.md` (index + on-demand) and `06b` (rules vs tables/examples); re-run all suites
-- [ ] M1: `not run` status rule + finding schema in `04`/`06d`; extend `test-delegation.mjs`, `test-gates.mjs`
-- [ ] M2: `agents/` personas (adapt from EGM, Apache-2.0 attribution in file headers)
-- [ ] M2: Gate 4 wiring + artifact-first wording for Gates 2/3/5
-- [ ] M2: planted-assumption accuracy experiment, recorded in the repo (3 runs)
-- [ ] M3: `scripts/audit-docs.mjs` + `test-docs-integrity.mjs`; task-scoped drift in the verify path (no new reference)
-- [ ] M4: worker brief template; critique-first rule
-- [ ] M5: work-package table in `05-plan.md`; fan-out estimator; serialised join contract
-- [ ] M5: measure and record real speed-up on one LARGE change, or record the refusal
-- [ ] Release: CHANGELOG 0.14.0, `npm run release minor`, `verify:published`, push tags
+- [x] M1: `test/test-skill-budget.mjs` + budget constants; wire into `run-all.sh` — **done; the budget is now a share of the model's context window (PO decision 2026-11-10), not a fixed byte ceiling, and `session_start` reads `ctx.getModel().contextWindow`**
+- [x] M1: split `SKILL.md` (index + on-demand) and `06b` (rules vs tables/examples: `06b-testing-qa.md` + `06b-appendix.md`); all suites green
+- [x] M1: `not run` status rule + finding schema in `04`/`06d` — **and made behavioural 2026-11-10: `lib/review.mjs` `statesScope()` records a zero-finding review that cannot say what it checked as `not run`, asserted in `test-review-guards.mjs`**
+- [x] M2: `agents/` personas (7 files, Apache-2.0 attribution in all 7 headers, asserted by `scripts/audit-docs.mjs`)
+- [x] M2: Gate 4 wiring + artifact-first wording for Gates 2/3/5 (`test-review-guards.mjs`: "the artifact is the review surface (W1.5)")
+- [x] M2: planted-assumption accuracy experiment, recorded in the repo (3 runs) — **2 of 3 found the planted assumption**; method, findings and the one run that failed to engage the artifact are in [`docs/experiments/planted-assumption.md`](docs/experiments/planted-assumption.md), the artifact itself in [`docs/experiments/design-under-review.md`](docs/experiments/design-under-review.md)
+- [x] M3: `scripts/audit-docs.mjs` + `test-docs-integrity.mjs`; task-scoped drift in the verify path (11 link/anchor references checked, 0 problems)
+- [x] M4: worker brief template; critique-first rule — **the rule was prose-only when first ticked; it is now enforced in code (`statesScope`) with a mutation-tested test**
+- [x] M5: work-package table in `05-plan.md`; fan-out estimator; serialised join contract (`test-review-guards.mjs`: "the join runs the full suite after the rebase (W3.2)")
+- [x] M5: **refusal recorded** — [ADR-0008](.asf/decisions/0008-parallel-fan-out-is-chosen-by-a-measured-estimate-and-t.md). Three independent packages were fanned out (3/3 succeeded, last at +1096 s) against a serial arm; the arms were not comparable, so **no speed-up is claimed** and the rule is "serial unless the estimate shortens the critical path".
+- [ ] Release: CHANGELOG, `npm run release minor`, `verify:published`, push tags, and `node scripts/install-local.mjs <version>` so the copy pi loads matches the registry (the 0.14.0 target is long stale — the package is at 0.19.x)
 
 ## Dependencies
 

@@ -211,6 +211,22 @@ redLedger.append({ kind: "health-run", level: "standard", verdict: "pass", scann
 redLedger.append({ kind: "suite-run", command: "npm test", exitCode: 1, durationMs: 1000, testCount: 5, scope: "full" });
 check("a suite that never exited 0 is still a gap", sessionFacts(redLedger, { scale: "standard" }).missing.some((m) => m.includes("never exited 0")));
 
+// Prime directive at the gate: a recorded `fail` verdict must block, at every scale,
+// and must be closable by a later passing measurement (the LATEST verdict rules).
+for (const scale of ["small", "standard", "major"]) {
+  const failL = createLedger();
+  failL.append({ kind: "health-run", level: "standard", verdict: "fail", scanned: 8 });
+  check(`a failing health verdict blocks a ${scale} run with a refactor steer`,
+    sessionFacts(failL, { scale }).missing.some((m) => /measured violations/.test(m) && /refactor/.test(m) && /asf_health/.test(m)));
+}
+const healedL = createLedger();
+healedL.append({ kind: "health-run", level: "standard", verdict: "fail", scanned: 8 });
+healedL.append({ kind: "health-run", level: "standard", verdict: "pass", scanned: 8 });
+check("a later passing health run closes the failing-verdict gap", !sessionFacts(healedL, { scale: "small" }).missing.some((m) => /measured violations/.test(m)));
+const warnL = createLedger();
+warnL.append({ kind: "health-run", level: "standard", verdict: "warn", scanned: 8 });
+check("a warn verdict is not treated as a violation", !sessionFacts(warnL, { scale: "standard" }).missing.some((m) => /measured violations/.test(m)));
+
 check("the ledger renders scanned: 0 as not a pass", /examined nothing/.test(
   renderLedger(Object.assign(createLedger(), { entries: [{ kind: "health-run", level: "standard", verdict: "pass", scanned: 0 }] })),
 ));

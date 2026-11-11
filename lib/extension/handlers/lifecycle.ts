@@ -17,7 +17,10 @@ import { __clearProjectCache } from "../../project.mjs";
 import { projectName } from "../paths.ts";
 import { loadState } from "../state.ts";
 import { cardFor } from "../run.ts";
-import { appendEvidence } from "../evidence.ts";
+import { appendEvidence, queueSteer } from "../evidence.ts";
+import { checkBudget } from "../../skill-budget.mjs";
+import { ASF_ROOT } from "../../code-health/tools.mjs";
+import { join } from "node:path";
 import { pendingSteers, deliveredSteers, MAX_REANCHORS_PER_RUN } from "../gate-state.ts";
 import { runtime, REANCHOR_AFTER_MACHINE_TURNS, REANCHOR_MIN_INTERVAL_MS } from "../runtime.ts";
 
@@ -76,6 +79,19 @@ async function noteProvenance(source: string): Promise<void> {
   appendEvidence({ kind: "steer", gate: "reanchor", machineTurns: REANCHOR_AFTER_MACHINE_TURNS });
 }
 
+/**
+ * The always-read budget is a share of the RUNNING model's context window (PO policy:
+ * limited only by the window). The suite checks it against the smallest supported window;
+ * this checks it against the real one, so a small-window model is told instead of
+ * silently losing the work's share of its context. A model that reports no window is
+ * judged against the minimum — never skipped.
+ */
+export function budgetNotice(contextWindow: number | undefined, skillDir = join(ASF_ROOT, "skills", "aia-asf")): string | null {
+  const r = checkBudget(skillDir, { contextWindow });
+  if (r.over.length === 0) return null;
+  return `ASF: ${r.over.map((o) => o.msg).join("; ")}. This is guidance, not a stop.`;
+}
+
 export function registerLifecycleHandlers(pi: ExtensionAPI): void {
   pi.on("turn_end", async (event) => {
     try {
@@ -92,10 +108,8 @@ export function registerLifecycleHandlers(pi: ExtensionAPI): void {
     }
   });
 
-  pi.on("session_start", async () => {
-    __clearProjectCache();
-    runtime.machineTurnsSinceHuman = 0;
-    await rearmCard("session_start");
+  pi.on("session_start", async (_event, ctx) => {
+    await startSession(ctx);
   });
 
   pi.on("session_compact", async () => {
@@ -112,14 +126,34 @@ export function registerLifecycleHandlers(pi: ExtensionAPI): void {
     return { action: "continue" } as never;
   });
 
-  pi.on("before_agent_start", async () => {
-    try {
-      if (!runtime.pendingCard) return undefined;
-      const card = runtime.pendingCard;
-      runtime.pendingCard = null;
-      return { message: { customType: "asf-run-card", content: card.text, display: true, details: { reason: card.reason } } };
-    } catch {
-      return undefined;
-    }
-  });
+  pi.on("before_agent_start", async () => injectCard());
+}
+
+/**
+ * A new session re-arms the card and reads the model's own context window to judge the
+ * always-read set against (a share of the window, never a fixed byte ceiling). Its own
+ * function: the handler list is a table of registrations, and this had logic in it.
+ */
+async function startSession(ctx: unknown): Promise<void> {
+  __clearProjectCache();
+  runtime.machineTurnsSinceHuman = 0;
+  try {
+    const model = (ctx as { getModel?: () => { contextWindow?: number } | undefined } | undefined)?.getModel?.();
+    const notice = budgetNotice(model?.contextWindow);
+    if (notice) queueSteer(notice);
+  } catch {
+    /* a budget reading never breaks session start */
+  }
+  await rearmCard("session_start");
+}
+
+function injectCard() {
+  try {
+    if (!runtime.pendingCard) return undefined;
+    const card = runtime.pendingCard;
+    runtime.pendingCard = null;
+    return { message: { customType: "asf-run-card", content: card.text, display: true, details: { reason: card.reason } } };
+  } catch {
+    return undefined;
+  }
 }

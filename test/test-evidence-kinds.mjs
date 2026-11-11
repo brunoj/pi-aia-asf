@@ -187,5 +187,60 @@ console.log("=== 4. the tools that produce them are registered, not merely defin
   chk("the definition of done no longer promises evidence nothing can produce", !/clean-room install" \}/.test(read("lib/extension/types.ts")));
 }
 
+console.log("=== 6. the reverse direction: every kind ASF emits is accepted somewhere ===");
+{
+  // Section 3 asks "does every kind a gate demands have a producer". The other direction
+  // was never asked, and it was broken: `steer`, `park`, `run-open` and the rest were sent
+  // through the LEDGER validator, which knows only the eight judged kinds, so every
+  // lifecycle event came back `unknown entry kind` and was written to the transcript as
+  // `asf-evidence-rejected`. A fake failure on every event is how a real one gets missed.
+  // Read the vocabulary out of the source rather than importing the .ts: this suite's
+  // contract is "the shipped text agrees with itself", and an import that silently
+  // resolved to null would turn the negative control into a pass.
+  const gsSrc = read("lib/extension/gate-state.ts");
+  const eventList = /EVENT_KINDS = new Set\(\[([^\]]*)\]\)/.exec(gsSrc);
+  const EVENT_KINDS = eventList ? [...eventList[1].matchAll(/"([a-z-]+)"/g)].map((m) => m[1]) : null;
+  chk("the lifecycle vocabulary is readable", Array.isArray(EVENT_KINDS) && EVENT_KINDS.length >= 10, String(EVENT_KINDS && EVENT_KINDS.length));
+  const emitted = new Set();
+  for (const rel of [...walk("lib/extension"), ...walk("lib/gates")]) {
+    // Scoped to the calls that actually record evidence. A bare `kind: "work-item"` is
+    // also how the input-channel router names a routing decision — matching every `kind:`
+    // in the tree would file that as a broken evidence kind and the control would fail
+    // for a reason that has nothing to do with the invariant.
+    for (const m of read(rel).matchAll(/appendEvidence\(\s*\{[\s\S]{0,300}?kind:\s*"([a-z-]+)"/g)) emitted.add(m[1]);
+  }
+  chk("ASF emits more kinds than the ledger judges (so the two vocabularies are real)", emitted.size > ENTRY_KINDS.length, `${emitted.size} emitted vs ${ENTRY_KINDS.length} judged`);
+  const known = new Set([...ENTRY_KINDS, ...(EVENT_KINDS || [])]);
+  const orphans = [...emitted].filter((k) => !known.has(k));
+  chk("NEGATIVE: no emitted kind is unknown to both vocabularies", orphans.length === 0, orphans.join(", ") || "none");
+  // Behavioural, not textual: the earlier version grepped for the routing and passed even
+  // when the early return was deleted (so the event still fell through to the ledger and
+  // was rejected). Loading the real module is the only way to ask what it DOES.
+  const written = [];
+  const { createJiti } = await import("jiti");
+  // moduleCache ON here (the harness runs it OFF): `setPiRef` and `getPiRef` must be the
+  // same module instance, or the probe writes into a pi-ref nobody reads and every
+  // "was it written?" assertion below passes for the wrong reason.
+  const jiti = createJiti(import.meta.url, { interopDefault: true, moduleCache: true });
+  const piRef = await jiti.import("../lib/extension/pi-ref.ts");
+  piRef.setPiRef({ appendEntry: (t, d) => written.push({ type: t, data: d }) });
+  const ev = await jiti.import("../lib/extension/evidence.ts");
+  const evSrc = read("lib/extension/evidence.ts");
+  chk("the kind decides the channel", /ENTRY_KINDS\.includes\(kind\)[\s\S]*EVENT_KINDS\.has\(kind\)/.test(evSrc) || /EVENT_KINDS\.has\(kind\)/.test(evSrc));
+  const steered = ev.appendEvidence({ kind: "steer", at: new Date().toISOString(), gate: "test", text: "x" });
+  chk("a lifecycle event is accepted as history", steered.ok === true && steered.event === true, JSON.stringify(steered).slice(0, 90));
+  chk("and it is written as an event, not as rejected evidence", written.some((w) => w.type === "asf-event") && !written.some((w) => w.type === "asf-evidence-rejected"), written.map((w) => w.type).join(","));
+  chk("NEGATIVE: it is not counted as gate evidence", createLedger().latest("steer") === null);
+  written.length = 0;
+  const bogus = ev.appendEvidence({ kind: "definitely-not-a-kind", at: new Date().toISOString() });
+  chk("NEGATIVE: a genuinely unknown kind is still rejected, not silently kept", !bogus.ok && written.some((w) => w.type === "asf-evidence-rejected"), JSON.stringify(bogus).slice(0, 70));
+  written.length = 0;
+  const judged = ev.appendEvidence({ kind: "suite-run", command: "bash test/run-all.sh", exitCode: 0, durationMs: 10, testCount: 3, at: new Date().toISOString() });
+  chk("a judged kind still goes to the ledger", judged.ok === true && !judged.event, JSON.stringify(judged).slice(0, 60));
+  for (const k of ["steer", "park", "run-open", "run-close", "passive"]) {
+    chk(`"${k}" is history, not gate evidence`, !ENTRY_KINDS.includes(k) && !!EVENT_KINDS && EVENT_KINDS.includes(k));
+  }
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 export default fail === 0;

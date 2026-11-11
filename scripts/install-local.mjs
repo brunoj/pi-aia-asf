@@ -34,6 +34,9 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(HERE, "..");
 
 /** Where pi loads extensions from, unless the operator says otherwise. */
+export { settingsPath, manifestPin, pinVersion, syncManifest, manifestStep } from "./pi-manifest.mjs";
+import { settingsPath, manifestStep } from "./pi-manifest.mjs";
+
 export function extensionDir(env = process.env) {
   const explicit = env.PI_EXTENSION_DIR;
   if (typeof explicit === "string" && explicit.trim()) return path.resolve(explicit);
@@ -152,7 +155,8 @@ export async function main(argv = process.argv.slice(2)) {
     return 0;
   }
   if (!verifyOnly && !installStep(dir, name, version)) return 1;
-  return verifyAgainstRegistry(dir, name, version);
+  if ((await verifyAgainstRegistry(dir, name, version)) !== 0) return 1;
+  return manifestStep({ file: settingsPath(), name, version, skip: argv.includes("--no-manifest") });
 }
 
 /** Install, reporting the pin npm ended up with. False = the install did not happen. */

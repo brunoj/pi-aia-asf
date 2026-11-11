@@ -60,6 +60,12 @@ export interface RuntimeState {
   /** Decisions this run wrote. Recording is engaging with the register too. */
   decisionsRecorded: string[];
   /**
+   * Whether this run has already been offered a backfill. One offer per run: an
+   * empty register is an invitation with a concrete list attached, not a nag, and
+   * a steer repeated every turn is how guidance stops being read.
+   */
+  backfillOffered: boolean;
+  /**
    * Every `browser_*` call the session made, as ASF observed it. This is what
    * makes browser verification evidence rather than a claim: the tool checks the
    * session actually drove a browser before it will record that it was verified.
@@ -86,5 +92,7 @@ export const runtime: RuntimeState = {
   decisionsSteered: [],
   decisionsCited: [],
   decisionsRecorded: [],
+  /** One backfill offer per run — an empty register is offered, never nagged about. */
+  backfillOffered: false,
   browserCalls: [],
 };

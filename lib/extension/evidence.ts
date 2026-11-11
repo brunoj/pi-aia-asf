@@ -5,6 +5,7 @@
 
 import { ledger, persistedVerdicts, EVENT_KINDS, pendingSteers, deliveredSteers } from "./gate-state.ts";
 import { getPiRef } from "./pi-ref.ts";
+import { ENTRY_KINDS } from "../gates/ledger.mjs";
 
 export function verdictSignature(entry: Record<string, unknown>): string {
   const { ts, at, timestamp, ...rest } = entry as Record<string, unknown> & { ts?: unknown; at?: unknown; timestamp?: unknown };
@@ -52,7 +53,30 @@ export function reportGateError(gate: string, e: unknown) {
 }
 
 
+/**
+ * Record something the session did.
+ *
+ * There are TWO vocabularies here and conflating them was a bug: the ledger holds the
+ * evidence a gate can judge (`ENTRY_KINDS` — a suite run, a health verdict), while the
+ * lifecycle events (`EVENT_KINDS` — run opened, steered, parked) are transcript history
+ * no gate reads. Sending a lifecycle event through the ledger validator made it come back
+ * as `unknown entry kind "steer"` and get written to the transcript as
+ * `asf-evidence-rejected` — a fake failure on every event, which is exactly the noise that
+ * makes a real rejected entry impossible to see. So the kind decides the channel, and a
+ * kind in NEITHER vocabulary is the genuine bug.
+ */
 export function appendEvidence(entry: Record<string, unknown>) {
+  const kind = String((entry as { kind?: unknown }).kind || "");
+  if (kind && !ENTRY_KINDS.includes(kind) && EVENT_KINDS.has(kind)) {
+    try {
+      (getPiRef() as unknown as { appendEntry?: (t: string, d?: unknown) => void } | null)?.appendEntry?.("asf-event", entry);
+    } catch {
+      /* history is not worth failing a turn over */
+    }
+    // The early return is the whole rule: without it the event falls through to the
+    // ledger below and is rejected there, which is the behaviour this replaced.
+    return { ok: true as const, entry, event: true };
+  }
   const res = ledger.append(entry);
   if (res.ok) {
     if (!shouldPersist(res.entry as Record<string, unknown>, persistedVerdicts)) return res;

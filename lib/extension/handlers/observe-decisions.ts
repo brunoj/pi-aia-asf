@@ -14,11 +14,17 @@
  * is reported by the register's own checks, never by breaking the tool call.
  */
 import { registerAt, unreadGoverning, citedIds } from "../../decisions/consult.mjs";
+import { matchesAny } from "../../decisions/glob.mjs";
 import { runRoot } from "../paths.ts";
 import { runtime } from "../runtime.ts";
+import { projectOf } from "../run.ts";
+import { inventory, coverage, findForeignAdrs, hasSource, backfillSteer } from "../../decisions/backfill.mjs";
 import { appendEvidence, queueSteer } from "../evidence.ts";
 
 import type { Input } from "./observed.ts";
+import type { DecisionRecord } from "../../decisions/schema.mjs";
+
+const SOURCE = /\.(ts|tsx|js|jsx|mjs|cjs|py|go|rs|java|kt|rb|php|cs|c|h|cpp|hpp|swift)$/i;
 
 /**
  * The fields that count as the run AUTHORED something. A citation has to be text
@@ -54,21 +60,55 @@ function steerOnUnread(record: { id?: unknown; decision?: unknown }, target: str
 }
 
 /** Record what the run cited, and steer once if it is about to edit governed code unread. */
+/**
+ * Which records the agent's own words name. The register tool's params are register
+ * operations, never citations — counting them would let `asf_decisions action=get` mark a
+ * decision as read by the edit it is being used to look up.
+ */
+function noteCitations(toolName: string, input: Input, records: DecisionRecord[]): void {
+  if (toolName === "asf_decisions") return;
+  for (const id of citedIds(authoredText(input), records)) {
+    if (runtime.decisionsCited.includes(id)) continue;
+    runtime.decisionsCited.push(id);
+    appendEvidence({ kind: "decision-cite", id });
+  }
+}
+
+/**
+ * The backfill offer: writing code in a project with no register is the first opportunity
+ * to recover the decisions already in it. Guidance, once per run, with the candidate list
+ * attached and a ceiling on the records — a gap saying "go analyse the repo" with no end
+ * would be a run that never closes. ASF reports; only the agent writes a record.
+ */
+function offerBackfill({ target, root, records, config }: { target: string | null; root: string; records: DecisionRecord[]; config: Record<string, unknown> }): void {
+  if (!target || runtime.backfillOffered || !SOURCE.test(target)) return;
+  runtime.backfillOffered = true;
+  if (records.length > 0 || !hasSource(root)) return;
+  const cfg = config || {};
+  const foreign = findForeignAdrs(root, cfg);
+  const { uncovered } = coverage(records, inventory(root, { config: cfg }), matchesAny);
+  const text = backfillSteer({ records, foreign, uncovered, hasSource: true });
+  if (!text) return;
+  queueSteer(text);
+  appendEvidence({ kind: "steer", gate: "backfill-offered", root });
+}
+
 export function observeDecisions(toolName: string, input: Input, config: Record<string, unknown>): void {
   try {
-    const { records } = registerAt(runRoot(), config);
+    // The register follows the code (ADR-0005): an edit is checked against the register
+    // of the project the edited file lives in, as long as that project is inside the
+    // session workspace. Reading the workspace root's register instead meant a session
+    // opened in a parent repo never saw the decisions governing the code it changed.
+    const target0 = writeTarget(toolName, input);
+    const ws = runRoot();
+    const root = (target0 && projectOf(target0, ws)) || ws;
+    const { records } = registerAt(root, config);
     // The register tool's own params name records to fetch/supersede; they are
     // register operations, never citations.
-    if (toolName !== "asf_decisions") {
-      for (const id of citedIds(authoredText(input), records)) {
-        if (!runtime.decisionsCited.includes(id)) {
-          runtime.decisionsCited.push(id);
-          appendEvidence({ kind: "decision-cite", id });
-        }
-      }
-    }
-    if (config["gate.decisions.read_before_edit"] === false) return;
+    noteCitations(toolName, input, records);
     const target = writeTarget(toolName, input);
+    offerBackfill({ target, root, records, config });
+    if (config["gate.decisions.read_before_edit"] === false) return;
     if (!target) return;
     for (const r of unreadGoverning(records, target, runtime.decisionsRead)) steerOnUnread(r, target);
   } catch {

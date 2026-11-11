@@ -135,6 +135,12 @@ export async function run({ events, invokeCommand, loadTs }) {
     chk("custom runner `bash test/run-all.sh` is a test run", isTestCommand("bash test/run-all.sh"));
     chk("`node tests/e2e/full.test.js` is a (subset) test run", deriveSuiteRun("timeout 300 node tests/e2e/full.test.js", { durationMs: 1 })?.scope === "subset");
     chk("`node --test` is a test run", isTestCommand("node --test"));
+    // A test file run directly with a RELATIVE path: `node test/x.mjs` is the most common form
+    // and was silently not recognised (the dir was only matched after a `/`), so a real green
+    // run left the gate reporting "no test ran". Controls: build scripts and reads are not tests.
+    chk("`node test/x.mjs` is a (subset) test run", deriveSuiteRun("node test/test-x.mjs", { durationMs: 1 })?.scope === "subset");
+    chk("`cd d && node test/x.mjs` is a (subset) test run", isTestCommand("cd /tmp/m && node test/test-x.mjs"));
+    chk("`node scripts/build.mjs` and `cat test/x.mjs` are not test runs", !isTestCommand("node scripts/build.mjs") && !isTestCommand("cat test/x.mjs") && !isTestCommand("node lib/testing.mjs"));
     await toolCall("bash", { command: "bash test/run-all.sh" }, "t-1");
     await toolResult("t-1", "ALL SUITES PASSED");
     const r2 = await settle();

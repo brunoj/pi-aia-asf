@@ -62,7 +62,21 @@ export const deliveredSteers = new Set<string>();
  * information. Events (gate-block, suite-run, transitions) are never deduped:
  * they are what a trace study measures.
  */
-export const EVENT_KINDS = new Set(["gate-error", "run-restored", "gate-block", "suite-run", "spec-transition", "browser-verify", "browser-na", "health-run", "run-open", "run-close", "park", "steer", "passive"]);
+/**
+ * The lifecycle vocabulary: things that happened, recorded for the transcript and the
+ * report, read by no gate. It has to be stated next to `ENTRY_KINDS` (the evidence a gate
+ * judges) because the two were drifting apart — kinds emitted but absent from both came
+ * back from the ledger as `unknown entry kind` and were written up as rejected evidence.
+ * `test-evidence-kinds.mjs` asserts every kind ASF emits lands in exactly one of them.
+ */
+export const EVENT_KINDS = new Set([
+  "gate-error", "run-restored", "gate-block", "suite-run", "spec-transition",
+  "browser-verify", "browser-na", "health-run", "run-open", "run-close", "park",
+  "steer", "passive",
+  // Emitted since the list was written; each was being rejected by the ledger validator.
+  "run-cleared", "state-migrated", "park-suppressed", "tracked",
+  "decision-read", "decision-cite", "decision-record", "decision-supersede", "decision-unread",
+]);
 export const persistedVerdicts = new Set<string>();
 export let passiveHeartbeatWritten = false;
 /** Re-anchoring is time-rate-limited AND count-limited per run. */

@@ -18,6 +18,10 @@ import {
   tree,
   diffTrees,
   checkVersion,
+  settingsPath,
+  manifestPin,
+  pinVersion,
+  syncManifest,
 } from "../scripts/install-local.mjs";
 
 let pass = 0, fail = 0;
@@ -106,6 +110,47 @@ console.log("=== 4. the directory it checks is the directory pi loads ===");
   const noDeps = tmp();
   fs.writeFileSync(path.join(noDeps, "package.json"), JSON.stringify({ name: "x" }));
   chk("NEGATIVE: a package.json without dependencies is not an extension dir", !isExtensionDir(noDeps));
+}
+
+console.log("=== 5. pi's own manifest must pin what was released ===");
+{
+  // The tree check proves what is on disk NOW. pi keeps a second source of truth —
+  // `packages` in settings.json — and re-syncs from it, so a stale pin silently reinstalls
+  // an older ASF over a verified one. That happened: a release verified 0.19.0 and the
+  // machine ended up running 0.17.13.
+  const dir = tmp();
+  const file = path.join(dir, "settings.json");
+  const write = (obj) => fs.writeFileSync(file, JSON.stringify(obj, null, 2) + "\n");
+  const settings = (pin) => ({ theme: "dark", defaultModel: "automatic", packages: ["npm:pi-smart-fetch", pin, "npm:pi-vigilant@0.9.0"] });
+
+  chk("the manifest path defaults to pi's", settingsPath({}) === path.join(os.homedir(), ".pi", "agent", "settings.json"), settingsPath({}));
+  chk("and an override is honoured", settingsPath({ PI_SETTINGS: "/tmp/s.json" }) === "/tmp/s.json");
+
+  write(settings("npm:pi-aia-asf@0.17.13"));
+  chk("a stale pin is READ as what it is", manifestPin(file, "pi-aia-asf") === "npm:pi-aia-asf@0.17.13");
+  chk("the version is extracted from it", pinVersion("npm:pi-aia-asf@0.17.13") === "0.17.13");
+  chk("NEGATIVE: a pin that is not this release does not pass", pinVersion("npm:pi-aia-asf@0.17.13") !== "0.19.0");
+
+  const r = syncManifest(file, "pi-aia-asf", "0.19.0");
+  chk("a stale pin is repaired", r.changed && r.before === "npm:pi-aia-asf@0.17.13" && r.after === "npm:pi-aia-asf@0.19.0", JSON.stringify(r));
+  chk("the file now pins the release", manifestPin(file, "pi-aia-asf") === "npm:pi-aia-asf@0.19.0");
+  const after = JSON.parse(fs.readFileSync(file, "utf8"));
+  const before = settings("npm:pi-aia-asf@0.17.13");
+  chk("NEGATIVE: nothing else in pi's config is touched",
+    after.theme === before.theme && after.defaultModel === before.defaultModel &&
+    JSON.stringify(after.packages.filter((p) => !p.includes("aia-asf"))) === JSON.stringify(before.packages.filter((p) => !p.includes("aia-asf"))),
+    JSON.stringify(after));
+
+  const again = syncManifest(file, "pi-aia-asf", "0.19.0");
+  chk("repairing twice changes nothing (a release run twice is safe)", !again.changed && again.after === "npm:pi-aia-asf@0.19.0");
+
+  write({ theme: "light", packages: ["npm:pi-vigilant@0.9.0"] });
+  chk("a package pi does not list has nothing to pin", manifestPin(file, "pi-aia-asf") === null);
+  chk("NEGATIVE: and the repair does not invent an entry for it", !syncManifest(file, "pi-aia-asf", "0.19.0").changed && JSON.parse(fs.readFileSync(file, "utf8")).packages.length === 1);
+
+  fs.writeFileSync(file, "{ this is not json");
+  chk("NEGATIVE: an unparsable manifest is reported, not swallowed", (() => { try { return manifestPin(file, "pi-aia-asf") === null && (() => { syncManifest(file, "pi-aia-asf", "0.19.0"); return false; })(); } catch { return true; } })());
+  chk("NEGATIVE: and it was left unmodified", fs.readFileSync(file, "utf8") === "{ this is not json");
 }
 
 console.log(pass === 0 ? "NO CHECKS RAN" : `\n${pass} passed, ${fail} failed`);

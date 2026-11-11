@@ -7,6 +7,65 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-11-10
+
+### Changed — the always-read budget is now the model's context window, not a byte ceiling
+The always-read skill set was held to fixed byte ceilings. A byte ceiling can only ever be
+met by splitting a rule in half, which weakens the rule to satisfy a number nobody chose,
+so the budget is now a share of the model's context window: `session_start` reads
+`ctx.getModel().contextWindow`, and an over-share set produces one non-blocking notice
+naming the files and the tokens, never a refusal to load them. A model with no usable
+context window is judged against the smallest supported window, so an unknown model makes
+the check stricter, never switches it off. Token estimates round up — an estimate must not
+flatter the set it is measuring.
+
+### Fixed — a failing health verdict can no longer satisfy the gate
+A recorded `verdict: "fail"` was accepted as "the health gate ran", so a run could settle
+with measured violations on the record. A failing verdict now raises a gap at every scale
+and the latest verdict rules, so a later passing run closes it; `warn` is not treated as a
+violation. Direct `node test/x.mjs` invocations are recognised as a subset test run —
+previously only scripted runners counted, so running one test file by hand looked like
+running nothing.
+
+### Added — `asf_decisions action=bootstrap`, and the register follows the code
+A project with code and no decision register now gets one bounded, once-per-run offer with
+concrete candidates (foreign ADRs, configs, CI, dependencies, plan docs, commits that
+changed course) and a ceiling on how many records to write. **ASF never writes a recovered
+record itself** — it can prove what exists, not why, and a register of invented rationale
+is worse than none. A record with `origin: backfill` is accepted only when it cites
+`source: [path or commit]`; without provenance it is demoted to `proposed` and flagged.
+The offer is guidance, not a gap: it never says stop and cannot make a run never close.
+Register lookup now resolves to the project the changed code lives in (card, settle and
+observer), so a session opened in a parent repo is judged against the decisions that
+govern the files it touched.
+
+### Fixed — lifecycle events are no longer written as rejected evidence
+`run-open`, `steer`, `park` and the rest are transcript history, but they were passed
+through the ledger validator, came back `unknown entry kind`, and were written up as
+`asf-evidence-rejected` — a fake failure on every event, which is exactly the noise that
+makes a real rejection impossible to see. The kind now decides the channel, and a kind in
+neither vocabulary is still reported as the bug it is. `test-evidence-kinds.mjs` asserts
+both directions: every kind the gates demand has a producer, and every kind ASF emits is
+accepted somewhere.
+
+### Fixed — review that cannot say what it checked is not a review
+A reviewer returning zero findings with no stated scope was counted as a clean review. It
+is now recorded `not run`: agreement you cannot audit is not evidence of anything, and
+"the reviewers found nothing" was reachable by a reviewer that read nothing.
+
+### Fixed — a release is not done until the copy pi loads matches the registry
+`~/.pi/agent/settings.json` pins the extension package by exact version, and a stale pin
+reinstalls an old version over the one you just verified. The local install gate now checks
+that pin and repairs it structurally, preserving every other setting and never inventing a
+package entry pi was never asked to load.
+
+### Documentation
+The M2 planted-assumption experiment is recorded in `docs/experiments/` (2 of 3 reviewers
+found the unstated single-writer assumption; the run that failed to engage the artifact is
+recorded too). The adoption plan's test attributions are corrected — several named
+assertions in files that do not contain them, which is the stale-claim failure the plan
+itself warns about.
+
 ## [0.19.0] - 2026-11-10
 
 ### Added — a required question goes where the answer actually lives

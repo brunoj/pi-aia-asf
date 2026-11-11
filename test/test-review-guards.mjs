@@ -72,6 +72,29 @@ export async function run({ extDir }) {
   chk("a not-run lens contributes zero findings to the count", st.rows.find((r) => r.lens === "asf-zoom-out").findings === 0);
   chk("the status table renders every lens", st.render().includes("asf-zoom-out") && st.render().includes("| Reviewer | Status |"));
 
+  // W2.4's promised control. The rule used to live only in prose that a docs test grepped
+  // for, which means a reviewer could return a wall of praise and be counted as a clean
+  // audit. A clean review is a result; a clean review that cannot name what it examined
+  // is agreement, and agreement is not what the pipeline is paying for.
+  console.log("=== 2b. critique-first: unearned agreement is not a clean review (W2.4) ===");
+  const praise = reviewerStatus({
+    results: [{ lens: "asf-design-critic", output: "Looks great — well written, clean, idiomatic. No issues at all.", citationCheck: { accepted: [], status: "completed" } }],
+  });
+  chk("NEGATIVE: an all-praise review is not counted as completed", praise.completed === 0, `${praise.completed} completed`);
+  chk("and it is reported as not run, with the reason", praise.notRun.includes("asf-design-critic") && /scope/.test(praise.rows[0].reason), praise.rows[0].reason);
+  const clean = reviewerStatus({
+    results: [{ lens: "asf-design-critic", output: "No defects found.", checked: ["lib/review.mjs:96-140", "test/test-review-guards.mjs"], citationCheck: { accepted: [], status: "completed" } }],
+  });
+  chk("a clean review that states its scope is still a completed review", clean.completed === 1 && clean.rows[0].findings === 0, JSON.stringify(clean.rows[0]));
+  const thin = reviewerStatus({
+    results: [{ lens: "asf-design-critic", output: "ok", checked: "lib", citationCheck: { accepted: [], status: "completed" } }],
+  });
+  chk("NEGATIVE: and a two-character 'scope' does not buy a pass", thin.completed === 0, JSON.stringify(thin.rows[0]));
+  const withFindings = reviewerStatus({
+    results: [{ lens: "asf-design-critic", output: "one real problem", checked: [], citationCheck: { accepted: [{ severity: "Blocker" }], status: "completed" } }],
+  });
+  chk("a reviewer that found something needs no scope to be believed", withFindings.completed === 1);
+
   console.log("=== 3. findings schema and dedup (W1.3) ===");
   const n = normalizeFindings([
     { severity: "Nit", scope: "a.ts:1", finding: "wording", recommendation: "reword" },

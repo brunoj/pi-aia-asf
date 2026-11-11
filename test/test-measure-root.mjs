@@ -68,6 +68,34 @@ export async function run({ loadTs }) {
     chk("a run touching the nested checkout MEASURES that checkout", (await measureRoot()) === t.child, await measureRoot());
     chk("and state did not move with it", runRoot() === t.parent, runRoot());
 
+    console.log("=== a directory is not a project just because a file lives in it ===");
+    // projectRoot() echoes its argument when git finds no repo (a state key has to be
+    // something). Used as a project probe that made `<parent>/plain` look like a root, so
+    // ASF read `<parent>/plain/.asf/decisions`, found nothing, and treated the project as
+    // having no decisions at all. A non-repo directory must never be chosen.
+    const plain = path.join(t.parent, "plain");
+    fs.mkdirSync(plain, { recursive: true });
+    fs.writeFileSync(path.join(plain, "d.mjs"), "export const d = 1;\n");
+    await openAutoRun("test", path.join(plain, "d.mjs"));
+    chk("a touched file in a NON-git subdirectory keeps the session root", (await measureRoot()) === t.parent, await measureRoot());
+    const { projectOf } = await loadTs("lib/extension/run.ts");
+    // The subdirectory belongs to the enclosing repo — it must never be reported as its
+    // own project, which is exactly what the echo used to do.
+    chk("a non-git subdirectory resolves to the ENCLOSED repo, not to itself", projectOf(path.join(plain, "d.mjs"), t.parent) === t.parent, String(projectOf(path.join(plain, "d.mjs"), t.parent)));
+    // And a file with no repo anywhere above it has no project at all (this is the shape
+    // that made a register read come up empty and look like "no decisions").
+    const noRepo = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "asf-norepo-")));
+    fs.writeFileSync(path.join(noRepo, "e.mjs"), "export const e = 1;\n");
+    chk("a file in no repository at all has no project", projectOf(path.join(noRepo, "e.mjs"), noRepo) === null, String(projectOf(path.join(noRepo, "e.mjs"), noRepo)));
+    fs.rmSync(noRepo, { recursive: true, force: true });
+
+    console.log("=== a file directly inside a repo still names it ===");
+    // The mirror case: git root == the file's own directory is legitimate, not an echo.
+    await openAutoRun("test", path.join(t.parent, "p.mjs"));
+    chk("a file in the repo root measures the repo", (await measureRoot()) === t.parent, await measureRoot());
+    chk("projectOf() resolves a repo-root file to that root", projectOf(path.join(t.child, "c.mjs"), t.parent) === t.child, String(projectOf(path.join(t.child, "c.mjs"), t.parent)));
+    chk("projectOf() refuses a path outside the workspace", projectOf(path.join(os.tmpdir(), "elsewhere", "z.ts"), t.parent) === null);
+
     console.log("=== it does not wander outside the workspace ===");
     // A stray absolute path (a scratch dir, an unrelated checkout) must not drag the
     // measurement out of the workspace; the session root is the safe answer.
