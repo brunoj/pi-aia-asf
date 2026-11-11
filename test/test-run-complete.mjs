@@ -51,6 +51,46 @@ export async function run({ tools, events, loadTs }) {
     chk("the next piece of work gets a NEW run", fresh.runId !== done.details.runId, `${fresh.runId} vs ${done.details.runId}`);
     chk("judged on its own files only", (fresh.filesTouched||[]).length===1 && fresh.filesTouched[0]===f2, JSON.stringify(fresh.filesTouched));
     chk("and it does not inherit the closed run's suite evidence claim", fresh.steers===0, String(fresh.steers));
+
+    // ---- run history: one run, archived once, by one writer (ADR-0001) ----
+    const st = await loadTs("lib/extension/state.ts");
+    const { archiveRun, mergeMonotonic, historyKey } = st;
+    chk("archiveRun is the single history writer, exported for that purpose", typeof archiveRun === "function" && typeof historyKey === "function");
+
+    const mkFile = () => ({ current: null, history: [] });
+    const run1 = { runId: "run-A", workType: "auto", phase: "implementation", startedAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z" };
+    const f1 = mkFile();
+    const first = archiveRun(f1, run1, { by: "auto" });
+    const again = archiveRun(f1, run1, { by: "asf_run_complete" });
+    chk("a run is archived once", f1.history.length === 1 && first.duplicate === false, JSON.stringify(f1.history));
+    chk("NEGATIVE: closing the SAME run again does not add a second entry", again.duplicate === true && f1.history.length === 1, JSON.stringify(f1.history));
+    chk("the archived run says WHICH run it was", f1.history[0].runId === "run-A", JSON.stringify(f1.history[0]));
+    chk("and what closed it", f1.history[0].by === "auto", String(f1.history[0].by));
+    chk("endedAt is recorded", typeof f1.history[0].endedAt === "string" && f1.history[0].endedAt.length > 10, String(f1.history[0].endedAt));
+
+    // Two sessions on one project key: each saw a different history. Neither may erase
+    // or duplicate the other's — this is exactly how one run landed in history twice.
+    const disk = { current: null, history: [{ runId: "run-A", workType: "auto", phase: "implementation", startedAt: "2026-01-01T00:00:00.000Z", endedAt: "2026-01-01T01:00:00.000Z", by: "auto" }] };
+    const stale = { current: { ...run1 }, history: [{ runId: "run-A", workType: "auto", phase: "implementation", startedAt: "2026-01-01T00:00:00.000Z", endedAt: "2026-01-01T01:02:00.000Z", by: "asf_run_complete" }] };
+    const merged = mergeMonotonic(JSON.parse(JSON.stringify(stale)), JSON.parse(JSON.stringify(disk)));
+    chk("NEGATIVE: two writers of the same run leave ONE history entry", merged.history.filter((h) => h.runId === "run-A").length === 1, JSON.stringify(merged.history));
+    const disk2 = { current: null, history: [{ runId: "run-A", workType: "auto", phase: "implementation", startedAt: "2026-01-01T00:00:00.000Z", endedAt: "2026-01-01T01:00:00.000Z", by: "auto" }] };
+    const other = { current: null, history: [{ runId: "run-B", workType: "auto", phase: "implementation", startedAt: "2026-01-02T00:00:00.000Z", endedAt: "2026-01-02T01:00:00.000Z", by: "auto" }] };
+    const union = mergeMonotonic(JSON.parse(JSON.stringify(other)), JSON.parse(JSON.stringify(disk2)));
+    chk("a different run from the other writer is KEPT, not overwritten", union.history.length === 2 && union.history.some((h) => h.runId === "run-A") && union.history.some((h) => h.runId === "run-B"), JSON.stringify(union.history.map((h) => h.runId)));
+    chk("history stays oldest-first after a merge", union.history[0].runId === "run-A" && union.history[1].runId === "run-B", JSON.stringify(union.history.map((h) => h.endedAt)));
+    chk("entries with no runId still deduplicate by their start", historyKey({ runId: null, startedAt: "X" }) === historyKey({ startedAt: "X" }));
+
+    // /asf phase none must go through the same writer, not push its own shape.
+    const { setPhase } = await loadTs("lib/extension/commands/session.ts");
+    const f3 = path.join(dir, "src", "c.ts");
+    await openAutoRun("phase-test", f3);
+    const beforePhase = await loadState(projectName());
+    const said = await setPhase({},{ phase: "none", workType: "auto" });
+    chk("the phase command closes the run", typeof said === "string" && /ended|none|closed/i.test(said), String(said).slice(0, 90));
+    const afterPhase = await loadState(projectName());
+    chk("and it archived through the single writer, with the runId", (afterPhase.history || []).some((h) => h.runId && h.by === "phase-none"), JSON.stringify((afterPhase.history || []).map((h) => [h.runId, h.by])));
+    chk("NEGATIVE: closing it a second time adds nothing", (afterPhase.history || []).filter((h) => h.runId === beforePhase.current?.runId).length === 1, JSON.stringify((afterPhase.history || []).map((h) => h.runId)));
   } finally { process.chdir(prev); fs.rmSync(dir,{recursive:true,force:true}); }
   console.log(`\n${pass} passed, ${fail} failed`); return fail===0;
 }

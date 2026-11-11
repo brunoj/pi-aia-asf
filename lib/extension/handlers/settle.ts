@@ -17,7 +17,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { decideSettlement } from "../../gates/settle.mjs";
 import { projectName } from "../paths.ts";
-import { loadState, saveState, sanitizeSteerFields } from "../state.ts";
+import { loadState, saveState, sanitizeSteerFields, archiveRun } from "../state.ts";
 import { loadProjectSpecs, validateTrace } from "../specs.ts";
 import { appendEvidence } from "../evidence.ts";
 import { ledger, suiteRuns, pendingSteers, deliveredSteers } from "../gate-state.ts";
@@ -152,8 +152,10 @@ async function handleBlock(
  * (`asf_run_complete`), so a run that closed without the gate passing is visible.
  */
 export async function closeRun(state: AsfState, file: ProjectStateFile, { project, by = "auto" }: { project: string; by?: string }): Promise<void> {
-  file.history.push({ workType: state.workType || "auto", phase: state.phase, startedAt: state.startedAt || state.updatedAt, endedAt: new Date().toISOString() });
-  appendEvidence({ kind: "run-close", runId: state.runId, auto: by === "auto", by });
+  const { duplicate } = archiveRun(file, state, { by });
+  // A second close of the same run is recorded, not silently swallowed: it means two
+  // sessions wrote one project's state, which is the condition the ledger is for.
+  appendEvidence({ kind: "run-close", runId: state.runId, auto: by === "auto", by, duplicate });
   file.current = null;
   await saveState(project, file);
 }

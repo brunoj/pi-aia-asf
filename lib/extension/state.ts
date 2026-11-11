@@ -132,7 +132,59 @@ export const saveQueue = new Map<string, Promise<void>>();
  * monotonic fields makes a lost update impossible for the fields that matter to
  * the completion gate.
  */
+/** How many completed runs a project keeps. Older ones are not needed to judge a run. */
+const MAX_HISTORY = 20;
+
+/**
+ * What makes two history entries the SAME run. The runId when it has one; the start
+ * otherwise, so entries written before runIds were recorded still deduplicate.
+ */
+export function historyKey(e: { runId?: string | null; startedAt?: string } | null | undefined): string {
+  if (!e) return "|";
+  return `${e.runId || ""}|${e.startedAt || ""}`;
+}
+
+/**
+ * Archive one finished run — the ONLY way a run enters history.
+ *
+ * Idempotent by run identity, because the same close can reach here twice: two sessions
+ * on one project key each hold their own in-memory copy, and a close from one can be
+ * replayed after the other restored the run (observed live as one run archived twice,
+ * minutes apart). Without this, "the next run is judged separately" is not actually
+ * guaranteed by the record, and nothing in the entry identified which run it was.
+ */
+export function archiveRun(file: ProjectStateFile, state: AsfState | null | undefined, { by = "auto" }: { by?: string } = {}): { duplicate: boolean } {
+  const now = new Date().toISOString();
+  const entry = {
+    runId: state?.runId || null,
+    workType: state?.workType || "auto",
+    phase: state?.phase || "none",
+    startedAt: state?.startedAt || state?.updatedAt || now,
+    endedAt: now,
+    by,
+  };
+  const key = historyKey(entry);
+  const list = Array.isArray(file.history) ? file.history : [];
+  if (list.some((h) => historyKey(h) === key)) return { duplicate: true };
+  file.history = [...list, entry].slice(-MAX_HISTORY);
+  return { duplicate: false };
+}
+
+/** Union two histories by run identity — neither side may erase or duplicate the other's. */
+function mergeHistory(incoming: ProjectStateFile, onDisk: ProjectStateFile | null): void {
+  const list = Array.isArray(onDisk?.history) ? [...(onDisk?.history || [])] : [];
+  for (const h of Array.isArray(incoming.history) ? incoming.history : []) {
+    if (!list.some((x) => historyKey(x) === historyKey(h))) list.push(h);
+  }
+  list.sort((x, y) => String(x.endedAt || "").localeCompare(String(y.endedAt || "")));
+  incoming.history = list.slice(-MAX_HISTORY);
+}
+
 export function mergeMonotonic(incoming: ProjectStateFile, onDisk: ProjectStateFile | null): ProjectStateFile {
+  // History is merged on EVERY path, including the one-sided ones below: a run closed by
+  // one session must not be erased by another session that still holds the run open, and
+  // must not be able to land twice.
+  mergeHistory(incoming, onDisk);
   const a = incoming.current;
   const b = onDisk?.current;
   // Both sides are sanitized: the on-disk copy can be hand-edited or written by

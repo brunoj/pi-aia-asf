@@ -2,9 +2,9 @@
 id: ADR-0001
 status: accepted
 title: "Run completion is an agent action that asks the gate's own question"
-decision: A run closes only through `closeRun`, reached either by the settle gate or by `asf_run_complete`, and both call the same `evaluateRun`. An agent-requested close on an unfinished run is refused with the gaps listed.
+decision: A run closes only through `closeRun`, reached either by the settle gate or by `asf_run_complete`, both calling the same `evaluateRun`; run history is written only through `archiveRun`, which is idempotent by run identity. An agent-requested close on an unfinished run is refused with the gaps listed.
 decided: 2026-11-10
-applies_to: [lib/extension/handlers/settle.ts, lib/extension/tools/run-complete.ts]
+applies_to: [lib/extension/handlers/settle.ts, lib/extension/tools/run-complete.ts, lib/extension/state.ts#archiveRun, lib/extension/state.ts#mergeMonotonic, lib/extension/commands/session.ts#setPhase]
 tags: [run-lifecycle, completion-gate, settle]
 from_spec: 
 user_instructed: ensure you properly complete and mark as completed every run, so you judge the next run separately again
@@ -19,7 +19,12 @@ checks: [test/test-run-complete.mjs]
 
 ## Decision
 
-`evaluateRun(project, state)` is the single judge of "is this run done". `judgeAndSettle` and the `asf_run_complete` tool both call it. `closeRun` is the only writer of run history and the only clearer of `current`.
+`evaluateRun(project, state)` is the single judge of "is this run done". `judgeAndSettle` and the `asf_run_complete` tool both call it. `closeRun` is the only closer, and `archiveRun` (lib/extension/state.ts) is the only writer of
+run history. That second half was a claim, not an invariant, when this record was written:
+`/asf phase none` pushed its own history entry with a different shape and no `runId`, and
+`mergeMonotonic` merged `current` but took `history` wholesale from one side — so two
+sessions on one project key archived the same run twice, minutes apart, with nothing in the
+entry identifying which run any entry was. Both are now enforced in code and tested.
 
 ## Context
 
@@ -33,4 +38,7 @@ Runs had no agent-callable completion. They closed only when the settle gate hap
 
 ## Consequences
 
-A finished run archives to `history` and clears `current`, so the next work opens a fresh run judged on its own facts. `run-close` evidence carries `by` (`auto` from the gate, `asf_run_complete` from the agent), so a close that happened outside the gate is visible.
+A finished run archives to `history` and clears `current`, so the next work opens a fresh run judged on its own facts. `run-close` evidence carries `by` (`auto`, `asf_run_complete`, `phase-none`) and `duplicate`,
+so a close outside the gate — and a close that arrived twice, which means two sessions wrote
+one project's state — is visible in the ledger. History entries carry `runId`, and a merge
+unions both sides by run identity instead of letting one erase the other.

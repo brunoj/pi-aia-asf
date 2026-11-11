@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.20.1] - 2026-11-11
+
+### Fixed — one run could be archived to history twice
+Two sessions writing one project's state produced the same finished run twice in
+`history`, minutes apart, and nothing in an entry said which run it belonged to — so the
+record no longer guaranteed what it exists to guarantee, that the next run is judged
+separately. Two causes, both fixed: `mergeMonotonic` merged `current` monotonically but
+took `history` wholesale from whichever side wrote last, and the history append had no
+notion of run identity. Run history is now written only through `archiveRun`, which keys
+each entry by `runId` (falling back to its start for older records), refuses a second
+entry for the same run, and reports `duplicate` in the `run-close` evidence so the
+condition is visible rather than merely survivable. A merge now unions both sides by run
+identity, oldest-first, so neither writer can erase or repeat the other's.
+
+`/asf phase none` was also pushing its own history entry with a different shape and no
+`runId`, which made ADR-0001's claim that `closeRun` is the only history writer false in
+the code. It now goes through the same single writer and records `by: "phase-none"`, so a
+close outside the settle gate is attributable.
+
 ## [0.20.0] - 2026-11-10
 
 ### Changed — the always-read budget is now the model's context window, not a byte ceiling

@@ -7,7 +7,7 @@ import { existsSync } from "node:fs";
 import type { AsfPhase, AsfScale, AsfState } from "../types.ts";
 import { projectName, runRoot } from "../paths.ts";
 import { readPath } from "../../home.mjs";
-import { loadState, saveState } from "../state.ts";
+import { loadState, saveState, archiveRun } from "../state.ts";
 import { newRunId } from "../run.ts";
 import { __resetRefusals } from "../../gates/refusals.mjs";
 
@@ -24,12 +24,10 @@ export async function setPhase(ctx: ExtensionCommandContext, change: PhaseChange
   const now = new Date().toISOString();
 
   if (state.current && phase === "none") {
-    state.history.push({
-      workType: state.current.workType || "unknown",
-      phase: state.current.phase,
-      startedAt: state.current.startedAt || now,
-      endedAt: now,
-    });
+    // The same single writer the settle gate uses (ADR-0001). This command used to push
+    // its own history entry, which is how "closeRun is the only history writer" became
+    // false in the code and how one run could be archived twice with two different shapes.
+    archiveRun(state, state.current, { by: "phase-none" });
     state.current = null;
   } else {
     if (!state.current) {
