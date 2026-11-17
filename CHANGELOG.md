@@ -22,13 +22,6 @@ The carry-through hop was the near-miss: the first cut set `root` at observe tim
 the ledger entry silently lacked it. `test-suite-root.mjs` drives the real
 tool_call/tool_result handlers and fails 3 of 5 checks when that hop is removed.
 
-### Fixed — tracked work that could never be closed
-A claim whose item id the harness could not read was tracked under `tool:<name>`
-while its resolve closed a key nobody had opened, so the gap stayed open whatever the
-agent did. A resolve/park with no readable id now closes the open item it was about,
-`gate.tracked.idKeys` lets a project name its own id field, and a narrated wait with
-no readable id no longer opens an item literally named "null".
-
 ## [0.21.4] - 2026-11-11
 
 ### Fixed — tracked work that could never be closed
