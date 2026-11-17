@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.21.4] - 2026-11-11
 
 ### Fixed — tracked work that could never be closed
-`noteTrackedCall` identified an item by `itemId(input) || \`tool:${toolName}\``, so a
+`noteTrackedCall` identified an item by `itemId(input) || "tool:" + toolName`, so a
 project whose tools name the item anything other than `ticket_id`/`id`/... opened a
 claim under `tool:bmx_claim` while its resolve closed a key nobody had opened. The gap
 stayed open no matter what the agent did — an unclosable gap, the exact defect class the
