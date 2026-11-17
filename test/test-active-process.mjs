@@ -296,6 +296,12 @@ export async function run({ events, invokeCommand, loadTs }) {
       chk("the park names who decides", /PO/.test(parked || ""), (parked || "").slice(0, 80));
       const quiet = await settle();
       chk("and once parked it stays quiet — no steer storm behind the park", !(quiet?.entries || []).some((e) => e.customType === "asf-completion-gate"), JSON.stringify(quiet?.entries || []).slice(0, 120));
+      // The park is the LOOP EXIT, so the exit itself must be asserted: a park
+      // that keeps asking `continue: true` is the same 2,349-steer storm with a
+      // nicer first message. And the question must be asked once, not re-shouted
+      // at the PO every settle.
+      chk("NEGATIVE: a repeat park does not continue the run — this is what ends the loop", quiet?.continue !== true, `continue=${quiet?.continue}`);
+      chk("the park question is asked once, not repeated every settle", !(quiet?.entries || []).some((e) => e.customType === "asf-park"), JSON.stringify((quiet?.entries || []).map((e) => e.customType)));
 
       // Wiping the state file mid-run must not reset the counter either: the
       // in-process memory is the authority, the file is a record. A fresh run is

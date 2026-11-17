@@ -5,7 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.21.3] - 2026-11-11
+
+### Fixed — the block path had no bound, and a fail claimed the gap was closed
+Two holes left under the anti-loop ladder:
+
+**A run steered forever without ever repeating a gap.** The ladder counts per
+fingerprint, and the fingerprint is the WHOLE missing set — with a dozen kinds of gap
+the subsets run into the thousands, so a gap set that keeps changing never repeats and
+never escalates. The 24-continuation cap guards the guidance path only; `handleBlock`
+consulted nothing. `MAX_RUN_STEERS` (40) now bounds a run in total: past it the gate
+escalates to a PO park that still names every unresolved gap — it never drops them, and
+never silently lets the run settle.
+
+**A failing health verdict announced itself as closing the gap.** `recordLine` said
+"the completion gate's health gap is now closed" for every recorded verdict, including
+`fail` — which the gate contradicts one line later. The line now depends on the verdict:
+only a `pass` closes it; a `fail` says it does not and what has to happen next; a
+`warn`-mode fail says reported-not-blocking while still refusing to call the code
+healthy; `not-measured` says neither pass nor fail.
+
+The continuation also stopped promising "no ceiling on warranted work" — true when it
+was written, false once bounds existed, and a bound the text denies is how an agent
+ends up believing it has been steered unfairly. It now names the escalation it actually
+enforces (`test-gates.mjs`, `test-loop-exits.mjs`, `test-boundary-continuation.mjs`,
+`test-health-record.mjs`, `test-active-process.mjs` — including the assertion that a
+repeat park does not continue the run, which is what ends the loop).
+
 
 ## [0.21.2] - 2026-11-17
 

@@ -156,11 +156,14 @@ export async function run({ events }) {
     chk("the entry names what is missing, not just 'continue'",
       typeof msg?.content === "string" && msg.content.length > 0 && /\n- \S/.test(msg.content),
       `${continuationText(result).split("\n").length} lines`);
-    // No ceiling: a warranted loop may run as long as the gap is real. Claiming
-    // "of at most N" is what made the 2026-11-07 loop read as a countdown that
-    // never counted down.
-    chk("the continuation claims no ceiling and says the work is not stopped",
-      typeof msg?.content === "string" && !/of at most/.test(msg.content) && /Nothing here stops you/.test(msg.content) && /no ceiling on warranted work/.test(msg.content));
+    // The wording must match the mechanism. What broke on 2026-11-07 was a
+    // countdown that never counted down ("of at most 2") — the sin was a claimed
+    // bound ASF did not have, not the existence of a bound. The ladder and the
+    // steer budget are real now, so the text is required to name them.
+    chk("the continuation fakes no countdown and says the work is not stopped",
+      typeof msg?.content === "string" && !/of at most/.test(msg.content) && /Nothing here stops you/.test(msg.content));
+    chk("and it names the escalation ASF really enforces",
+      /parked for the PO/.test(continuationText(result)), continuationText(result).slice(-140));
 
     // The regression assertion: pi's own rule, applied to the handler's result.
     chk("PI WOULD ACCEPT this continuation (the 1.5.0 contract)",

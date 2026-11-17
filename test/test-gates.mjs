@@ -25,7 +25,7 @@ import {
 import { createLedger, sessionFacts, renderLedger, validateEntry } from "../lib/gates/ledger.mjs";
 import { deriveSuiteRun } from "../lib/gates/suite-runs.mjs";
 import { createAuthority, renderAuthority, PROMOTION_RULE } from "../lib/gates/authority.mjs";
-import { decideSettlement, renderCompletionGate, MAX_STEERS, steerFingerprint, agentClosable, splitGaps, classifyPark } from "../lib/gates/settle.mjs";
+import { decideSettlement, renderCompletionGate, MAX_STEERS, steerFingerprint, agentClosable, splitGaps, classifyPark, REPEAT_LIMIT, MAX_RUN_STEERS } from "../lib/gates/settle.mjs";
 import { loadDeclarations, assertSignalsExist, validateTrigger, renderRules } from "../lib/gates/declarations.mjs";
 import { createTracked, noteTrackedCall, danglingGaps, trackedClear, DISPOSITIONS, matchersFromConfig } from "../lib/gates/tracked.mjs";
 import fs from "node:fs";
@@ -299,7 +299,12 @@ check("the continuation names exactly what is missing", typeof d1.continuation =
 // A warranted loop has NO ceiling. Claiming one is what made the 2026-11-07
 // loop read as "1st of at most 2 continuations" forever.
 check("the continuation never claims a ceiling it does not have", !/of at most|at most \d+|max(imum)? of \d+/i.test(d1.continuation));
-check("the continuation says the work is not stopped", /Nothing here stops you/.test(d1.continuation) && /no ceiling on warranted work/.test(d1.continuation));
+check("the continuation says the work is not stopped", /Nothing here stops you/.test(d1.continuation));
+// The wording must match the mechanism. This line used to promise "no ceiling on
+// warranted work" while the loop ran 2,349 times — the sin was never the ceiling,
+// it was claiming a ceiling that did not exist (or denying one that did). Both
+// bounds are now real, so the text names them.
+check("and it states the bounds ASF actually enforces", /parked for the PO/.test(d1.continuation) && d1.continuation.includes(String(REPEAT_LIMIT + 1)) && d1.continuation.includes(String(MAX_RUN_STEERS)), d1.continuation.slice(-160));
 check("the completion gate never asks a human anything", !/please confirm|approve|Allow\?/i.test(d1.continuation));
 check("the steer carries a fingerprint of exactly its gaps", d1.fingerprint === steerFingerprint(d1.missing));
 
@@ -314,10 +319,18 @@ check("and it names the same gaps", d2.fingerprint === d1.fingerprint);
 const l2b = createLedger();
 const d2b = decideSettlement(l2b, { scale: "standard", sourceMutated: true, continuationsSoFar: 1, seenSteers: [d1.fingerprint] });
 check("a new, different gap is still raised", d2b.block === true && d2b.fingerprint !== d1.fingerprint);
-// No cap: past any reporting number the gate still blocks on a real gap.
+// A real gap is never SILENTLY dropped. Past the run's steer budget the gate
+// stops re-asking — but it escalates to a PO park that still names every gap,
+// which is what the 2,349-steer loop never did. "Keep asking forever" was the
+// behaviour that broke, not the visibility of the gap.
 for (const n of [MAX_STEERS, MAX_STEERS * 10, 1000]) {
   const d2c = decideSettlement(l2b, { scale: "standard", sourceMutated: true, continuationsSoFar: n });
-  check(`at steer ${n} a real gap still blocks (no cap on warranted work)`, d2c.block === true && d2c.steer === n + 1);
+  if (n < MAX_RUN_STEERS) {
+    check(`at steer ${n} a real gap still blocks`, d2c.block === true && d2c.steer === n + 1, JSON.stringify({ block: d2c.block, steer: d2c.steer }));
+  } else {
+    check(`at steer ${n} the gap is escalated, never dropped`, !!d2c.park && (d2c.missing || []).length > 0 && d2c.steer === n + 1, JSON.stringify({ park: !!d2c.park, missing: (d2c.missing || []).length }));
+    check(`and the escalation still carries the unresolved gaps to the PO at ${n}`, (d2c.park?.question || "").includes(d2c.missing[0]), (d2c.park?.question || "").slice(0, 60));
+  }
 }
 
 section("A7: specs met this run need a trace");

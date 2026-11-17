@@ -97,6 +97,22 @@ export async function run() {
   chk("1 measured + 8 skipped -> scanned 1", healthRunEntry({ healthy: true, exitCode: 0, ran: 1, skipped: 8 }, "standard").scanned === 1);
   chk("the summary agrees with the report's own wording", /1 metric\(s\) measured, 8 skipped/.test(line1), line1.slice(0, 60));
 
+  // The line the agent reads after a recording must agree with what the gate then
+  // does. It used to say "the health gap is now closed" for a FAIL too — and the
+  // gate steered the run open one line later, which is how an agent ends up
+  // believing it did all it could while a loop keeps asking.
+  const failEntry = { ...healthRunEntry({ healthy: false, exitCode: 1, ran: 5, skipped: 4 }, "standard"), skipped: 4, recorded: true, error: "" };
+  const failLine = recordLine(failEntry);
+  chk("NEGATIVE: a failing verdict never claims the gap is closed", !/now closed/.test(failLine), failLine.slice(-70));
+  chk("a failing verdict says what still has to happen", /does NOT close the health gap/.test(failLine), failLine.slice(-70));
+  const warnLine = recordLine({ ...failEntry, mode: "warn" });
+  chk("under gate.mode warn it is reported, not blocking", /reported, not blocking/.test(warnLine), warnLine.slice(-70));
+  chk("and warn still does not call the code healthy", /still not healthy/.test(warnLine));
+  const passLine = recordLine({ ...healthRunEntry({ healthy: true, exitCode: 0, ran: 9, skipped: 0 }, "standard"), skipped: 0, recorded: true, error: "" });
+  chk("a passing verdict is what closes the gap", /now closed/.test(passLine), passLine.slice(-60));
+  const nmLine = recordLine({ ...healthRunEntry({ healthy: false, measured: false, exitCode: 0, ran: 0, skipped: 9 }, "standard"), skipped: 9, recorded: true, error: "" });
+  chk("not-measured is reported as neither pass nor fail", /not measured/.test(nmLine) && !/now closed/.test(nmLine), nmLine.slice(-70));
+
   const recErr = healthRunEntry({ healthy: false, exitCode: 1, ran: 1, skipped: 7 }, "major");
   chk("an error row does not inflate the count", recErr.scanned === 1 && recErr.verdict === "fail", `scanned=${recErr.scanned} verdict=${recErr.verdict}`);
 

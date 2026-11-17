@@ -14,7 +14,7 @@
  */
 
 import { createLedger } from "../lib/gates/ledger.mjs";
-import { decideSettlement, REPEAT_LIMIT } from "../lib/gates/settle.mjs";
+import { decideSettlement, REPEAT_LIMIT, MAX_RUN_STEERS } from "../lib/gates/settle.mjs";
 import { parseFailing, failuresInheritedFromBaseline, deriveSuiteRun } from "../lib/gates/suite-runs.mjs";
 
 const results = [];
@@ -166,6 +166,25 @@ section("4. an identical ask escalates to a park instead of looping forever");
   check("the park names the gaps it is escalating", (fourth.park?.question || "").includes("Missing") || (fourth.park?.question || "").length > 20);
   check("the park reason is a scope/waiver reason", /scope|waiver/.test(fourth.park?.reason || ""), fourth.park?.reason);
   check("the ladder is bounded and small", REPEAT_LIMIT <= 5, `REPEAT_LIMIT=${REPEAT_LIMIT}`);
+
+  // ── 4b. the coarse bound: gaps that never repeat ───────────────────────────
+  // The ladder counts per fingerprint, and the fingerprint is the WHOLE missing
+  // set — so a gap set that keeps changing never repeats and never escalates.
+  // With a dozen kinds of gap the subsets run into the thousands; the block path
+  // has no other bound. This is the general form of the 2,349-steer hole.
+  const rot = createLedger();
+  let rotated = null;
+  for (let i = 0; i < MAX_RUN_STEERS; i++) {
+    rotated = decideSettlement(rot, { scale: "standard", continuationsSoFar: i, seenSteers: [`fp-${i}`], steerCounts: { [`fp-${i}`]: 1 } });
+    if (rotated.park) break;
+  }
+  check("a gap set that never repeats still blocks while there is budget", rotated?.block === true && !rotated?.park, JSON.stringify({ block: rotated?.block, park: !!rotated?.park }));
+  const exhausted = decideSettlement(rot, { scale: "standard", continuationsSoFar: MAX_RUN_STEERS, seenSteers: [], steerCounts: {} });
+  check("NEGATIVE: past the run's steer budget it does not ask again", exhausted.block === false && !!exhausted.park, JSON.stringify({ block: exhausted.block, park: !!exhausted.park }));
+  check("the budget park names the run that will not close", /steered/.test(exhausted.park?.question || ""), (exhausted.park?.question || "").slice(0, 80));
+  check("and its reason is the budget, not a gap pattern", exhausted.park?.reason === "steer-budget-exhausted", exhausted.park?.reason);
+  check("and it puts the decision in the PO's hands", /PO/.test(exhausted.park?.question || ""), (exhausted.park?.question || "").slice(0, 80));
+  check("the budget is large enough for real work but not unbounded", MAX_RUN_STEERS > REPEAT_LIMIT * 4 && MAX_RUN_STEERS <= 100, `MAX_RUN_STEERS=${MAX_RUN_STEERS}`);
 
   // A DIFFERENT gap set is a different fingerprint: the ladder must not punish
   // an agent that made progress and then hit a new wall.
