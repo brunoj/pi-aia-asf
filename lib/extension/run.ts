@@ -4,13 +4,12 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { existsSync } from "node:fs";
 import { runRoot, projectName } from "./paths.ts";
 import { fileURLToPath } from "node:url";
 import { dirname, isAbsolute, resolve } from "node:path";
-import { gitRoot } from "../project.mjs";
+import { gitRoot, isProjectRoot } from "../project.mjs";
 import { ensureHome } from "../home.mjs";
-import { cpus, loadavg } from "node:os";
+import { cpus, loadavg, homedir } from "node:os";
 import { renderRunCard, cardSummary, CARD_CEILING_BYTES } from "../run-card.mjs";
 import { ledger, suiteRuns, gateStats } from "./gate-state.ts";
 import { appendEvidence } from "./evidence.ts";
@@ -43,20 +42,6 @@ export function newRunId(): string {
  * 0.20.5, offered them as its own). A hint about the register only makes sense
  * where there is a project to have a register for.
  */
-function isProjectRoot(root: string): boolean {
-  try {
-    if (!root || !isAbsolute(root)) return false;
-    if (existsSync(resolve(root, ".git"))) return true;
-    if (existsSync(resolve(root, ".asf"))) return true;
-    for (const m of ["package.json", "pyproject.toml", "setup.py", "go.mod", "Cargo.toml", "composer.json", "pom.xml", "build.gradle", "mix.exs"]) {
-      if (existsSync(resolve(root, m))) return true;
-    }
-    return false;
-  } catch {
-    return false;
-  }
-}
-
 function decisionBlock(root: string): string {
   try {
     if (!isProjectRoot(root)) return "";
@@ -211,9 +196,9 @@ export function measureRootFor(state: { filesTouched?: unknown } | null | undefi
       const f = touched[i];
       if (typeof f !== "string" || !f.includes("/")) continue;
       const root = projectOf(f, fallback);
-      // Only a root that CONTAINS the session root counts as a better answer: a
-      // stray touched path outside the workspace must not drag the measurement to
-      // someone's scratch directory.
+      // Only a root related to the workspace counts as a better answer: a stray
+      // touched path outside it must not drag the measurement to someone's scratch
+      // directory.
       if (root) return root;
     }
   } catch {
@@ -223,6 +208,30 @@ export function measureRootFor(state: { filesTouched?: unknown } | null | undefi
 }
 
 /**
+ * A root worth measuring.
+ *
+ * The 2,349-steer loop's verdict was produced by measuring `$HOME`: the session
+ * workspace here is a home directory, the fallback when nothing credible is known
+ * is the session root, and home is full of other projects — so the gate demanded
+ * that a run about one small package refactor several hundred violations in code
+ * nobody was touching. A wrong tree is worse than no measurement: it produces
+ * numbers that are real, unfixable here, and presented as this run's.
+ */
+export function isCredibleRoot(cand: string | null | undefined): boolean {
+  if (!cand || !isAbsolute(cand)) return false;
+  if (cand === resolve(homedir())) return false;
+  return isProjectRoot(cand);
+}
+
+/**
+ * The last root the async path vouched for. `measureRoot()` can read the run's
+ * state, `measureRootSync()` cannot — without this shared answer the two disagree
+ * silently, and the sync callers (project config, /asf inspect) measure the
+ * session workspace while the gate measures the project.
+ */
+let lastCredibleRoot: string | null = null;
+
+/**
  * The sync form of measureRoot(), for the places that read a project artifact on a
  * path where an async state read does not belong (config reads happen on every tool
  * call). It answers from what THIS session has touched; with nothing touched yet it
@@ -230,15 +239,28 @@ export function measureRootFor(state: { filesTouched?: unknown } | null | undefi
  * session that is not working there.
  */
 export function measureRootSync(): string {
-  return runtime.measureRoot || runRoot();
+  // The runtime value is set when a source file is touched; the shared answer is
+  // what the async path last vouched for. Neither may be the home directory.
+  if (isCredibleRoot(runtime.measureRoot)) return runtime.measureRoot as string;
+  if (lastCredibleRoot) return lastCredibleRoot;
+  const here = runRoot();
+  return isCredibleRoot(here) ? here : here;
 }
 
 export async function measureRoot(): Promise<string> {
   try {
     const state = await loadState(projectName());
-    return measureRootFor(state?.current);
+    const cand = measureRootFor(state?.current);
+    if (isCredibleRoot(cand)) {
+      lastCredibleRoot = cand;
+      return cand;
+    }
+    // Nothing credible this time: keep answering with the last one that was, so a
+    // settle that briefly lost its filesTouched cannot silently re-point the gate
+    // at the home directory.
+    return lastCredibleRoot || cand;
   } catch {
-    return runRoot();
+    return lastCredibleRoot || runRoot();
   }
 }
 

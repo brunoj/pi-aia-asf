@@ -331,8 +331,15 @@ section("15. pipeline: --update-baseline writes the committed baseline");
   // since 0.17.x); reading the old root path is what made this check crash.
   const file = home.writePath(dir, "baseline");
   check("baseline written where the gate reads it", fs.existsSync(file), file);
-  const baseline = JSON.parse(fs.readFileSync(file, "utf-8"));
-  check("baseline has metric rows", baseline.metrics && typeof baseline.metrics.complexity === "object");
+  // Read only what exists: crashing the suite on a missing artifact hides every
+  // check that comes after it, which is worse than reporting the one that failed.
+  let baseline = null;
+  try {
+    baseline = JSON.parse(fs.readFileSync(file, "utf-8"));
+  } catch {
+    /* reported by the check above */
+  }
+  check("baseline has metric rows", !!(baseline && baseline.metrics && typeof baseline.metrics.complexity === "object"));
   check("report mentions baseline update", res.text.includes("Baseline updated"));
   check("the baseline did not dirty the project directory", !fs.existsSync(path.join(dir, ".asf-code-health-baseline.json")));
   rm(dir);

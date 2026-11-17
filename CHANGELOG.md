@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.21.1] - 2026-11-11
+
+### Fixed — the health gate measured the home directory, not the project
+The 2,349-steer loop had a second cause underneath the missing ladder: its
+`verdict: fail` was never about this package. `asf_health` reported max cyclomatic
+complexity 714 and 300 model findings from `AiAWorkspace/betamaxx/...` — code under
+`$HOME`, which is this session's workspace. `measureRoot()` derived the right root
+from the run's state, but `measureRootSync()` answered `runtime.measureRoot ||
+runRoot()`, so every sync caller (project config, `/asf inspect`) measured the session
+workspace, and the async path had nothing to share its answer with. Now the async path
+vouches for a root once and the sync readers use it; the answer is seeded at session
+start; and `runHealth` refuses outright to measure a directory that is the user's home
+or the parent of several checkouts — it returns NOT MEASURED with the reason, never a
+wall of violations that the gated run cannot fix. A plain folder of sources is still
+measurable: the refusal is for the shape that manufactured the uncloseable gate, not for
+every directory without a manifest. `isProjectRoot`/`isMeasurableRoot` live in
+`lib/project.mjs` so the card and the gate cannot disagree about what a project is
+(`test-measure-root.mjs`, 30 checks).
+
+
 ## [0.21.0] - 2026-11-11
 
 ### Fixed — the completion gate could ask the same uncloseable question forever

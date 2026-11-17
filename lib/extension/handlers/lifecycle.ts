@@ -137,6 +137,17 @@ export function registerLifecycleHandlers(pi: ExtensionAPI): void {
 async function startSession(ctx: unknown): Promise<void> {
   __clearProjectCache();
   runtime.machineTurnsSinceHuman = 0;
+  // Seed the measured root while there is an async context. The sync readers
+  // (project config, /asf inspect) cannot load state themselves; if nothing has
+  // vouched for a root by the time they run, they fall back to the session
+  // workspace — which, for a session started in $HOME, is not the project and
+  // produced a health verdict about everyone else's code.
+  try {
+    const { measureRoot } = await import("../run.ts");
+    await measureRoot();
+  } catch {
+    /* the fallback is still the session root; a failed seed is not a failure to start */
+  }
   try {
     const model = (ctx as { getModel?: () => { contextWindow?: number } | undefined } | undefined)?.getModel?.();
     const notice = budgetNotice(model?.contextWindow);

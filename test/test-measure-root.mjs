@@ -54,7 +54,7 @@ export async function run({ loadTs, events, invokeCommand }) {
   const toolCall = async (n, i, id = `tc-${Math.random()}`) => {
     for (const fn of events.filter((e) => e.ev === "tool_call").map((e) => e.fn)) await fn({ toolName: n, input: i, toolCallId: id });
   };
-  const { measureRoot, openAutoRun } = await loadTs("lib/extension/run.ts");
+  const { measureRoot, openAutoRun, measureRootSync } = await loadTs("lib/extension/run.ts");
   const { runRoot } = await loadTs("lib/extension/paths.ts");
   const { __clearProjectCache } = await import("../lib/project.mjs");
 
@@ -159,6 +159,59 @@ export async function run({ loadTs, events, invokeCommand }) {
     chk("with nothing touched yet, the session root is the project", /configuration is consistent/.test(idle), idle.slice(0, 70));
     process.chdir(prevFresh);
     fs.rmSync(fresh, { recursive: true, force: true });
+
+    // ── the root must be a project before anything is measured ──────────────
+    // The 2,349-steer loop's failing verdict was produced by measuring $HOME: the
+    // session workspace here IS a home directory, the fallback when nothing is
+    // known is the session root, and home is a pile of unrelated checkouts. The
+    // numbers were real, belonged to no run, and could not be fixed by the run
+    // being gated — the exact shape of an uncloseable gate.
+    const { isProjectRoot, isMeasurableRoot } = await loadTs("lib/project.mjs");
+    const { runHealth } = await loadTs("lib/code-health/index.mjs");
+
+    const bare = fs.mkdtempSync(path.join(os.tmpdir(), "asf-mroot-bare-"));
+    chk("a plain directory is not a project", isProjectRoot(bare) === false);
+    chk("a repository is a project", isProjectRoot(t.parent) === true);
+    chk("a manifest counts as a project", (() => {
+      fs.writeFileSync(path.join(bare, "package.json"), "{}\n");
+      const got = isProjectRoot(bare);
+      fs.rmSync(path.join(bare, "package.json"));
+      return got;
+    })());
+    chk("NEGATIVE: the user's home is never a measurable root", isMeasurableRoot(os.homedir()) === false);
+    chk("a project is a measurable root", isMeasurableRoot(t.parent) === true);
+    // A bare folder of sources is a legitimate thing to measure — the refusal is
+    // for the shape that produced the uncloseable verdict, not for every directory
+    // without a manifest.
+    chk("a plain source folder is still measurable", isMeasurableRoot(bare) === true);
+    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "asf-mroot-ws-"));
+    for (const name of ["one", "two"]) {
+      fs.mkdirSync(path.join(workspace, name), { recursive: true });
+      fs.writeFileSync(path.join(workspace, name, "package.json"), "{}\n");
+    }
+    chk("NEGATIVE: a parent of several checkouts is not measurable", isMeasurableRoot(workspace) === false, "the shape that generated 300 findings from strangers");
+    fs.rmSync(workspace, { recursive: true, force: true });
+
+    const home = await runHealth(os.homedir(), [], {});
+    chk("measuring home is REFUSED, not reported as violations", home.measured === false && home.healthy === false, `measured=${home.measured}`);
+    chk("the refusal says why", /not a project/i.test(home.text), home.text.slice(0, 80));
+    chk("and refusing is not a build failure", home.exitCode === 0);
+    fs.rmSync(bare, { recursive: true, force: true });
+
+    // The sync readers cannot load state, so they share the async path's answer.
+    // Without this, the health gate measures the project while the config readers
+    // measure the session root, and the two disagree in silence.
+    const prevCwd = process.cwd();
+    process.chdir(t.root);
+    __clearProjectCache();
+    const before = m_sync();
+    const resolved = await measureRoot();
+    const after = m_sync();
+    chk("the async path finds the project the run is about", resolved === t.parent, resolved);
+    chk("once vouched for, the sync readers get the same answer", after === t.parent, after);
+    chk("NEGATIVE: the sync path never answers with the session root once a project is known", after !== t.root, after);
+    process.chdir(prevCwd);
+    function m_sync() { return measureRootSync(); }
 
     return fail === 0;
   } finally {
