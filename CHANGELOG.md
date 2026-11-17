@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.21.6] - 2026-11-11
+
+### Fixed — a health verdict counted for a tree it never measured
+The 0.21.5 fix covered suite runs; the health gate had the same bleed and the 2,349-steer
+loop proved it. `runHealth` knew the root it measured and never returned it, so the
+ledger entry could not say what it was about. A `pass` recorded against one checkout
+closed another's health gap, and a `fail` produced by measuring `$HOME` blocked a run
+for several hundred violations in code that run had never touched. `runHealth` returns
+the root, `healthRunEntry` records it, and `sessionFacts` judges a verdict only when it
+covers the project the run is about (parent and child count, a sibling does not) — and
+when it does not, the gap says so and names both trees, rather than demanding the run
+fix someone else's code. A refused root records the path it refused, so a refusal can
+never read as a measurement. An unlabelled verdict is still never held against a run.
+
+### Fixed — `.asf/` confirmed itself as a project
+`isProjectRoot` accepted a bare `.asf/` as a marker, but ASF creates that directory
+itself when it writes run state. Every directory ASF had ever run in — the user's home
+included — was therefore a project, and the decision hint could offer to bootstrap a
+register for a home directory full of unrelated checkouts. Only durable content counts
+now: a register with records, a config, a plan, a baseline. A telemetry-only home does
+not.
+
+### Fixed — a suite that reported "0 failed" above a FAIL line
+`test-measure-root.mjs` printed its tally mid-file, at a section boundary added after
+it, so 25 later checks were excluded from the number a reviewer reads. The returned
+verdict was always honest (a late failure exits 1, verified by mutation); the printed
+one was not. The tally now prints once, at the end, and matches the PASS lines.
+
 ## [0.21.5] - 2026-11-11
 
 ### Fixed — one checkout's green suite closed another's gate

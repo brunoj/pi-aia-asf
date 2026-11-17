@@ -226,6 +226,39 @@ unlabelled.append({ kind: "suite-run", command: "npm test", exitCode: 0, duratio
 check("NEGATIVE: an unlabelled entry is never held against the run (a missing label cannot manufacture a gap)", sessionFacts(unlabelled, { scale: "standard", webTouched: false, root: "/work/this-project" }).missing.length === 0, sessionFacts(unlabelled, { scale: "standard", webTouched: false, root: "/work/this-project" }).missing.join("; "));
 check("coversProject treats a trailing slash as the same directory", coversProject("/work/a/", "/work/a") === true);
 
+// The same bleed for the health gate — and this one is not hypothetical: the
+// 2,349-steer loop was a `fail` produced by measuring $HOME, demanded of a run about
+// one small package. A verdict must speak for the tree it measured, in both
+// directions: a pass from elsewhere cannot close the gap, and a fail from elsewhere
+// cannot block a run for code it never touched.
+const hOther = createLedger();
+hOther.append({ kind: "health-run", level: "standard", verdict: "pass", scanned: 40, root: "/work/other" });
+const hOtherFacts = sessionFacts(hOther, { scale: "standard", root: "/work/this" });
+check("NEGATIVE: a PASS measured in another checkout does not close this run's health gap", hOtherFacts.missing.some((g) => /not this project/.test(g)), hOtherFacts.missing.join("; ").slice(0, 90));
+check("the gap names both roots", /\/work\/other/.test(hOtherFacts.missing.join(" ")) && /\/work\/this/.test(hOtherFacts.missing.join(" ")));
+check("the same PASS counts for the project it measured", !sessionFacts(hOther, { scale: "standard", root: "/work/other" }).missing.some((g) => /health gate/.test(g)));
+
+const hFail = createLedger();
+hFail.append({ kind: "health-run", level: "standard", verdict: "fail", scanned: 600, root: "/home/user" });
+const hFailFacts = sessionFacts(hFail, { scale: "standard", root: "/work/pkg" });
+check("NEGATIVE: a FAIL from another tree is not this run's violation to fix", !hFailFacts.missing.some((g) => /refactor the flagged code/.test(g)), hFailFacts.missing.join("; ").slice(0, 120));
+check("and it is still reported as an unverified fact, not a pass", hFailFacts.missing.some((g) => /measured "\/home\/user"/.test(g)));
+
+const hNoRoot = createLedger();
+hNoRoot.append({ kind: "health-run", level: "standard", verdict: "pass", scanned: 12 });
+check("NEGATIVE: an unlabelled health verdict is never held against the run", !sessionFacts(hNoRoot, { scale: "standard", root: "/work/this" }).missing.some((g) => /health gate/.test(g)), sessionFacts(hNoRoot, { scale: "standard", root: "/work/this" }).missing.join("; "));
+
+const hNested = createLedger();
+hNested.append({ kind: "health-run", level: "standard", verdict: "pass", scanned: 12, root: "/work/mono" });
+check("a verdict from a monorepo root covers the package under it", !sessionFacts(hNested, { scale: "standard", root: "/work/mono/pkg" }).missing.some((g) => /not this project/.test(g)));
+
+const hNotMeasured = createLedger();
+hNotMeasured.append({ kind: "health-run", level: "standard", verdict: "not-measured", scanned: 0, root: "/work/other" });
+check("a not-measured from another tree reports the wrong tree, not a disabled gate", (() => {
+  const f = sessionFacts(hNotMeasured, { scale: "standard", root: "/work/this" });
+  return f.missing.some((g) => /not this project/.test(g)) && !f.reported.some((r) => /did not measure anything/.test(r));
+})(), JSON.stringify(sessionFacts(hNotMeasured, { scale: "standard", root: "/work/this" }).reported));
+
 const naLedger = createLedger();
 naLedger.append({ kind: "health-run", level: "standard", verdict: "pass", scanned: 10 });
 naLedger.append({ kind: "suite-run", command: "npm test", exitCode: 0, durationMs: 1000, testCount: 5, scope: "full" });

@@ -118,7 +118,6 @@ export async function run({ loadTs, events, invokeCommand }) {
     chk("a touched path outside the workspace does not move the measurement", got === t.parent, got);
     fs.rmSync(outside, { recursive: true, force: true });
 
-    console.log(`\n${pass} passed, ${fail} failed`);
     console.log("=== the project's OWN artifacts follow the code, not the session ===");
     // One family, one root. The trace gate resolved a spec's testFile against
     // runRoot(); the project config, Gate 5's PLAN.md and the config screen did the
@@ -177,6 +176,35 @@ export async function run({ loadTs, events, invokeCommand }) {
       const got = isProjectRoot(bare);
       fs.rmSync(path.join(bare, "package.json"));
       return got;
+    })());
+    // ASF creates `.asf/` itself when it writes run state. If a bare `.asf/` counted
+    // as a project marker, every directory ASF has ever run in — the user's home
+    // included — would confirm itself as a project, and the decision hint would offer
+    // to bootstrap a register for a home directory full of other people's checkouts.
+    chk("NEGATIVE: a telemetry-only .asf ASF created itself does not make a project", (() => {
+      const d = fs.mkdtempSync(path.join(os.tmpdir(), "asf-mroot-tel-"));
+      try {
+        fs.mkdirSync(path.join(d, ".asf", "state", "some-key"), { recursive: true });
+        fs.writeFileSync(path.join(d, ".asf", ".gitignore"), "state/\n");
+        fs.mkdirSync(path.join(d, ".asf", "decisions"), { recursive: true });
+        return isProjectRoot(d) === false;
+      } finally { fs.rmSync(d, { recursive: true, force: true }); }
+    })());
+    chk("but durable content in the home does — a register someone wrote is evidence", (() => {
+      const d = fs.mkdtempSync(path.join(os.tmpdir(), "asf-mroot-reg-"));
+      try {
+        fs.mkdirSync(path.join(d, ".asf", "decisions"), { recursive: true });
+        fs.writeFileSync(path.join(d, ".asf", "decisions", "ADR-001-x.md"), "# Decision\n");
+        return isProjectRoot(d) === true;
+      } finally { fs.rmSync(d, { recursive: true, force: true }); }
+    })());
+    chk("and so does a config someone wrote", (() => {
+      const d = fs.mkdtempSync(path.join(os.tmpdir(), "asf-mroot-cfg-"));
+      try {
+        fs.mkdirSync(path.join(d, ".asf"), { recursive: true });
+        fs.writeFileSync(path.join(d, ".asf", "config.json"), "{}\n");
+        return isProjectRoot(d) === true;
+      } finally { fs.rmSync(d, { recursive: true, force: true }); }
     })());
     chk("NEGATIVE: the user's home is never a measurable root", isMeasurableRoot(os.homedir()) === false);
     chk("a project is a measurable root", isMeasurableRoot(t.parent) === true);
@@ -240,6 +268,11 @@ export async function run({ loadTs, events, invokeCommand }) {
     fs.rmSync(home2, { recursive: true, force: true });
     fs.rmSync(outsideDir, { recursive: true, force: true });
 
+    // The tally is printed once, at the end. It used to sit mid-file, at a section
+    // boundary added later, so it reported "0 failed" while checks still to come
+    // were printing FAIL below it. The returned verdict was always honest — the
+    // printed one was not, and a reviewer reads the log.
+    console.log(`\n${pass} passed, ${fail} failed`);
     return fail === 0;
   } finally {
     process.chdir(prev);
