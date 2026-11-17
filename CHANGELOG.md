@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.21.7] - 2026-11-11
+
+### Fixed — the health gate demanded a refactor and refused to say what
+`countByRule` received eslint's `filePath` and `line` for every violation and reduced
+them to a number. The report could say `complexity 2` and the completion gate could
+demand "refactor the flagged code" while nothing anywhere named a file — a demand with
+no object, which is the other half of the health loop: even an agent willing to fix the
+code had no way to find it. Model findings already carried file:line for exactly this
+reason (06b Rule 4); the eslint metrics were the exception that proved the rule.
+Offenders now travel through the existing `row.details` channel, project-relative (an
+absolute path is terminal noise, and a path with its leading slash chopped off reads as
+relative while being nothing of the sort), capped at five per metric so 400 violations
+cannot flood the report — while the count above them still tells the truth.
+
 ## [0.21.6] - 2026-11-11
 
 ### Fixed — a health verdict counted for a tree it never measured

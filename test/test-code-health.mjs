@@ -289,6 +289,34 @@ section("11. pipeline: gate.mode:warn → violations reported, exit 0");
   rm(dir);
 }
 
+section("12b. offenders: the report names WHERE the violations are");
+{
+  // eslint returns filePath and line. Reducing them to a count left the gate able to
+  // demand "refactor the flagged code" while the report flagged nothing — a demand
+  // with nothing to act on, which is how the health loop ran out of any way to close.
+  const dir = makeProject({ "src/god.js": "function god() { return 1; }\n" });
+  const msg = (n) => ({ ruleId: "complexity", message: "x", line: n });
+  const eslintJson = [{ filePath: `${dir}/src/god.js`, messages: [msg(7), msg(11)] }];
+  const res = await health.runHealth(dir, [], { tools: TOOLS_ALL, execFn: fakeExec({ eslintJson }) });
+  const row = (res.rows || []).find((r) => r.key === "complexity");
+  check("the failing row carries the offenders", Array.isArray(row?.details) && row.details.length === 2, JSON.stringify(row?.details));
+  check("NEGATIVE: paths are project-relative, not absolute and not slash-chopped", row.details.some((d) => /(^| )src\/god\.js:7/.test(d)) && !row.details.some((d) => d.includes(dir)), JSON.stringify(row?.details));
+  check("the line number is the one eslint reported", row.details.some((d) => /:11\b/.test(d)), JSON.stringify(row?.details));
+  check("and the text report prints them, so a human sees the same thing", /src\/god\.js:7/.test(res.text), res.text.split("\n").filter((l) => /god\.js/.test(l))[0]);
+  rm(dir);
+}
+{
+  // The list is bounded: a metric with 400 violations must not print 400 lines, but
+  // the count above it still tells the truth.
+  const dir = makeProject({ "src/many.js": "const a = 1;\n" });
+  const eslintJson = [{ filePath: `${dir}/src/many.js`, messages: Array.from({ length: 9 }, (_, i) => ({ ruleId: "complexity", message: "x", line: i + 1 })) }];
+  const res = await health.runHealth(dir, [], { tools: TOOLS_ALL, execFn: fakeExec({ eslintJson }) });
+  const row = (res.rows || []).find((r) => r.key === "complexity");
+  check("NEGATIVE: offenders are capped, so a wall of violations cannot flood the report", row.details.length === 5, String(row.details.length));
+  check("while the count stays honest", row.value === "9", row.value);
+  rm(dir);
+}
+
 section("12. pipeline: missingTool:fail + tool absent → gate fails");
 {
   const dir = makeProject({ "src/a.js": "const a = 1;\n" });
