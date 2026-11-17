@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — a run working under its session root measured the session root
+`measureRootFor` only accepted a touched file's project if that project CONTAINED the
+session root, so the ordinary shape — `pi` started in `$HOME`, work happening in a
+checkout underneath it — could never answer with the checkout and answered with the
+parent instead. Every gate then measured every project in the home directory at once.
+The run's own `filesTouched` now decides: the nearest project below the session root is
+the measured root. A touched path in an unrelated sibling still cannot drag the
+measurement away, and with nothing touched the session root stands as before
+(`test-measure-root.mjs`).
+
+
 ## [0.21.1] - 2026-11-11
 
 ### Fixed — the health gate measured the home directory, not the project

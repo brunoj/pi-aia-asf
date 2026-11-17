@@ -213,6 +213,33 @@ export async function run({ loadTs, events, invokeCommand }) {
     process.chdir(prevCwd);
     function m_sync() { return measureRootSync(); }
 
+    // ── the run's touched files decide the root, not where the shell stood ─────
+    // The live failure: a session whose workspace is a home-shaped directory, doing
+    // its work in a checkout underneath it. The containment rule could not answer
+    // with that checkout, so every gate measured the parent — and the verdict the
+    // 2,349-steer loop was stuck on was other people's code.
+    const { measureRootFor } = await loadTs("lib/extension/run.ts");
+    const home2 = fs.mkdtempSync(path.join(os.tmpdir(), "asf-mroot-home-"));
+    const projDir = path.join(home2, "proj");
+    fs.mkdirSync(path.join(projDir, "src"), { recursive: true });
+    fs.writeFileSync(path.join(projDir, "package.json"), "{}\n");
+    fs.writeFileSync(path.join(projDir, "src", "a.ts"), "export const a = 1;\n");
+    const prevCwd2 = process.cwd();
+    process.chdir(home2);
+    __clearProjectCache();
+    const gotRoot = measureRootFor({ filesTouched: [path.join(projDir, "src", "a.ts")] });
+    chk("a run working in a checkout under the session root measures THAT project", gotRoot === projDir, gotRoot);
+    chk("NEGATIVE: it is not the home-shaped session root", gotRoot !== home2, gotRoot);
+    chk("with nothing touched, the session root still stands", measureRootFor({ filesTouched: [] }) === home2, measureRootFor({ filesTouched: [] }));
+
+    const outsideDir = fs.mkdtempSync(path.join(os.tmpdir(), "asf-mroot-out-"));
+    fs.writeFileSync(path.join(outsideDir, "package.json"), "{}\n");
+    const strayRoot = measureRootFor({ filesTouched: [path.join(outsideDir, "x.ts")] });
+    chk("NEGATIVE: a stray touched path outside the workspace does not hijack the measurement", strayRoot === home2, strayRoot);
+    process.chdir(prevCwd2);
+    fs.rmSync(home2, { recursive: true, force: true });
+    fs.rmSync(outsideDir, { recursive: true, force: true });
+
     return fail === 0;
   } finally {
     process.chdir(prev);

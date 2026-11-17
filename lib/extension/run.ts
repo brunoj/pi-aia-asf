@@ -7,7 +7,7 @@ import { execFileSync } from "node:child_process";
 import { runRoot, projectName } from "./paths.ts";
 import { fileURLToPath } from "node:url";
 import { dirname, isAbsolute, resolve } from "node:path";
-import { gitRoot, isProjectRoot } from "../project.mjs";
+import { gitRoot, isProjectRoot, isMeasurableRoot } from "../project.mjs";
 import { ensureHome } from "../home.mjs";
 import { cpus, loadavg, homedir } from "node:os";
 import { renderRunCard, cardSummary, CARD_CEILING_BYTES } from "../run-card.mjs";
@@ -201,10 +201,36 @@ export function measureRootFor(state: { filesTouched?: unknown } | null | undefi
       // directory.
       if (root) return root;
     }
+    // Nothing passed the containment rule, but the run did touch real files. Walk up
+    // from the most recent one to the nearest directory that IS a project — but only
+    // one BELOW the session root. That is the ordinary shape that broke: a session
+    // started in $HOME working in a checkout underneath it, where answering with
+    // $HOME measured every project in the home directory at once and produced a
+    // completion gate nobody could close. A touched path in an unrelated sibling is
+    // still not allowed to drag the measurement away.
+    for (let i = touched.length - 1; i >= 0; i--) {
+      const f = touched[i];
+      if (typeof f !== "string" || !f.startsWith("/")) continue;
+      if (!f.startsWith(fallback + "/")) continue;
+      const near = nearestProject(dirname(f));
+      if (near && near.startsWith(fallback + "/") && isMeasurableRoot(near)) return near;
+    }
   } catch {
     /* measurement falls back to the session root; a broken guess is worse than none */
   }
   return fallback;
+}
+
+/** Nearest ancestor (inclusive) that is a project, or null. */
+function nearestProject(dir: string): string | null {
+  let cur = dir;
+  for (let i = 0; i < 12; i++) {
+    if (isProjectRoot(cur)) return cur;
+    const parent = cur.replace(/\/+$/, "").replace(/\/[^/]*$/, "");
+    if (!parent || parent === cur) return null;
+    cur = parent;
+  }
+  return null;
 }
 
 /**
