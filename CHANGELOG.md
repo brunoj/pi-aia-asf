@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.21.2] - 2026-11-17
+
 ### Fixed — a run working under its session root measured the session root
 `measureRootFor` only accepted a touched file's project if that project CONTAINED the
 session root, so the ordinary shape — `pi` started in `$HOME`, work happening in a
@@ -16,7 +18,6 @@ The run's own `filesTouched` now decides: the nearest project below the session 
 the measured root. A touched path in an unrelated sibling still cannot drag the
 measurement away, and with nothing touched the session root stands as before
 (`test-measure-root.mjs`).
-
 
 ## [0.21.1] - 2026-11-11
 
