@@ -17,6 +17,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { setPiRef } from "./lib/extension/pi-ref.ts";
 import { registerHealthTool } from "./lib/extension/tools/health.ts";
+import { registerBaselineTool } from "./lib/extension/tools/baseline.ts";
 import { registerDecisionsTool } from "./lib/extension/tools/decisions.ts";
 import { registerBrowserTools } from "./lib/extension/tools/browser.ts";
 import { registerEvidenceCheckTool } from "./lib/extension/tools/evidence-check.ts";
@@ -32,6 +33,7 @@ export { shouldPersist } from "./lib/extension/evidence.ts";
 export default function register(pi: ExtensionAPI): void {
   setPiRef(pi);
   registerHealthTool(pi);
+  registerBaselineTool(pi);
   registerDecisionsTool(pi);
   registerBrowserTools(pi);
   registerEvidenceCheckTool(pi);

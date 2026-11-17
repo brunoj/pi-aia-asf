@@ -41,6 +41,7 @@ export async function setPhase(ctx: ExtensionCommandContext, change: PhaseChange
         trigger: "command",
         steers: 0,
         seenSteers: [],
+        steerCounts: {},
       };
       __resetRefusals();
     }

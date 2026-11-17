@@ -254,50 +254,64 @@ export async function run({ events, invokeCommand, loadTs }) {
     p.cleanup();
   }
 
-  console.log("=== 8b. THE LOOP: warranted loops never stop, unwarranted ones never start ===");
+  console.log("=== 8b. THE LOOP: warranted work is steered, an uncloseable ask is escalated ===");
   {
     // The 2026-11-07 production loop was UNWARRANTED: the gate demanded a pi
     // slash command no tool could satisfy, so the gap could never close. The fix
-    // is not a cap — a real gap must be steered for as long as it is real. What
-    // must never happen: steering over something the agent cannot close, and
-    // losing the count so the same steer restarts as "steer 1".
+    // then was to remove a FAKE ceiling ("1st of at most 2") and keep steering
+    // while the gap was real. That fix was incomplete: in 2026-11-11 a real gap
+    // that ASF itself could not close was re-asked 2,349 times, because a repeat
+    // only changed the wording. Steering is now uncapped up to a ladder, and the
+    // ladder ends in a human decision — which is what "uncapped" always meant
+    // when the agent could still act, and what it must mean when it cannot.
     const lp = project("loop");
     process.chdir(lp.root);
     __clearProjectCache();
     try {
       await toolCall("edit", { path: path.join(lp.root, "src", "a.ts") });
-      let continuations = 0;
-      for (let i = 0; i < 25; i++) {
-        const r = await settle();
-        if ((r?.entries || []).some((e) => e.customType === "asf-completion-gate")) continuations++;
-      }
-      chk("a real gap keeps steering on every settle (no cap on warranted work)", continuations === 25, `got ${continuations} of 25`);
-
-      // The count only goes up — a reset is what let the loop restart itself
-      // with identical text forever.
+      const LIMIT = settleMod.REPEAT_LIMIT;
+      const steers = [];
       const numbers = [];
-      for (let i = 0; i < 3; i++) {
+      // The counter checks run INSIDE the ladder window: once it trips, the gap is
+      // escalated and there is no steer text left to read.
+      let parked = null;
+      for (let i = 0; i < LIMIT + 3; i++) {
         const r = await settle();
-        const txt = (r?.entries || []).map((e) => e.content).join(" ");
+        const es = r?.entries || [];
+        const gated = es.some((e) => e.customType === "asf-completion-gate");
+        if (es.some((e) => e.customType === "asf-park")) { parked = es.map((e) => e.content).join(" "); break; }
+        steers.push(gated);
+        const txt = es.map((e) => e.content).join(" ");
         const n = Number((txt.match(/steer (\d+)/) || [])[1]);
         if (Number.isFinite(n) && n > 0) numbers.push(n);
       }
+      chk("while the agent can still act, every settle steers", steers.length === LIMIT && steers.every(Boolean), JSON.stringify(steers));
+      // The count only goes up — a reset is what let the loop restart itself
+      // with identical text forever.
       chk("the steer counter only ever goes up", numbers.length >= 2 && numbers.every((n, i) => i === 0 || n > numbers[i - 1]), JSON.stringify(numbers));
 
-      // Wiping the state file mid-run must not reset it either: the in-process
-      // memory is the authority, the file is a record.
-      fs.writeFileSync(lp.stateFile, JSON.stringify({ current: { ...lp.read().current, steers: null, seenSteers: ["", "", ""] }, history: [] }));
+      // And past the ladder the same gap is ESCALATED, not re-asked. This is the
+      // check that the 2,349-steer loop can no longer happen.
+      chk("an identical ask repeated past the ladder is parked for the PO, not re-issued", !!parked);
+      chk("the park names who decides", /PO/.test(parked || ""), (parked || "").slice(0, 80));
+      const quiet = await settle();
+      chk("and once parked it stays quiet — no steer storm behind the park", !(quiet?.entries || []).some((e) => e.customType === "asf-completion-gate"), JSON.stringify(quiet?.entries || []).slice(0, 120));
+
+      // Wiping the state file mid-run must not reset the counter either: the
+      // in-process memory is the authority, the file is a record. A fresh run is
+      // used because the parked one has already exhausted its ladder — and the
+      // fresh run must NOT inherit that exhausted ladder.
+      await invokeCommand("asf", "abort");
+      await toolCall("edit", { path: path.join(lp.root, "src", "b.ts") });
+      const r1 = await settle();
+      const firstTxt = (r1?.entries || []).map((e) => e.content).join(" ");
+      chk("a new run with a real gap is steered from steer 1", /steer 1\b/.test(firstTxt) && !/still open/.test(firstTxt), firstTxt.match(/steer \d+/)?.[0] || "no steer text");
+      await settle();
+      fs.writeFileSync(lp.stateFile, JSON.stringify({ current: { ...lp.read().current, steers: null, seenSteers: ["", "", ""], steerCounts: {} }, history: [] }));
       const afterCorrupt = await settle();
       const corruptTxt = (afterCorrupt?.entries || []).map((e) => e.content).join(" ");
       const corruptN = Number((corruptTxt.match(/steer (\d+)/) || [])[1]);
       chk("a corrupted state file cannot reset the counter", Number.isFinite(corruptN) && corruptN > 1, corruptTxt.match(/steer \d+/)?.[0] || "no steer text");
-
-      // ...and a fresh run with a real gap starts its own count at 1.
-      await invokeCommand("asf", "abort");
-      await toolCall("edit", { path: path.join(lp.root, "src", "b.ts") });
-      const r2 = await settle();
-      const freshTxt = (r2?.entries || []).map((e) => e.content).join(" ");
-      chk("a new run with a real gap is steered from steer 1", /steer 1\b/.test(freshTxt) && !/still open/.test(freshTxt), freshTxt.match(/steer \d+/)?.[0] || "no steer text");
 
       // A state file whose steer fields are the WRONG TYPE must not throw inside
       // the settle handler: a throw there returns undefined, which lets the run

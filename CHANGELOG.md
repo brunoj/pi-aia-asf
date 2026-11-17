@@ -7,6 +7,79 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-11-11
+
+### Fixed — the completion gate could ask the same uncloseable question forever
+A production run was steered at one gap **2,349 times**. The gate knew: `blockDecision`
+computed `repeat = seenSteers.includes(fingerprint)` and used it only to change the
+wording, then returned `block: true` with a fresh continuation every time. The one exit
+that fitted — a park — was reachable only through four regexes matched against ASF's own
+gap text, and the steer itself promised that nothing but an unobtainable action is ever
+parked. The gate now counts each exact gap set (`state.steerCounts`, since `seenSteers`
+is a set and cannot answer "how many times"), steers normally up to `REPEAT_LIMIT`, and
+past it **parks for the PO** with "fix it in this run, waive it for this run, or open a
+ticket". The ladder belongs to a run: `steerCounts` is cleared when a run opens, so a
+fresh run is never parked by its predecessor's history.
+`test-loop-exits.mjs` (39 checks) pins the ladder, and `test-active-process.mjs` now
+asserts the new contract end-to-end: steer while the agent can act, park when the same
+ask stops producing work, stay quiet behind the park.
+
+### Fixed — the code health gate measured files the project had excluded
+`ignorePatterns` was matched with `ignorePatterns.some((p) => p.includes(name))`, so
+`public/**` and `**/*.min.js` excluded nothing at all, and several call sites passed
+`null` anyway: eslint ran with ASF's own `--no-config-lookup --config`, jscpd with a
+hardcoded `--ignore`, depcruise with ASF's own config. A 248 KB minified vendor bundle
+was measured as first-party source and produced 148 of 158 `maxParams` violations — an
+unfixable verdict wearing a real number. Ignore patterns are now real globs
+(`lib/code-health/glob.mjs`, `.gitignore`-like: basename patterns match at any depth,
+`**` spans segments, `!` un-ignores, last match wins), defaults exclude minified,
+bundled, generated and dotfiles, and every spawner receives the project's list.
+Exclusions are counted and reported rather than silent.
+
+### Fixed — a gate that measured nothing was a pass
+`enabled: false` returned `healthy: true`, and a run where no metric could run was
+healthy too, so a project with no toolchain recorded a nine-metric audit. A gate that
+did not run is now `not-measured`: never a pass, never a tick on the board, never a
+blocker — it is reported as unverified with the reason. `gate.mode: "warn"` is honoured
+the same way: a recorded `fail` under warn is reported, not blocked, and the report
+still says the code is **NOT healthy**.
+
+### Fixed — a suite that was already red demanded this run fix it
+The only question asked was "did the full suite exit 0 this session", so on a legacy
+project the gap closed only by fixing someone else's failures or claiming a green that
+never happened. Red is now split into *inherited* and *caused*, measured against a
+baseline ASF recorded itself: `failuresInheritedFromBaseline` accepts inheritance only
+when every failing test in the last full run was already failing at the base commit,
+and answers no — with the reason — when the names could not be read. The gate judges the
+**last** full run, not "did any full run ever pass", so a session that finished red is
+judged red. `asf_baseline` is the new producer: it runs the suite at `HEAD` in a
+throwaway detached worktree (never `git stash`, never `git checkout` — one of those has
+already destroyed uncommitted work here), and refuses a non-repo, a lint, a subset and a
+failed spawn. `test-baseline-tool.mjs` (14 checks) covers it.
+
+### Fixed — runner and scope recognition
+`parseFailing` reads the failing test names from pytest, jest, vitest, mocha and
+`node --test`, through ANSI colour, and keeps file-level `FAIL` lines only when no
+runner named a test — an extra name would make an inherited failure look new. A runner
+given a path is a subset (`pytest tests/a.py`, `bash test/test-gates.mjs`,
+`node --test test/`), where only `python tests/x.py` was caught before, and
+`run-all-tests.sh` is recognised as a suite at all. A subset baseline cannot license
+leaving the rest of the suite red.
+
+### Fixed — the register hint described a directory that is not a project
+The run card's "(no decision register yet …)" line was computed from the session
+workspace when nothing had been touched yet, so a session started in `$HOME` was told to
+bootstrap a register for a directory that is not a project. The hint now appears only
+where there is a project to have one for.
+
+### Fixed — an orphaned health suite
+`test-code-health.mjs` was never in `test/run-all.sh`, and its `fakeExec` identified
+tools by `args` while the implementation passes the resolved bin path as `cmd`, so every
+eslint metric was an `error` row. It is registered (93 checks) and identifies tools by
+`cmd`; its fixtures honour `ASF_STATE_ROOT` so they no longer write into the developer's
+real spec memory.
+
+
 ## [0.20.5] - 2026-11-11
 
 ### Fixed — a scratch write offered a decision register for the wrong directory

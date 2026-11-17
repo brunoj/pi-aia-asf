@@ -131,6 +131,14 @@ async function handleBlock(
   if (decision.fingerprint) mem.seen.add(decision.fingerprint);
   state.steers = Math.max(typeof decision.steer === "number" ? decision.steer : 0, mem.count);
   state.seenSteers = [...new Set([...(state.seenSteers || []), ...(decision.fingerprint ? [decision.fingerprint] : [])])].slice(-50);
+  if (decision.fingerprint) {
+    const counts = { ...(state.steerCounts || {}) };
+    counts[decision.fingerprint] = (Number(counts[decision.fingerprint]) || 0) + 1;
+    // Bounded: the map is keyed by an exact gap set, so a long session with many
+    // distinct gaps cannot grow it without limit, but no counter is a reason to
+    // lose the history that triggers the escalation.
+    state.steerCounts = Object.fromEntries(Object.entries(counts).slice(-40));
+  }
   state.updatedAt = new Date().toISOString();
   await saveState(project, file);
   entries.push({
@@ -230,6 +238,11 @@ export async function evaluateRun(project: string, state: AsfState) {
     webTouched: runtime.webTouched,
     continuationsSoFar: Math.max(state.steers || 0, mem.count),
     seenSteers: [...new Set([...(state.seenSteers || []), ...mem.seen])],
+    // How many times THIS exact gap set has already been asked. A Set of
+    // fingerprints cannot answer that (duplicates collapse), which is why the
+    // gate could detect a repeat but never escalate on one — the 2,349-steer
+    // loop. The count is what turns "keep working" into "ask the human".
+    steerCounts: state.steerCounts || {},
     sourceMutated: !!state.sourceMutated,
     testRunRecorded,
     tracked: runtime.tracked,

@@ -20,6 +20,12 @@ export function decideSettlement(
     webTouched?: boolean;
     continuationsSoFar?: number;
     seenSteers?: string[];
+    /**
+     * How many times each exact gap-set fingerprint has already been steered.
+     * The escalation to a park is keyed on this count — `seenSteers` is a set
+     * and cannot answer "how many times".
+     */
+    steerCounts?: Record<string, number>;
     sourceMutated?: boolean;
     testRunRecorded?: boolean;
     reportFields?: string[];

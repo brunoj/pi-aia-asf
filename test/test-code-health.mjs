@@ -11,6 +11,7 @@
  */
 import * as fs from "node:fs";
 import * as path from "node:path";
+import * as os from "node:os";
 import { fileURLToPath } from "node:url";
 import { createJiti } from "jiti";
 
@@ -18,11 +19,21 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.dirname(HERE);
 const jiti = createJiti(import.meta.url, { interopDefault: true });
 
+// Isolate the ASF home BEFORE the modules load: `--update-baseline` writes
+// through lib/home.mjs, which resolves its directory at import time, and a
+// fixture that does not redirect it drops `.asf-code-health-baseline.json`
+// into the developer's real ~/.asf.
+const STATE_ROOT = fs.mkdtempSync(path.join(os.tmpdir(), "asf-ch-state-"));
+process.env.ASF_STATE_ROOT = STATE_ROOT;
+
 const config = await jiti.import(path.join(REPO, "lib", "code-health", "config.mjs"));
 const detect = await jiti.import(path.join(REPO, "lib", "code-health", "detect.mjs"));
 const report = await jiti.import(path.join(REPO, "lib", "code-health", "report.mjs"));
 const run = await jiti.import(path.join(REPO, "lib", "code-health", "run.mjs"));
 const health = await jiti.import(path.join(REPO, "lib", "code-health", "index.mjs"));
+const measure = await jiti.import(path.join(REPO, "lib", "code-health", "measure.mjs"));
+const glob = await jiti.import(path.join(REPO, "lib", "code-health", "glob.mjs"));
+const home = await jiti.import(path.join(REPO, "lib", "home.mjs"));
 
 const results = [];
 function check(name, cond, detail = "") {
@@ -53,17 +64,24 @@ const TOOLS_ALL = { eslint: true, eslintSonarjs: true, jscpd: true, madge: true,
 /** Fake execFn: canned eslint JSON / jscpd report / madge exit. */
 function fakeExec({ eslintJson = null, eslintError = null, jscpdPercent = 0, madgeExit = 0, madgeOut = "", sleepMs = 0 } = {}) {
   return async (cmd, args, opts = {}) => {
+    // The tool is identified by the BIN (the first argument). Matching only
+    // `args` never matched: spawnEslint passes the resolved bin path as `cmd`
+    // and the args are flags — so every eslint metric fell through to the
+    // default branch, became an `error` row, and this whole suite drifted into
+    // a state where it asserted nothing about the pipeline. It was then dropped
+    // from run-all.sh, which is how it stayed broken.
+    const who = String(cmd);
     if (sleepMs > 0) {
       // Honor the bounded timeout the real exec would enforce.
       const bound = Math.min(sleepMs, opts.timeoutMs || 120_000);
       await new Promise((r) => setTimeout(r, bound));
       return { code: -1, stdout: "", stderr: "", timedOut: true };
     }
-    if (args.includes("eslint")) {
+    if (/\beslint\b/.test(who)) {
       if (eslintError) return { code: 1, stdout: "", stderr: eslintError, timedOut: false };
       return { code: 0, stdout: JSON.stringify(eslintJson || []), stderr: "", timedOut: false };
     }
-    if (args.includes("jscpd")) {
+    if (/\bjscpd\b/.test(who)) {
       const outDir = args[args.indexOf("--output") + 1];
       fs.mkdirSync(outDir, { recursive: true });
       fs.writeFileSync(
@@ -72,10 +90,10 @@ function fakeExec({ eslintJson = null, eslintError = null, jscpdPercent = 0, mad
       );
       return { code: jscpdPercent >= 5 ? 1 : 0, stdout: "", stderr: "", timedOut: false };
     }
-    if (args.includes("madge")) {
+    if (/\bmadge\b/.test(who)) {
       return { code: madgeExit, stdout: madgeOut, stderr: "", timedOut: false };
     }
-    if (args.includes("depcruise")) {
+    if (/\bdepcruise\b/.test(who)) {
       return { code: 0, stdout: "", stderr: "", timedOut: false };
     }
     return { code: 0, stdout: "", stderr: "", timedOut: false };
@@ -252,7 +270,9 @@ section("10. pipeline: enabled:false → disabled, no tools spawned");
   fs.writeFileSync(path.join(dir, ".asf-code-health.json"), JSON.stringify({ enabled: false }));
   let spawned = 0;
   const res = await health.runHealth(dir, [], { tools: TOOLS_ALL, execFn: async () => { spawned++; return { code: 0, stdout: "[]", stderr: "", timedOut: false }; } });
-  check("reports disabled", res.text.includes("disabled"));
+  check("reports not measured", res.text.includes("not measured"), res.text.slice(0, 60));
+  check("a disabled gate never says HEALTHY", !res.text.includes("HEALTHY"));
+  check("a disabled gate is not a pass", res.healthy === false && res.measured === false);
   check("exit 0", res.exitCode === 0);
   check("no tools spawned", spawned === 0);
   rm(dir);
@@ -307,9 +327,14 @@ section("15. pipeline: --update-baseline writes the committed baseline");
 {
   const dir = makeProject({ "src/a.js": "const a = 1;\n" });
   const res = await health.runHealth(dir, ["--update-baseline"], { tools: TOOLS_ALL, execFn: fakeExec() });
-  const baseline = JSON.parse(fs.readFileSync(path.join(dir, ".asf-code-health-baseline.json"), "utf-8"));
-  check("baseline written", baseline.metrics && typeof baseline.metrics.complexity === "object");
+  // The baseline lives in the ASF home, not the project directory (home-first
+  // since 0.17.x); reading the old root path is what made this check crash.
+  const file = home.writePath(dir, "baseline");
+  check("baseline written where the gate reads it", fs.existsSync(file), file);
+  const baseline = JSON.parse(fs.readFileSync(file, "utf-8"));
+  check("baseline has metric rows", baseline.metrics && typeof baseline.metrics.complexity === "object");
   check("report mentions baseline update", res.text.includes("Baseline updated"));
+  check("the baseline did not dirty the project directory", !fs.existsSync(path.join(dir, ".asf-code-health-baseline.json")));
   rm(dir);
 }
 
@@ -335,13 +360,79 @@ section("15b. pipeline: --json returns machine-readable output");
   rm(dir);
 }
 
+section("16c. the project's ignore list reaches every tool (the d3.v5.min.js bug)");
+{
+  // A 248 KB minified vendor bundle was measured as first-party source and
+  // produced 148 of 158 maxParams violations, because the ignore matcher asked
+  // whether the PATTERN contained the FILENAME — so `public/**` and
+  // `**/*.min.js` excluded nothing, silently. And even a working list never
+  // reached the spawners, which re-listed the files with `null`.
+  const dir = makeProject({
+    "src/a.js": "export function add(a, b) { return a + b; }\n",
+    "public/js/d3.v5.min.js": "function f(a,b,c,d,e,g,h,i,j,k){return 1}\n",
+    "assets/vendor/lodash.min.js": "function f(a,b,c,d,e,g,h,i,j,k){return 1}\n",
+    "generated/proto.js": "function f(a,b,c,d,e,g,h,i,j,k){return 1}\n",
+    ".eslintrc.json": JSON.stringify({ ignores: ["public/**"] }),
+    "legacy/old.js": "function f(a,b,c,d,e,g,h,i,j,k){return 1}\n",
+  });
+  fs.writeFileSync(path.join(dir, ".asf-code-health.json"), JSON.stringify({ ignore: ["legacy/**"] }));
+  const seen = { eslint: [], jscpd: [], depcruise: [], jscpdIgnore: "" };
+  const spy = async (cmd, args) => {
+    const who = /\beslint\b/.test(String(cmd)) ? "eslint" : /\bjscpd\b/.test(String(cmd)) ? "jscpd" : /\bdepcruise\b/.test(String(cmd)) ? "depcruise" : null;
+    if (who === "jscpd") seen.jscpdIgnore = String(args[args.indexOf("--ignore") + 1] || "");
+    if (who) seen[who] = args.filter((a) => /\.(js|mjs|cjs|ts)$/.test(String(a)));
+    return fakeExec()(cmd, args, {});
+  };
+  const res = await health.runHealth(dir, [], { tools: TOOLS_ALL, execFn: spy });
+  check("the minified bundle is not measured by eslint", !seen.eslint.some((f) => f.includes("d3.v5.min.js")), seen.eslint.join(","));
+  check("a vendored minified file is not measured", !seen.eslint.some((f) => f.includes("lodash.min.js")));
+  check("a generated tree is not measured", !seen.eslint.some((f) => f.includes("generated/")));
+  check("the project's own ignore glob is honoured", !seen.eslint.some((f) => f.includes("legacy/")), "legacy/** was ignored in config");
+  check("first-party source IS measured", seen.eslint.some((f) => f.endsWith("src/a.js")), seen.eslint.join(","));
+  check("the tool config is not measured as source", !seen.eslint.some((f) => f.includes(".eslintrc")));
+  check("depcruise honours the ignore list too", !seen.depcruise.some((f) => f.includes("d3.v5.min.js") || f.includes("legacy/")), seen.depcruise.join(","));
+  check("jscpd is told about minified and vendored trees", /min\.js/.test(seen.jscpdIgnore || "") && /vendor|generated/.test(seen.jscpdIgnore || ""), (seen.jscpdIgnore || "").slice(0, 80));
+  check("jscpd receives the project's own ignore patterns too", (seen.jscpdIgnore || "").includes("legacy/**"), (seen.jscpdIgnore || "").slice(0, 120));
+  check("the exclusion count is reported, not silent", typeof res.excluded === "number" && res.excluded >= 3, `excluded=${res.excluded}`);
+  rm(dir);
+}
+
+section("16d. the ignore matcher matches paths, not substrings of the pattern");
+{
+  const cases = [
+    ["public/js/d3.v5.min.js", ["public/**"], true],
+    ["public/js/d3.v5.min.js", ["**/*.min.js"], true],
+    ["src/a.js", ["**/*.min.js"], false],
+    ["src/a.js", ["public/**"], false],
+    ["a.js", ["a.js"], true],
+    ["deep/nested/a.js", ["a.js"], true],
+    ["dist/x.js", ["dist/**", "!dist/keep.js"], true],
+    ["dist/keep.js", ["dist/**", "!dist/keep.js"], false],
+    ["dist/other.js", ["dist/**", "!dist/keep.js"], true],
+    ["src/aXb.js", ["src/a?b.js"], true],
+    ["src/axxb.js", ["src/a?b.js"], false],
+  ];
+  let ok = 0;
+  for (const [file, patterns, want] of cases) {
+    if (glob.isIgnored(file, patterns) === want) ok++;
+    else check(`glob ${JSON.stringify(patterns)} vs ${file}`, false, `wanted ${want}`);
+  }
+  check(`all ${cases.length} ignore-matcher cases match`, ok === cases.length, `${ok}/${cases.length}`);
+  rm(makeProject({ "x.js": "1\n" }));
+}
+
 section("16b. pipeline: no tools at all → UNVERIFIED, not a gate failure");
 {
   const dir = makeProject({ "src/a.js": "const a = 1;\n" });
   const res = await health.runHealth(dir, [], { tools: { eslint: false, eslintSonarjs: false, jscpd: false, madge: false, dependencyCruiser: false, typescriptParser: false }, execFn: fakeExec() });
-  check("not a failure (warn semantics)", res.healthy === true);
-  check("exit 0", res.exitCode === 0);
-  check("report says UNVERIFIED", res.text.includes("UNVERIFIED"));
+  // The old contract here was `healthy === true` with "UNVERIFIED" printed
+  // above it: a project with no toolchain recorded a PASS. Honest now — not
+  // healthy, not measured, and still not a build failure.
+  check("not measured, not a pass", res.healthy === false && res.measured === false);
+  check("exit 0 (a missing toolchain is not a build failure)", res.exitCode === 0);
+  check("report says NOT MEASURED", res.text.includes("NOT MEASURED"));
+  check("report never says HEALTHY", !res.text.includes("HEALTHY"));
+  check("verdictOf reads it as not-measured", measure.verdictOf(res) === "not-measured");
   rm(dir);
 }
 
@@ -399,6 +490,9 @@ section("18. real eslint: clean fixture passes, god-file fails");
 for (const dir of tempDirs) {
   fs.rmSync(dir, { recursive: true, force: true });
 }
+
+fs.rmSync(STATE_ROOT, { recursive: true, force: true });
+for (const d of tempDirs) rm(d);
 
 const failed = results.filter((r) => !r.cond);
 console.log(`\n${results.length - failed.length}/${results.length} checks passed`);

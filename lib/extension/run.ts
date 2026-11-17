@@ -4,6 +4,7 @@
  */
 
 import { execFileSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import { runRoot, projectName } from "./paths.ts";
 import { fileURLToPath } from "node:url";
 import { dirname, isAbsolute, resolve } from "node:path";
@@ -33,8 +34,32 @@ export function newRunId(): string {
  * a decision can never push the DoD list off the card. Titles are rules, so
  * three lines steer; that is the whole point of the format.
  */
+/**
+ * Is this directory a project, or just where pi happened to be started?
+ *
+ * The card says "this project has no decision register". Saying that about
+ * `$HOME` — a non-repo session workspace with unrelated checkouts under it —
+ * told an agent to "adopt" five ADRs belonging to another project (and, before
+ * 0.20.5, offered them as its own). A hint about the register only makes sense
+ * where there is a project to have a register for.
+ */
+function isProjectRoot(root: string): boolean {
+  try {
+    if (!root || !isAbsolute(root)) return false;
+    if (existsSync(resolve(root, ".git"))) return true;
+    if (existsSync(resolve(root, ".asf"))) return true;
+    for (const m of ["package.json", "pyproject.toml", "setup.py", "go.mod", "Cargo.toml", "composer.json", "pom.xml", "build.gradle", "mix.exs"]) {
+      if (existsSync(resolve(root, m))) return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 function decisionBlock(root: string): string {
   try {
+    if (!isProjectRoot(root)) return "";
     const cfg = readProjectConfig(root);
     if (cfg["gate.decisions.inject"] === false) return "";
     const { records } = registerAt(root, cfg);
@@ -114,6 +139,9 @@ export async function openAutoRun(trigger: string, path: string | null): Promise
     lastMutationAt: Date.now(),
     steers: 0,
     seenSteers: [],
+    // The ladder belongs to a run. Inheriting it would park a fresh run's first
+    // honest gap because a previous run had already asked three times.
+    steerCounts: {},
   };
   file.current = state;
   // The home is created when a run opens, not when a file is first needed: the

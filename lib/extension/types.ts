@@ -41,6 +41,13 @@ export interface AsfState {
   /** Steers issued, and the exact gaps already raised (never raised twice). */
   steers?: number;
   seenSteers?: string[];
+  /**
+   * How many times each exact gap set has been steered. `seenSteers` is a set,
+   * so it can answer "have we asked this before" but never "how many times" —
+   * and without the count the gate could detect a repeat and still re-ask it
+   * forever (the 2,349-steer loop).
+   */
+  steerCounts?: Record<string, number>;
   /** The run the PO silenced with `/asf passive`. */
   passiveRunId?: string;
   /** Epoch ms of the last source mutation in this run. */
@@ -60,7 +67,7 @@ export const QA_CHECKLIST: Array<{ key: string; label: string }> = [
   { key: "browser", label: "Every interface the change TOUCHES exercised through a real browser during the build (06b Rule 9) — page + action + assertion named; n/a with reason if none" },
   { key: "specs", label: "Every MUST spec 'met' with concrete evidence" },
   { key: "trace", label: "Spec-to-code traceability: every met spec has outcome → codePath → test" },
-  { key: "code-health", label: "Code Health Gate passed (or enabled:false / gate.mode:warn with the report shown)" },
+  { key: "code-health", label: "Code Health Gate measured and passed — or it is reported as NOT MEASURED (gate disabled in the project config, or no metric could run) with the reason shown; a gate that did not run is never drawn as a tick" },
   { key: "model", label: "Model (06j): every relationship the change touches has a written ownership declaration; store writes have invariant + non-effect tests (06g §3); /asf health model level passes or its findings are accepted with a reason; n/a with reason if no persistence touched" },
   { key: "surface", label: "Every delivered feature is consumed by a surface (UI or API) — nothing dead" },
   { key: "e2e", label: "Feature specs have an end-to-end behavioral test through the real entry point" },

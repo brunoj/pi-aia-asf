@@ -114,6 +114,14 @@ export function sanitizeSteerFields(state: AsfState | null | undefined): void {
   if (typeof state.steers !== "number" || !Number.isFinite(state.steers) || state.steers < 0) state.steers = 0;
   if (!Array.isArray(state.seenSteers)) state.seenSteers = [];
   state.seenSteers = (state.seenSteers as unknown[]).filter((x): x is string => typeof x === "string" && x.trim().length > 0);
+  if (!state.steerCounts || typeof state.steerCounts !== "object" || Array.isArray(state.steerCounts)) state.steerCounts = {};
+  else {
+    const clean: Record<string, number> = {};
+    for (const [k, v] of Object.entries(state.steerCounts as Record<string, unknown>)) {
+      if (typeof k === "string" && k.trim() && Number.isFinite(Number(v)) && Number(v) > 0) clean[k] = Math.floor(Number(v));
+    }
+    state.steerCounts = clean;
+  }
   if (!Array.isArray(state.filesTouched)) state.filesTouched = [];
   else state.filesTouched = (state.filesTouched as unknown[]).filter((f): f is string => typeof f === "string" && f.trim().length > 0).slice(-10);
   if (typeof state.lastMutationAt !== "number" || !Number.isFinite(state.lastMutationAt)) state.lastMutationAt = 0;
@@ -226,6 +234,12 @@ function resolveCurrent(incoming: ProjectStateFile, onDisk: ProjectStateFile | n
 function mergeRunFields(a: AsfState, b: AsfState): void {
   a.steers = Math.max(Number(a.steers) || 0, Number(b.steers) || 0);
   a.seenSteers = [...new Set([...(a.seenSteers || []), ...(b.seenSteers || [])])].filter((x) => typeof x === "string" && x.trim()).slice(-50);
+  // Merging counts takes the MAX, never the sum: two writers observing the same
+  // gap set should not inflate each other into a premature park.
+  a.steerCounts = { ...(a.steerCounts || {}) };
+  for (const [k, v] of Object.entries(b.steerCounts || {})) {
+    a.steerCounts[k] = Math.max(Number(a.steerCounts[k]) || 0, Number(v) || 0);
+  }
   // Chronological: the on-disk list is older, the incoming one carries the new
   // entry. Appending the incoming entries AFTER the on-disk ones keeps
   // newest-last, which is what the slice(-10) below trims.
