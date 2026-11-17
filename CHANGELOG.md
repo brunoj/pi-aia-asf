@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.21.4] - 2026-11-11
+
+### Fixed — tracked work that could never be closed
+`noteTrackedCall` identified an item by `itemId(input) || \`tool:${toolName}\``, so a
+project whose tools name the item anything other than `ticket_id`/`id`/... opened a
+claim under `tool:bmx_claim` while its resolve closed a key nobody had opened. The gap
+stayed open no matter what the agent did — an unclosable gap, the exact defect class the
+tracked-work gate exists to prevent, and now bounded only by the new steer budget. A
+resolve/park with no readable id closes the open item it was plainly about, and
+`gate.tracked.idKeys` lets a project name its own id field so its items stay separate.
+
+A narrated wait had the same shape in miniature: with no readable id it opened an item
+literally named `"null"`, which the agent can neither name nor resolve. It now uses the
+claim's fallback key and is closeable by the real resolve action.
+
+`MAX_STEERS`' comment still promised "no cap on warranted work, and a real gap is
+re-raised forever" after 0.21.3 added one; a bound the code denies is how a fair
+escalation reads as harassment, so it names the two bounds that actually exist
+(`test-gates.mjs`, 133 checks).
+
 ## [0.21.3] - 2026-11-11
 
 ### Fixed — the block path had no bound, and a fail claimed the gap was closed

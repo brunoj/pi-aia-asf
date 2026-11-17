@@ -426,6 +426,40 @@ noteTrackedCall(trParked, { toolName: "bmx_claim", input: { ticket_id: "BMX-2" }
 noteTrackedCall(trParked, { toolName: "bmx_request_input", input: { ticket_id: "BMX-2", question: "deploy now?" } });
 check("parking clears it — parking is a legal disposition", trackedClear(trParked) && danglingGaps(trParked).length === 0);
 
+// A project whose tools name the item differently used to be uncloseable: the claim
+// was tracked under `tool:bmx_claim`, the resolve closed a key nobody had opened, and
+// the gap stayed open no matter what the agent did. An unclosable gap is the exact
+// defect this area exists to prevent.
+const trNoId = createTracked();
+noteTrackedCall(trNoId, { toolName: "bmx_claim", input: { card_id: "CARD-7" } });
+check("an unidentifiable claim is still tracked", Object.keys(trNoId.open).length === 1, Object.keys(trNoId.open).join(","));
+noteTrackedCall(trNoId, { toolName: "bmx_submit_resolution", input: { card_id: "CARD-7" } });
+check("NEGATIVE: and the correct resolve action can still close it", trackedClear(trNoId) && danglingGaps(trNoId).length === 0, Object.keys(trNoId.open).join(","));
+
+const mIdKeys = matchersFromConfig({ "gate.tracked.idKeys": "card_id" });
+const trIds = createTracked();
+noteTrackedCall(trIds, { toolName: "bmx_claim", input: { card_id: "C-1" }, matchers: mIdKeys });
+noteTrackedCall(trIds, { toolName: "bmx_claim", input: { card_id: "C-2" }, matchers: mIdKeys });
+check("a project can name its own id field, and items stay separate", Object.keys(trIds.open).join(",") === "C-1,C-2", Object.keys(trIds.open).join(","));
+noteTrackedCall(trIds, { toolName: "bmx_submit_resolution", input: { card_id: "C-1" }, matchers: mIdKeys });
+check("resolving one leaves the other genuinely open", Object.keys(trIds.open).join(",") === "C-2" && danglingGaps(trIds).length === 1, Object.keys(trIds.open).join(","));
+check("NEGATIVE: an id-less resolve does not clear work it never named", (() => {
+  const t = createTracked();
+  noteTrackedCall(t, { toolName: "bmx_claim", input: { ticket_id: "BMX-9" } });
+  noteTrackedCall(t, { toolName: "bmx_claim", input: { card_id: "other" } });
+  noteTrackedCall(t, { toolName: "bmx_submit_resolution", input: { card_id: "other" } });
+  return Object.keys(t.open).join(",") === "BMX-9";
+})(), "an unrelated named item must survive");
+
+// A narrated wait whose id the harness cannot read used to open an item literally
+// named "null" — a gap the agent can neither name nor resolve.
+const trWaitNull = createTracked();
+noteTrackedCall(trWaitNull, { toolName: "bmx_ticket_progress", input: { card_id: "X", text: "still waiting on the vendor to reply" } });
+check("NEGATIVE: a narrated wait never opens an item called 'null'", !Object.keys(trWaitNull.open).includes("null"), Object.keys(trWaitNull.open).join(","));
+check("and the wait is still tracked, so the gate can see it", danglingGaps(trWaitNull).length === 1 && /waiting|narrated/.test(danglingGaps(trWaitNull)[0]), danglingGaps(trWaitNull)[0]?.slice(0, 60));
+noteTrackedCall(trWaitNull, { toolName: "bmx_submit_resolution", input: { card_id: "X" } });
+check("and it is closeable by the real resolve action", trackedClear(trWaitNull), Object.keys(trWaitNull.open).join(","));
+
 const trNone = createTracked();
 check("a session that claimed nothing is held to nothing", danglingGaps(trNone).length === 0);
 
