@@ -28,7 +28,7 @@ export const pendingSuiteRuns = new Map<string, Record<string, unknown>>();
  */
 export const pendingCleanRoom = new Map<string, { package: string; command: string }>();
 /** Completed suite runs — the fact the push gate checks for. */
-export const suiteRuns: Array<{ scope: string; exitCode: number; command: string; durationMs: number; testCount: number | string; at?: number }> = [];
+export const suiteRuns: Array<{ scope: string; exitCode: number; command: string; durationMs: number; testCount: number | string; at?: number; root?: string }> = [];
 /** Memoised dirty-tree answer, refreshed at most once per tool call. */
 export let dirtyCache: { at: number; dirty: boolean } | null = null;
 

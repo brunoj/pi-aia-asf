@@ -13,6 +13,8 @@ export interface SuiteRunEntry {
   failing: string[];
   scope: "full" | "subset";
   impactStated: boolean;
+  /** Where the suite actually ran; the gate will not let one checkout stand in for another. */
+  root?: string;
   at?: number;
   [field: string]: unknown;
 }

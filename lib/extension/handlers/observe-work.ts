@@ -7,6 +7,7 @@
  * Extracted from the tool_call handler for the same reason `observe-decisions.ts`
  * exists: the handler's job is to decide, and reading the session is a different job.
  */
+import { resolve } from "node:path";
 import { deriveSuiteRun } from "../../gates/suite-runs.mjs";
 import { noteTrackedCall, matchersFromConfig } from "../../gates/tracked.mjs";
 import { projectName } from "../paths.ts";
@@ -39,6 +40,10 @@ export function observeSuiteAttempt(input: Input, event: Event): void {
     // Exit code and duration are filled in by tool_result; recording the attempt
     // here keeps the ledger chronological.
     (derived as Record<string, unknown>)._startedAt = started;
+    // WHERE it ran. The ledger is one per process, so in a session that touches two
+    // checkouts a green suite in one used to satisfy the other's completion gate.
+    // The gate can only judge an entry if the entry says where it happened.
+    (derived as Record<string, unknown>).root = suiteCwd(input, command);
     pendingSuiteRuns.set(String(event.toolCallId || started), derived);
   }
   if (!/\basf-approve\b/.test(command)) return;
@@ -53,6 +58,29 @@ export function observeSuiteAttempt(input: Input, event: Event): void {
   });
 }
 
+/**
+ * The directory a suite command actually ran in.
+ *
+ * `cd other/place && npm test` is common enough that trusting the session cwd
+ * would mislabel it, and a mislabelled root is worse than none: the gate would
+ * blame a run for a suite that really did cover it.
+ */
+function suiteCwd(input: Input, command: string): string {
+  const cd = /(?:^|&&|;)\s*cd\s+([^\s&|;]+)/.exec(command);
+  const base = typeof input.cwd === "string" && input.cwd ? input.cwd : process.cwd();
+  if (cd) {
+    try {
+      return resolve(base, cd[1].replace(/^['"]|['"]$/g, ""));
+    } catch {
+      /* fall through to the session cwd */
+    }
+  }
+  try {
+    return resolve(base);
+  } catch {
+    return base;
+  }
+}
 /** A write to a web surface means browser verification is owed. */
 export function observeWebTouch(input: Input): void {
   const touched = typeof input.path === "string" ? input.path : typeof input.file_path === "string" ? input.file_path : "";

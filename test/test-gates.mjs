@@ -22,7 +22,7 @@ import {
   blockPushWithoutGreen,
   blockDestructiveGitDirty,
 } from "../lib/gates/blockers.mjs";
-import { createLedger, sessionFacts, renderLedger, validateEntry } from "../lib/gates/ledger.mjs";
+import { createLedger, sessionFacts, renderLedger, validateEntry, coversProject } from "../lib/gates/ledger.mjs";
 import { deriveSuiteRun } from "../lib/gates/suite-runs.mjs";
 import { createAuthority, renderAuthority, PROMOTION_RULE } from "../lib/gates/authority.mjs";
 import { decideSettlement, renderCompletionGate, MAX_STEERS, steerFingerprint, agentClosable, splitGaps, classifyPark, REPEAT_LIMIT, MAX_RUN_STEERS } from "../lib/gates/settle.mjs";
@@ -199,6 +199,32 @@ full.append({ kind: "health-run", level: "standard", verdict: "pass", scanned: 4
 full.append({ kind: "suite-run", command: "npm test", exitCode: 0, durationMs: 4000, testCount: 73, scope: "full" });
 full.append({ kind: "browser-verify", page: "/settings", action: "click save", assertion: "toast appears" });
 check("a complete session has no gaps", sessionFacts(full, { scale: "standard", webTouched: true }).missing.length === 0, sessionFacts(full, { scale: "standard", webTouched: true }).missing.join("; "));
+
+// ── one checkout may not stand in for another ────────────────────────────────
+// The ledger is one per process. A session that touched two projects could close
+// one run's completion gate with the other's green suite — the gate certified
+// verification that had nothing to do with the code under review.
+const bleed = createLedger();
+bleed.append({ kind: "health-run", level: "standard", verdict: "pass", scanned: 41 });
+bleed.append({ kind: "suite-run", command: "npm test", exitCode: 0, durationMs: 4000, testCount: 73, scope: "full", root: "/work/other-project" });
+const bleedFacts = sessionFacts(bleed, { scale: "standard", webTouched: false, root: "/work/this-project" });
+check("NEGATIVE: a green suite from a sibling checkout does not close this run's gap", bleedFacts.missing.some((g) => /not for this project/.test(g)), bleedFacts.missing.join("; ").slice(0, 100));
+check("the gap names both roots, so the agent knows what to run", /\/work\/other-project/.test(bleedFacts.missing.join(" ")) && /\/work\/this-project/.test(bleedFacts.missing.join(" ")), bleedFacts.missing.join(" ").slice(0, 140));
+const bleedSame = sessionFacts(bleed, { scale: "standard", webTouched: false, root: "/work/other-project" });
+check("the same entry DOES count for the project it ran in", !bleedSame.missing.some((g) => /not for this project/.test(g)), bleedSame.missing.join("; ").slice(0, 90));
+
+const nested = createLedger();
+nested.append({ kind: "health-run", level: "standard", verdict: "pass", scanned: 41 });
+nested.append({ kind: "suite-run", command: "npm test", exitCode: 0, durationMs: 4000, testCount: 73, scope: "full", root: "/work/mono" });
+check("a suite run from a parent that covers the project still counts", !sessionFacts(nested, { scale: "standard", webTouched: false, root: "/work/mono/pkg" }).missing.some((g) => /not for this project/.test(g)));
+nested.append({ kind: "suite-run", command: "npm test", exitCode: 0, durationMs: 4000, testCount: 73, scope: "full", root: "/work/mono/pkg" });
+check("and a run inside the project counts", !sessionFacts(nested, { scale: "standard", webTouched: false, root: "/work/mono" }).missing.some((g) => /not for this project/.test(g)));
+
+const unlabelled = createLedger();
+unlabelled.append({ kind: "health-run", level: "standard", verdict: "pass", scanned: 41 });
+unlabelled.append({ kind: "suite-run", command: "npm test", exitCode: 0, durationMs: 4000, testCount: 73, scope: "full" });
+check("NEGATIVE: an unlabelled entry is never held against the run (a missing label cannot manufacture a gap)", sessionFacts(unlabelled, { scale: "standard", webTouched: false, root: "/work/this-project" }).missing.length === 0, sessionFacts(unlabelled, { scale: "standard", webTouched: false, root: "/work/this-project" }).missing.join("; "));
+check("coversProject treats a trailing slash as the same directory", coversProject("/work/a/", "/work/a") === true);
 
 const naLedger = createLedger();
 naLedger.append({ kind: "health-run", level: "standard", verdict: "pass", scanned: 10 });

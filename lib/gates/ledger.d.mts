@@ -24,7 +24,9 @@ export function createLedger(): Ledger;
 export function validateEntry(entry: unknown): string | null;
 export function sessionFacts(
   ledger: Ledger,
-  opts?: { scale?: "small" | "standard" | "major"; webTouched?: boolean },
-): { missing: string[]; health: LedgerEntry | null; fullRuns: LedgerEntry[] };
+  opts?: { scale?: "small" | "standard" | "major"; webTouched?: boolean; root?: string | null },
+): { missing: string[]; reported: string[]; health: LedgerEntry | null; fullRuns: LedgerEntry[] };
+/** Does a suite run recorded at `entryRoot` speak for the project at `root`? */
+export function coversProject(entryRoot: string | null | undefined, root: string | null | undefined): boolean;
 export function renderLedger(ledger: Ledger): string;
 export const ENTRY_KINDS: string[];

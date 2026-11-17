@@ -28,6 +28,10 @@ function completeSuiteRun(event: ResultEvent, pending: Record<string, unknown>):
   });
   if (!derived) return;
   delete (derived as Record<string, unknown>)._startedAt;
+  // The entry is re-derived from the command here, so anything the observer learned
+  // at call time has to be carried across explicitly — otherwise where the suite
+  // ran was recorded on the pending row and silently dropped from the ledger.
+  if (typeof pending.root === "string" && pending.root) (derived as Record<string, unknown>).root = pending.root;
   // P6: any real test run ends the blind stretch.
   runtime.blindMutations = 0;
   runtime.blindNudged = false;
@@ -38,6 +42,7 @@ function completeSuiteRun(event: ResultEvent, pending: Record<string, unknown>):
     command: derived.command,
     durationMs: derived.durationMs,
     testCount: derived.testCount,
+    root: (derived as Record<string, unknown>).root as string | undefined,
   });
   appendEvidence({ ...derived });
 }

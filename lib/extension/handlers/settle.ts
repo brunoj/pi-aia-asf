@@ -227,7 +227,8 @@ export async function evaluateRun(project: string, state: AsfState) {
   const testRunRecorded = suiteRuns.some((r) => r.exitCode === 0 && (r.at ?? 0) >= since);
   // Traces are checked against the project the run is about (the code the specs
   // describe), not the directory pi happened to be started in.
-  const untracedMet = await untracedMetSpecs(state.startedAt, measureRootFor(state));
+  const root = measureRootFor(state);
+  const untracedMet = await untracedMetSpecs(state.startedAt, root);
   // The in-process ledger is the authority; the file is a record that may be
   // stale, raced or hand-edited. max() means a counter can never go down.
   const mem = steerLedgerFor(`${project}|${state.runId || "run"}`);
@@ -247,6 +248,9 @@ export async function evaluateRun(project: string, state: AsfState) {
     testRunRecorded,
     tracked: runtime.tracked,
     decisionGaps: decisionFacts(state),
+    // Which checkout the suite has to have run in. Without it a green suite in one
+    // project of a multi-checkout session satisfied another project's gate.
+    root,
   });
 }
 

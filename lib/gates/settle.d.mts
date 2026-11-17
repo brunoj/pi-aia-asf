@@ -26,6 +26,8 @@ export function decideSettlement(
      * and cannot answer "how many times".
      */
     steerCounts?: Record<string, number>;
+    /** The checkout the suite must have run in (see `coversProject`). */
+    root?: string | null;
     sourceMutated?: boolean;
     testRunRecorded?: boolean;
     reportFields?: string[];

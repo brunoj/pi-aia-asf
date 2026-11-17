@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.21.5] - 2026-11-11
+
+### Fixed — one checkout's green suite closed another's gate
+The evidence ledger is one per process, and a `suite-run` entry did not say where it
+ran. A session that touched two projects could therefore satisfy one run's completion
+gate with the other project's passing suite — verification that had nothing to do with
+the code under review. The observer now records the directory the command ran in
+(honouring `cd x && npm test`), `completeSuiteRun` carries it through the re-derive
+step that previously dropped everything learned at call time, and `sessionFacts`
+judges only runs that cover the project the run is about (a parent or child directory
+counts; a sibling does not). An unlabelled entry is never held against a run, so a
+missing label cannot manufacture a gap the agent cannot answer.
+
+The carry-through hop was the near-miss: the first cut set `root` at observe time and
+the ledger entry silently lacked it. `test-suite-root.mjs` drives the real
+tool_call/tool_result handlers and fails 3 of 5 checks when that hop is removed.
+
+### Fixed — tracked work that could never be closed
+A claim whose item id the harness could not read was tracked under `tool:<name>`
+while its resolve closed a key nobody had opened, so the gap stayed open whatever the
+agent did. A resolve/park with no readable id now closes the open item it was about,
+`gate.tracked.idKeys` lets a project name its own id field, and a narrated wait with
+no readable id no longer opens an item literally named "null".
+
 ## [0.21.4] - 2026-11-11
 
 ### Fixed — tracked work that could never be closed
