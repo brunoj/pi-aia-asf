@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.21.8] — 2026-11-18
+
+The gate can now tell you *where* the code is unhealthy, and ASF's own code walks its
+own rules.
+
+### The report names the violating code
+
+`✗ complexity 5` told the agent to "refactor the flagged code" while the report
+flagged nothing. eslint returned `filePath` and `line` for every violation and the
+gate threw them away. Offenders now reach the report (project-relative, capped at 5
+per metric so a metric with 400 violations cannot print 400 lines), on the same
+channel model findings already used:
+
+```
+✗ function  complexity  1  max cyclomatic complexity
+      complexity at lib/code-health/report.mjs:9
+```
+
+### ASF's own code now passes every function-level metric
+
+`sessionFacts` — the single function tripping complexity, cognitive complexity and
+length at once — is split into `healthFacts`, `suiteFacts` and `browserFacts`.
+`blockDecision` gives its two parks a `parked()` helper and its steer text a
+`continuationText()`; `evaluateRow` gains `unevaluatedRow`/`rowDetails`; `asf_baseline`
+loses its five-parameter signature and its duplicated measurement path.
+
+The five reasons a metric never ran (disabled, wrong language, tool missing, threw,
+rule unknown) are no longer collapsed into one `skipped` — collapsing them is how a
+disabled gate once read as a pass.
+
+`complexity`, `cognitiveComplexity`, `maxLinesPerFunction`, `maxDepth` and `maxParams`
+all now report 0 on this repo. Remaining: 5 files over 300 lines.
+
 ## [0.21.7] - 2026-11-11
 
 ### Fixed — the health gate demanded a refactor and refused to say what
