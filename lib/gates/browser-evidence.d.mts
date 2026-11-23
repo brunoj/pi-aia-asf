@@ -17,12 +17,12 @@ export function naGap(fields?: { reason?: string }): string | null;
 
 /** The ledger entry for a verification. */
 export function verifyEntry(
-  fields?: { page?: string; action?: string; assertion?: string },
+  fields?: { page?: string; action?: string; assertion?: string; root?: string },
   by?: string,
-): { kind: "browser-verify"; page: string; action: string; assertion: string; by: string };
+): { kind: "browser-verify"; page: string; action: string; assertion: string; by: string; root?: string };
 
 /** The ledger entry for a structured n/a. */
 export function naEntry(
-  fields?: { reason?: string },
+  fields?: { reason?: string; root?: string },
   by?: string,
-): { kind: "browser-na"; reason: string; by: string };
+): { kind: "browser-na"; reason: string; by: string; root?: string };

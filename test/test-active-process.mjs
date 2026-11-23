@@ -74,6 +74,16 @@ export async function run({ events, invokeCommand, loadTs }) {
   chk("NEGATIVE: grep is not a write", bashWritesSource("grep -rn foo lib/x.mjs").writes === false);
   chk("NEGATIVE: a test run is not a write", bashWritesSource("node test/x.test.js > /tmp/out.log").writes === false);
   chk("NEGATIVE: reading a file with cat is not a write", bashWritesSource("cat lib/x.mjs | head").writes === false);
+  // A heredoc is stdin, not a write. The old detector matched ANY heredoc and
+  // then only needed a source-looking path somewhere in the command, so a heredoc
+  // that merely MENTIONED a source file set `sourceMutated` on a run that changed
+  // nothing — and the completion gate then demanded tests for work that never
+  // happened (observed live as a spurious steer on a run that only replied "ok").
+  chk("NEGATIVE: a heredoc that only mentions a source path is not a write", bashWritesSource("cat <<'EOF'\nsee lib/foo.ts for details\nEOF").writes === false);
+  chk("NEGATIVE: a heredoc piped to grep is not a write", bashWritesSource("cat <<'EOF' | grep ts\nlib/foo.ts\nEOF").writes === false);
+  chk("a heredoc redirected INTO source is still a write", bashWritesSource("cat > src/x.js <<'EOF'\nconsole.log(1)\nEOF").writes === true);
+  chk("and it is attributed to the redirect, not to the heredoc", bashWritesSource("cat > src/x.js <<'EOF'\nx\nEOF").via === "redirect");
+  chk("a heredoc fed to tee is still a write", bashWritesSource("tee lib/x.mjs <<'EOF'\nx\nEOF").writes === true);
 
   console.log("=== 2. hand-spawned workers without extensions are not invisible ===");
   chk("pi -p --no-extensions with default tools is counted as source mutation", delegatesUnguardedWrites('pi -p "fix the bug" --no-extensions') === true);

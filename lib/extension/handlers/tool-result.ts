@@ -47,13 +47,14 @@ function completeSuiteRun(event: ResultEvent, pending: Record<string, unknown>):
   appendEvidence({ ...derived });
 }
 
-function completeCleanRoom(pending: { package: string; command: string }, isError?: boolean): void {
+function completeCleanRoom(pending: { package: string; command: string; root?: string }, isError?: boolean): void {
   appendEvidence({
     kind: "clean-room",
     package: pending.package,
     result: isError ? "fail" : "pass",
     command: pending.command,
     by: "observed",
+    ...(pending.root ? { root: pending.root } : {}),
     at: new Date().toISOString(),
   });
 }

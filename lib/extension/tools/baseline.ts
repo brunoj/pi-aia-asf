@@ -140,6 +140,9 @@ async function measureAndRecordBaseline(opts: {
     failing: derived.failing,
     scope: derived.scope,
     head,
+    // Which checkout this baseline describes: a baseline from another tree must
+    // not excuse this tree's failures.
+    root,
   });
   return {
     recorded: !!res.ok,

@@ -26,7 +26,7 @@ export const pendingSuiteRuns = new Map<string, Record<string, unknown>>();
  * Paired with `tool_result`, so the recorded result is what the command returned
  * rather than what anyone says it returned.
  */
-export const pendingCleanRoom = new Map<string, { package: string; command: string }>();
+export const pendingCleanRoom = new Map<string, { package: string; command: string; root?: string }>();
 /** Completed suite runs — the fact the push gate checks for. */
 export const suiteRuns: Array<{ scope: string; exitCode: number; command: string; durationMs: number; testCount: number | string; at?: number; root?: string }> = [];
 /** Memoised dirty-tree answer, refreshed at most once per tool call. */

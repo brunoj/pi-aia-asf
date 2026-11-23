@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.21.10] — 2026-11-23
+
+A heredoc is not a write, and every measurement now says which tree it measured.
+
+### A heredoc that only mentioned a source path counted as a source change
+
+`bashWritesSource` matched ANY heredoc and then only needed a source-looking path
+somewhere in the command. So `cat <<'EOF' ... see lib/foo.ts ... EOF` — a command
+that reads nothing and writes nothing — set `sourceMutated` on the run, and the
+completion gate then demanded tests for work that never happened. Observed live as a
+spurious steer on a run whose only action was replying "ok".
+
+A bare heredoc is stdin. Every real heredoc write is still caught by the construct
+that actually writes: `cat > x.ts <<EOF` by redirect, `tee x.ts <<EOF` by tee,
+`python3 - <<PY` by scripted edit's `needsWrite`. The detector now attributes the
+write to that construct instead of to the heredoc.
+
+### Evidence is scoped to the tree it measured
+
+`coversProject` guarded suite and health evidence, but three kinds were unscoped, and
+the ledger is one per process — so one checkout's evidence satisfied another's gate:
+
+- **`baseline-run`** — the sharper one. It is what lets a red suite be reported as
+  inherited debt instead of a regression, so a baseline from checkout A could excuse
+  failures it never measured in checkout B.
+- **`browser-verify` / `browser-na`** — `ledger.has("browser-verify")` asked only
+  whether SOME entry existed, so a page verified in one checkout closed another's
+  browser gap.
+- **`clean-room`** — recorded and rendered but never judged, so a failed artifact
+  install sat in the report as a line while the run could still close.
+
+All three now record `root`, and the gate only counts an entry that covers the
+project. An entry with no root is reported as unattributed rather than charged to the
+run — a missing root cannot manufacture a gap the agent cannot answer.
+
 ## [0.21.9] — 2026-11-23
 
 pi 1.6.0, and a lost update in the file-touch record.

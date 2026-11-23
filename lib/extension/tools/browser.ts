@@ -37,7 +37,7 @@ export function registerBrowserTools(pi: ExtensionAPI): void {
       assertion: Type.String({ description: "What you saw that proves it works, as the reviewer would repeat it." }),
     }),
     async execute(_toolCallId: string, params: { page?: unknown; action?: unknown; assertion?: unknown }) {
-      const res = recordBrowserVerify({
+      const res = await recordBrowserVerify({
         page: typeof params?.page === "string" ? params.page : "",
         action: typeof params?.action === "string" ? params.action : "",
         assertion: typeof params?.assertion === "string" ? params.assertion : "",
@@ -58,7 +58,7 @@ export function registerBrowserTools(pi: ExtensionAPI): void {
       reason: Type.String({ description: "Why no interface is involved, as a sentence a reviewer could dispute." }),
     }),
     async execute(_toolCallId: string, params: { reason?: unknown }) {
-      const res = recordBrowserNa({ reason: typeof params?.reason === "string" ? params.reason : "" });
+      const res = await recordBrowserNa({ reason: typeof params?.reason === "string" ? params.reason : "" });
       return { content: [{ type: "text", text: text(res) }], details: { ...(res.details || {}), ok: res.ok } };
     },
   });

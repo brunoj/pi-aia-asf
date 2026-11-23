@@ -258,6 +258,34 @@ export function noteTouch(state: AsfState, path: string): void {
   state.filesTouched = topTouched(seqs);
 }
 
+/**
+ * Merge the file-touch record by touch ORDER, not by union.
+ *
+ * Appending the incoming entries after the on-disk ones assumed the incoming
+ * snapshot was always newer. Under concurrency it is not: a snapshot loaded earlier
+ * can be written last, and it pushed its own older entries into the last-10 window
+ * and evicted the newer ones — a lost update the gate read as "no source changed".
+ * The sequence says which touch is newer, so the merge keeps the genuinely newest 10
+ * whatever order the writes arrive in.
+ */
+function mergeTouches(a: AsfState, b: AsfState): void {
+  const seqs: Record<string, number> = {};
+  for (const side of [b, a]) {
+    for (const [path, n] of Object.entries(side.fileSeqs || {})) {
+      seqs[path] = Math.max(seqs[path] ?? 0, Number(n) || 0);
+    }
+  }
+  // State written before sequences existed has none. Its list order is the only
+  // evidence left, and it is old by definition, so it gets small numbers that any
+  // real timestamp outranks: the on-disk copy is older, the incoming one newer.
+  let base = 0;
+  for (const path of b.filesTouched || []) if (!(path in seqs)) seqs[path] = ++base;
+  for (const path of a.filesTouched || []) if (!(path in seqs)) seqs[path] = ++base;
+  a.fileSeqs = seqs;
+  a.touchSeq = Math.max(Number(a.touchSeq) || 0, Number(b.touchSeq) || 0, base);
+  a.filesTouched = topTouched(seqs);
+}
+
 /** The fields the completion gate reads, merged so an older copy can never undo a newer fact. */
 function mergeRunFields(a: AsfState, b: AsfState): void {
   a.steers = Math.max(Number(a.steers) || 0, Number(b.steers) || 0);
@@ -268,24 +296,7 @@ function mergeRunFields(a: AsfState, b: AsfState): void {
   for (const [k, v] of Object.entries(b.steerCounts || {})) {
     a.steerCounts[k] = Math.max(Number(a.steerCounts[k]) || 0, Number(v) || 0);
   }
-  // Merged by touch ORDER, not by union. Appending the incoming entries after the
-  // on-disk ones assumed the incoming snapshot was always newer — under concurrency
-  // it is not, and a stale snapshot written last pushed its older entries into the
-  // last-10 window and evicted the newer ones (a lost update the gate read as "no
-  // source changed"). The sequence says which touch is newer, so the merge can
-  // keep the genuinely newest 10 whatever order the writes arrive in.
-  const seqs: Record<string, number> = {};
-  for (const [path, n] of Object.entries(b.fileSeqs || {})) seqs[path] = Math.max(seqs[path] ?? 0, Number(n) || 0);
-  for (const [path, n] of Object.entries(a.fileSeqs || {})) seqs[path] = Math.max(seqs[path] ?? 0, Number(n) || 0);
-  // State written before sequences existed has none. Its list order is the only
-  // evidence left, and it is old by definition, so it gets small numbers that any
-  // real timestamp outranks: the on-disk copy is older, the incoming one newer.
-  let base = 0;
-  for (const path of b.filesTouched || []) if (!(path in seqs)) seqs[path] = ++base;
-  for (const path of a.filesTouched || []) if (!(path in seqs)) seqs[path] = ++base;
-  a.fileSeqs = seqs;
-  a.touchSeq = Math.max(Number(a.touchSeq) || 0, Number(b.touchSeq) || 0, base);
-  a.filesTouched = topTouched(seqs);
+  mergeTouches(a, b);
   if (typeof b.lastMutationAt === "number") a.lastMutationAt = Math.max(Number(a.lastMutationAt) || 0, b.lastMutationAt);
   if (!a.parked && b.parked) a.parked = b.parked;
 }

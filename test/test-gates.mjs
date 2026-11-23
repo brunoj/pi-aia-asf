@@ -252,6 +252,68 @@ const hNested = createLedger();
 hNested.append({ kind: "health-run", level: "standard", verdict: "pass", scanned: 12, root: "/work/mono" });
 check("a verdict from a monorepo root covers the package under it", !sessionFacts(hNested, { scale: "standard", root: "/work/mono/pkg" }).missing.some((g) => /not this project/.test(g)));
 
+// Browser evidence is a measurement too, and it was the last kind that could bleed
+// between checkouts: `ledger.has("browser-verify")` asked only whether SOME entry
+// existed, so a page verified in one checkout satisfied another's browser gap.
+const bOther = createLedger();
+bOther.append({ kind: "browser-verify", page: "/orders", action: "loaded the list", assertion: "10 rows render", root: "/work/other" });
+const bOtherFacts = sessionFacts(bOther, { webTouched: true, root: "/work/this" });
+check("NEGATIVE: a browser verification from another checkout does not close this run's browser gap", bOtherFacts.missing.some((g) => /browser/.test(g)), bOtherFacts.missing.join("; ").slice(0, 110));
+check("the browser gap names the tree that was verified", /\/work\/other/.test(bOtherFacts.missing.join(" ")));
+check("the same verification counts for the project it verified", !sessionFacts(bOther, { webTouched: true, root: "/work/other" }).missing.some((g) => /browser/.test(g)));
+
+const bNaOther = createLedger();
+bNaOther.append({ kind: "browser-na", reason: "server-side retry policy only; no UI consumes this module", root: "/work/other" });
+check("NEGATIVE: a structured n/a from another checkout does not close this one's gap", sessionFacts(bNaOther, { webTouched: true, root: "/work/this" }).missing.some((g) => /browser/.test(g)));
+
+const bNoRoot = createLedger();
+bNoRoot.append({ kind: "browser-verify", page: "/orders", action: "loaded", assertion: "rows render" });
+check("NEGATIVE: unlabelled browser evidence is never held against the run", !sessionFacts(bNoRoot, { webTouched: true, root: "/work/this" }).missing.some((g) => /browser/.test(g)), sessionFacts(bNoRoot, { webTouched: true, root: "/work/this" }).missing.join("; "));
+
+// The baseline is the other unscoped kind, and the sharper one: it is what lets a
+// red suite be reported as inherited debt instead of a regression. A baseline from
+// another checkout would excuse failures it never measured.
+const baseOther = createLedger();
+baseOther.append({ kind: "suite-run", command: "pytest -q", exitCode: 1, durationMs: 10, testCount: 3, scope: "full", failing: ["test_a"], root: "/work/this" });
+baseOther.append({ kind: "baseline-run", command: "pytest -q", exitCode: 1, durationMs: 10, failing: ["test_a"], scope: "full", head: "abc1234", root: "/work/other" });
+const baseOtherFacts = sessionFacts(baseOther, { scale: "standard", root: "/work/this" });
+check("NEGATIVE: a baseline from another checkout cannot excuse this run's red suite", baseOtherFacts.missing.some((g) => /never exited 0/.test(g)), baseOtherFacts.missing.join("; ").slice(0, 120));
+check("and the reason names the tree the baseline measured", /\/work\/other/.test(baseOtherFacts.missing.join(" ")));
+
+const baseSame = createLedger();
+baseSame.append({ kind: "suite-run", command: "pytest -q", exitCode: 1, durationMs: 10, testCount: 3, scope: "full", failing: ["test_a"], root: "/work/this" });
+baseSame.append({ kind: "baseline-run", command: "pytest -q", exitCode: 1, durationMs: 10, failing: ["test_a"], scope: "full", head: "abc1234", root: "/work/this" });
+const baseSameFacts = sessionFacts(baseSame, { scale: "standard", root: "/work/this" });
+check("a baseline for THIS tree still reports inherited debt", !baseSameFacts.missing.some((g) => /never exited 0/.test(g)) && baseSameFacts.reported.some((r) => /inherited from the recorded baseline/.test(r)), JSON.stringify(baseSameFacts.reported));
+
+const baseNoRoot = createLedger();
+baseNoRoot.append({ kind: "suite-run", command: "pytest -q", exitCode: 1, durationMs: 10, testCount: 3, scope: "full", failing: ["test_a"], root: "/work/this" });
+baseNoRoot.append({ kind: "baseline-run", command: "pytest -q", exitCode: 1, durationMs: 10, failing: ["test_a"], scope: "full", head: "abc1234" });
+check("NEGATIVE: an unlabelled baseline is never held against the run", !sessionFacts(baseNoRoot, { scale: "standard", root: "/work/this" }).missing.some((g) => /never exited 0/.test(g)));
+
+// clean-room was recorded and rendered but never judged: a failed artifact install
+// sat in the report as a line while the run could still close.
+const crFail = createLedger();
+crFail.append({ kind: "clean-room", package: "pi-aia-asf", result: "fail", command: "npm run release", root: "/work/this" });
+const crFailFacts = sessionFacts(crFail, { root: "/work/this" });
+check("a release ASF watched fail blocks the run", crFailFacts.missing.some((g) => /release pipeline ran and failed/.test(g)), crFailFacts.missing.join("; ").slice(0, 110));
+check("and the gap names the command it saw", /npm run release/.test(crFailFacts.missing.join(" ")));
+
+const crPass = createLedger();
+crPass.append({ kind: "clean-room", package: "pi-aia-asf", result: "pass", command: "npm run release", root: "/work/this" });
+check("a passing release is not a gap", !sessionFacts(crPass, { root: "/work/this" }).missing.some((g) => /release pipeline/.test(g)));
+
+const crNone = createLedger();
+check("NEGATIVE: a run that never released has no clean-room gap", !sessionFacts(crNone, { root: "/work/this" }).missing.some((g) => /release pipeline/.test(g)));
+
+const crOther = createLedger();
+crOther.append({ kind: "clean-room", package: "other", result: "fail", command: "npm run release", root: "/work/other" });
+check("NEGATIVE: another checkout's failed release is not this run's gap", !sessionFacts(crOther, { root: "/work/this" }).missing.some((g) => /release pipeline/.test(g)));
+
+const crNoRoot = createLedger();
+crNoRoot.append({ kind: "clean-room", package: "pi-aia-asf", result: "fail", command: "npm run release" });
+check("NEGATIVE: an unlabelled clean-room result is never held against the run", !sessionFacts(crNoRoot, { root: "/work/this" }).missing.some((g) => /release pipeline/.test(g)));
+
 const hNotMeasured = createLedger();
 hNotMeasured.append({ kind: "health-run", level: "standard", verdict: "not-measured", scanned: 0, root: "/work/other" });
 check("a not-measured from another tree reports the wrong tree, not a disabled gate", (() => {

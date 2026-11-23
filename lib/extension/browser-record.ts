@@ -15,6 +15,7 @@
 import { verifyGap, naGap, verifyEntry, naEntry } from "../gates/browser-evidence.mjs";
 import { appendEvidence } from "./evidence.ts";
 import { runtime } from "./runtime.ts";
+import { measureRoot } from "./run.ts";
 
 export type BrowserRecord = {
   ok: boolean;
@@ -37,11 +38,12 @@ function refuse(error: string, extra: Record<string, unknown> = {}): BrowserReco
  * Record that a web surface was verified. Refused if the session never drove a
  * browser, or if any of page/action/assertion is missing.
  */
-export function recordBrowserVerify(input: { page?: string; action?: string; assertion?: string }): BrowserRecord {
+export async function recordBrowserVerify(input: { page?: string; action?: string; assertion?: string; root?: string }): Promise<BrowserRecord> {
   const calls = observedBrowserCalls();
   const gap = verifyGap(input || {}, calls);
   if (gap) return refuse(gap, { observed: calls.map((c) => c.tool) });
-  const res = appendEvidence({ ...verifyEntry(input || {}), at: new Date().toISOString() });
+  const root = await measureRoot();
+  const res = appendEvidence({ ...verifyEntry({ ...(input || {}), root }), at: new Date().toISOString() });
   if (!res.ok) return refuse(`the ledger refused the entry: ${res.error}`, { page: input?.page });
   return {
     ok: true,
@@ -56,10 +58,11 @@ export function recordBrowserVerify(input: { page?: string; action?: string; ass
  * can push back on — that is the only thing that makes an n/a evidence instead of an
  * exit.
  */
-export function recordBrowserNa(input: { reason?: string }): BrowserRecord {
+export async function recordBrowserNa(input: { reason?: string; root?: string }): Promise<BrowserRecord> {
   const gap = naGap(input || {});
   if (gap) return refuse(gap, { reason: input?.reason });
-  const res = appendEvidence({ ...naEntry(input || {}), at: new Date().toISOString() });
+  const root = await measureRoot();
+  const res = appendEvidence({ ...naEntry({ ...(input || {}), root }), at: new Date().toISOString() });
   if (!res.ok) return refuse(`the ledger refused the entry: ${res.error}`, { reason: input?.reason });
   return {
     ok: true,

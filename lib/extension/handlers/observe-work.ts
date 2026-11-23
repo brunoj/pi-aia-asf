@@ -28,7 +28,8 @@ export function observeCleanRoom(input: Input, event: Event): void {
   const command = typeof input.command === "string" ? input.command : "";
   if (!/verify-published\.mjs|npm\s+run\s+release/.test(command)) return;
   const pkg = projectName();
-  pendingCleanRoom.set(String(event.toolCallId || Date.now()), { package: pkg, command });
+  // Where the release ran, so a clean-room result speaks for the tree it installed.
+  pendingCleanRoom.set(String(event.toolCallId || Date.now()), { package: pkg, command, root: suiteCwd(input, command) });
 }
 
 export function observeSuiteAttempt(input: Input, event: Event): void {
