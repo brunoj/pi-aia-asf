@@ -69,6 +69,37 @@ export async function run({ loadTs }) {
     chk("a NEW run opens normally even though an earlier run is closed", next.current?.runId === "run-Y", JSON.stringify(next.current?.runId));
     chk("and it carries its own files only", (next.current?.filesTouched || []).length === 1 && next.current.filesTouched[0].endsWith("b.ts"), JSON.stringify(next.current?.filesTouched));
 
+    console.log("=== 3b. a stale writer cannot evict the newer touches ===");
+    // `filesTouched` is what tells the completion gate "source changed this run".
+    // It is an ORDERED list of the last 10, and the merge used to append the
+    // incoming entries after the on-disk ones — which assumed the incoming
+    // snapshot was always newer. Under concurrency it is not: a stale snapshot
+    // written last pushed its own older entries into the window and evicted the
+    // newer ones, so the gate read "no source changed" and could close a run
+    // without the tests its own edits required.
+    const staleRun = { ...runX, runId: "run-T", filesTouched: [], fileSeqs: {}, touchSeq: 0 };
+    for (let i = 0; i < 10; i++) st.noteTouch(staleRun, path.join(dir, `old${i}.ts`));
+    await new Promise((r) => setTimeout(r, 5));
+    const newerRun = { ...runX, runId: "run-T", filesTouched: [], fileSeqs: {}, touchSeq: 0 };
+    for (let i = 0; i < 10; i++) st.noteTouch(newerRun, path.join(dir, `new${i}.ts`));
+    const ordered = mergeMonotonic(
+      { current: JSON.parse(JSON.stringify(staleRun)), history: [], closedRuns: [] },
+      { current: JSON.parse(JSON.stringify(newerRun)), history: [], closedRuns: [] },
+    );
+    const keptTouched = ordered.current?.filesTouched || [];
+    const lostNew = Array.from({ length: 10 }, (_, i) => `new${i}.ts`).filter((f) => !keptTouched.some((t) => t.endsWith(f)));
+    chk("NEGATIVE: a stale snapshot written last does not evict the newer touches", lostNew.length === 0, `missing ${lostNew.join(",")} in ${keptTouched.length}`);
+    chk("the newest touch is still last", (keptTouched[keptTouched.length - 1] || "").endsWith("new9.ts"), JSON.stringify(keptTouched.slice(-2)));
+    chk("the window is still capped at 10", keptTouched.length === 10, String(keptTouched.length));
+
+    // Legacy state (written before sequences existed) still merges: its list order
+    // is the only evidence left, and the incoming copy is the newer one.
+    const legacy = mergeMonotonic(
+      { current: { ...runX, runId: "run-L", filesTouched: [path.join(dir, "l2.ts")] }, history: [], closedRuns: [] },
+      { current: { ...runX, runId: "run-L", filesTouched: [path.join(dir, "l1.ts")] }, history: [], closedRuns: [] },
+    );
+    chk("legacy state without sequences still merges both lists", (legacy.current?.filesTouched || []).length === 2, JSON.stringify(legacy.current?.filesTouched));
+
     console.log("=== 4. the tombstone list cannot grow without bound ===");
     let file = { current: null, history: [] };
     for (let i = 0; i < 60; i++) {

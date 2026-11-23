@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.21.9] — 2026-11-23
+
+pi 1.6.0, and a lost update in the file-touch record.
+
+### pi 1.6.0
+
+The host pins move to 1.6.0. 1.6.0's breaking change is that extension components'
+`render()` returns `readonly string[]` and `Container` caches its array while its
+children are unchanged — ASF registers no TUI components, so nothing here was
+affected. Verified against the real host: typecheck against 1.6.0 types, the full
+suite, and a live `loadExtensions()` with zero errors.
+
+### A stale save could erase the newer file touches
+
+`filesTouched` is what tells the completion gate "source changed this run", and it
+keeps the last 10 paths in touch order. The merge appended the incoming entries
+after the on-disk ones, which assumed the incoming snapshot was always newer. Under
+concurrency it is not: a snapshot loaded earlier can be written last, and it pushed
+its own older entries into the last-10 window and evicted the newer ones.
+
+Observed as an intermittent suite failure (`missing: c10.ts in 10`) that passed in
+isolation and failed under load. The consequence is not cosmetic: if the gate loses
+the touches, it reads "no source changed" and can close a run without the tests its
+own edits required.
+
+Each touch now records a monotonic sequence (`fileSeqs`/`touchSeq`), and the merge
+keeps the genuinely newest 10 whatever order the writes arrive in. State written
+before sequences existed still merges on its list order.
+
 ## [0.21.8] — 2026-11-18
 
 The gate can now tell you *where* the code is unhealthy, and ASF's own code walks its

@@ -34,8 +34,20 @@ export interface AsfState {
   objective?: string;
   /** Claimed ticket, when this run is Betamaxx work. */
   ticketId?: string;
-  /** P4 working-set anchor: paths this run has changed. */
+  /** P4 working-set anchor: paths this run has changed, newest last. */
   filesTouched?: string[];
+  /**
+   * When each touched path was last touched, as a monotonic counter.
+   *
+   * `filesTouched` alone cannot be merged correctly: it is ordered, and two
+   * snapshots of it give no way to tell which entry is newer. A stale snapshot
+   * written last therefore pushed its own older entries into the last-10 window
+   * and evicted the newer ones — the gate then read "no source changed" and let
+   * a run close without the tests its own edits required.
+   */
+  fileSeqs?: Record<string, number>;
+  /** The counter behind `fileSeqs`; never decreases across a merge. */
+  touchSeq?: number;
   /** True once this run changed source — the completion floor then needs a test. */
   sourceMutated?: boolean;
   /** Steers issued, and the exact gaps already raised (never raised twice). */

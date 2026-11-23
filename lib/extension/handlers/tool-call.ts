@@ -23,7 +23,7 @@ import { observeCleanRoom, observeSuiteAttempt, observeWebTouch, observeBrowserC
 import type { Input, Event } from "./observed.ts";
 import { readProjectConfig } from "../../gates/config.mjs";
 import { projectName, runRoot } from "../paths.ts";
-import { loadState, saveState } from "../state.ts";
+import { loadState, saveState, noteTouch } from "../state.ts";
 import { measureRootSync, openAutoRun, gitDirty, numberConfig, projectOf } from "../run.ts";
 import { appendEvidence, queueSteer, reportGateError } from "../evidence.ts";
 import { gateStats, pendingSuiteRuns, pendingCleanRoom, suiteRuns, recordVerdict } from "../gate-state.ts";
@@ -66,9 +66,7 @@ async function observeActivation(toolName: string, input: Input): Promise<void> 
     cur.sourceMutated = true;
     cur.lastMutationAt = Date.now();
     if (call.path) {
-      const list = (cur.filesTouched || []).filter((p) => p !== call.path);
-      list.push(call.path);
-      cur.filesTouched = list.slice(-10);
+      noteTouch(cur, call.path);
       // The run follows the code: whatever the session touches last is the project the
       // gates, the config screen and a trace's testFile are judged against.
       runtime.measureRoot = projectOf(call.path, runRoot()) ?? runtime.measureRoot;

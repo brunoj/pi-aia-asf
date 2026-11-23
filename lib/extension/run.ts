@@ -120,6 +120,8 @@ export async function openAutoRun(trigger: string, path: string | null): Promise
     auto: true,
     trigger,
     filesTouched: path ? [path] : [],
+    fileSeqs: path ? { [path]: 1 } : {},
+    touchSeq: path ? 1 : 0,
     sourceMutated: true,
     lastMutationAt: Date.now(),
     steers: 0,
